@@ -4,3 +4,7 @@ node_modules
 /build
 /public/build
 yarn-error.log
+.vercel
+.env
+/app/styles/**/*.css
+other/postcss.ignored/

@@ -483,6 +483,9 @@ video {
 	--tw-transform: translateX(var(--tw-translate-x)) translateY(var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
 	--tw-border-opacity: 1;
 	border-color: rgba(229, 231, 235, var(--tw-border-opacity));
+	--tw-ring-offset-shadow: 0 0 #0000;
+	--tw-ring-shadow: 0 0 #0000;
+	--tw-shadow: 0 0 #0000;
 }
 /* purgecss end ignore */
 /* tailwind is configured to prefer this font */
@@ -504,8 +507,11 @@ video {
 .right-2 {
 	right: 0.5rem;
 }
-.bottom-0 {
-	bottom: 0px;
+.-bottom-5 {
+	bottom: -1.25rem;
+}
+.z-10 {
+	z-index: 10;
 }
 .m-1 {
 	margin: 0.25rem;
@@ -624,6 +630,10 @@ video {
 	padding-left: 1rem;
 	padding-right: 1rem;
 }
+.py-4 {
+	padding-top: 1rem;
+	padding-bottom: 1rem;
+}
 .py-12 {
 	padding-top: 3rem;
 	padding-bottom: 3rem;
@@ -670,6 +680,10 @@ video {
 .text-gray-400 {
 	--tw-text-opacity: 1;
 	color: rgba(156, 163, 175, var(--tw-text-opacity));
+}
+.shadow-lg {
+	--tw-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+	box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }
 .transition {
 	transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-backdrop-filter;
@@ -726,6 +740,9 @@ video {
 @media (min-width: 768px) {
 	.md\:visible {
 		visibility: visible;
+	}
+	.md\:bottom-0 {
+		bottom: 0px;
 	}
 	.md\:m-4 {
 		margin: 1rem;
