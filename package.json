@@ -4,14 +4,17 @@
   "description": "",
   "license": "",
   "scripts": {
-    "build": "remix build",
     "css": "tailwindcss --output ./app/styles/tailwind.css --config ./tailwind.config.js --watch",
     "dev2": "remix run",
     "postinstall": "remix setup node",
     "start": "remix-serve build",
     "dev": "pm2-dev ./other/pm2.config.js",
     "build:css": "postcss styles/**/*.css --base styles --dir app/styles",
-    "build:css:prod": "npm run build:css -- --env production"
+    "build:css:prod": "npm run build:css -- --env production",
+    "clean": "rimraf ./node_modules/.cache ./server/dist ./build ./public/build \"./app/styles/**/*.css\"",
+    "prebuild": "npm run clean && echo All clean ✨",
+    "build:remix": "cross-env NODE_ENV=production remix build",
+    "build": "npm run build:css:prod && npm run build:remix"
   },
   "dependencies": {
     "@remix-run/express": "^0.19.3",
@@ -19,6 +22,7 @@
     "@remix-run/serve": "^0.19.3",
     "@tailwindcss/line-clamp": "^0.2.2",
     "compression": "^1.7.4",
+    "cross-env": "^7.0.3",
     "dotenv": "^10.0.0",
     "express": "^4.17.1",
     "pm2": "^5.1.2",
