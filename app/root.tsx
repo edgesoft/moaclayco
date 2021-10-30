@@ -11,9 +11,9 @@ export let links: LinksFunction = () => {
 
 const Header = (): JSX.Element  => {
   return (
-    <div className="fixed z-10 hover:bg-rosa bg-white text-gray-600 flex p-4 h-20  font-note text-3xl border-b-2 border-gray-600 md:p-2 md:text-5xl min-w-full">
-          <div>Moa Clay Collection</div>
-          <div className="flex absolute right-2 m-1 md:m-4">
+    <div className="fixed space-between left-0 top-0 z-10 hover:bg-rosa bg-white text-gray-600 flex p-4 h-20  font-note text-3xl border-b-2 border-gray-600 md:p-2 md:text-5xl min-w-full">
+          <div className="flex-grow">Moa Clay Collection</div>
+          <div className="py-0 md:py-3">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-15 w-10 text-gray-600"
@@ -70,7 +70,7 @@ export default function App() {
       <Outlet />
       <div className="fixed -bottom-5 md:bottom-0 flex px-4 py-4 flex-grow w-full bg-gray-50">
       
-          <a href="#" className="">
+          <a href="https://www.instagram.com/moaclayco/" className="">
             <svg
               className="w-10 h-10 text-gray-500 hover:text-gray-600"
               aria-hidden="true"
@@ -95,7 +95,7 @@ export default function App() {
             </svg>
           </a>
           <span className="p-2 invisible md:visible">
-            All rights reserved © Moa Gustafsson 2021
+            All rights reserved © Moa Clay Co 2021
           </span>
        
       </div>
