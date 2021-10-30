@@ -76,16 +76,15 @@ const Collection: React.FC<CollectionProps> = ({ image, headline, longDescriptio
 export default function Index() {
   let data = useLoaderData()
   return (
-<section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-4 py-5">
-<div className="grid grid-cols-1 lg:grid-cols-2 gap-6  my-20">
-    {data.data && data.data.map((d:CollectionProps) => {
-      return (
-       <Collection instagram={d.instagram} key={d.id} image={d.image} headline={d.headline} shortDescription={d.shortDescription} longDescription={d.longDescription}/>
-      )
-    })}
+    <section className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-4 py-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6  my-20">
+        {data.data && data.data.map((d:CollectionProps) => {
+          return (
+          <Collection instagram={d.instagram} key={d.id} image={d.image} headline={d.headline} shortDescription={d.shortDescription} longDescription={d.longDescription}/>
+          )
+        })}
 
-  </div>
-</section>
-
+      </div>
+    </section>
   );
 }
