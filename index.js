@@ -4,10 +4,10 @@ const path = require('path')
 const express = require('express')
 const {createRequestHandler} = require('@remix-run/express')
 const compression = require('compression')
+require('./connector')
 
 const MODE = process.env.NODE_ENV
 const BUILD_DIR = path.join(process.cwd(), 'build')
-
 let app = express()
 
 app.use(compression())
