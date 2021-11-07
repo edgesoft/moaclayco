@@ -1,4 +1,8 @@
 {
+    "github": {
+      "enabled": false,
+      "silent": true
+    },
     "builds": [
       {
         "src": "public/**/*",

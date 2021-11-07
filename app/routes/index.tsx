@@ -1,6 +1,6 @@
 import type {MetaFunction, LinksFunction, LoaderFunction} from 'remix'
 import {useLoaderData} from 'remix'
-import {Link} from 'react-router-dom'
+import { useNavigate } from 'react-router-dom';
 import {Collections} from '../schemas/collections'
 import {useEffect} from 'react'
 
@@ -33,18 +33,19 @@ const Collection: React.FC<CollectionProps> = ({
   shortDescription,
   instagram,
 }): JSX.Element => {
+  let history = useNavigate();
   return (
-    <Link to={`/collections/${shortUrl}`}>
-      <div className="md:hover:-translate-y-2 md:hover:scale-105 flex flex-col w-full bg-gray-50 rounded-lg shadow-lg overflow-hidden transform transition duration-300 ease-in-out md:flex-row">
+      <div onClick={() => {
+        history(`/collections/${shortUrl}`)
+      }} className="md:hover:-translate-y-2 md:hover:scale-105 flex flex-col w-full bg-gray-50 rounded-lg shadow-lg overflow-hidden transform transition duration-300 ease-in-out md:flex-row">
         <div className="w-full h-80 md:w-2/5">
           <img
-            className="w-full h-full group-hover:opacity-70 object-cover object-center"
+            className="w-full h-full object-cover object-center"
             src={image}
-            alt="photo"
           />
         </div>
         <div className="p-6 w-full text-left space-y-2 md:p-4 md:w-3/5">
-          <p className="text-gray-700 group-hover:text-white text-xl font-bold">
+          <p className="text-gray-700 text-xl font-bold">
             {headline}
           </p>
           <p className="text-gray-400 text-base font-normal">
@@ -82,7 +83,6 @@ const Collection: React.FC<CollectionProps> = ({
           </div>
         </div>
       </div>
-    </Link>
   )
 }
 
@@ -120,3 +120,4 @@ export default function Index() {
     </section>
   )
 }
+
