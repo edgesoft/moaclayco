@@ -2,6 +2,7 @@ import {MetaFunction, LoaderFunction, useLoaderData} from 'remix'
 import {useEffect, useState} from 'react'
 import {useSwipeable} from 'react-swipeable'
 import {Items} from '~/schemas/items'
+import {useCart} from 'react-use-cart'
 
 export let loader: LoaderFunction = async ({params}) => {
   return Items.find({collectionRef: params.collection})
@@ -15,7 +16,7 @@ export let meta: MetaFunction = () => {
 }
 
 type ItemProps = {
-  _id?: string
+  _id: string
   images: string[]
   amount: number
   price: number
@@ -29,6 +30,7 @@ function classNames(...classes: Array<string>) {
 }
 
 const Item: React.FC<ItemProps> = ({
+  _id,
   images,
   headline,
   amount,
@@ -38,6 +40,7 @@ const Item: React.FC<ItemProps> = ({
 }): JSX.Element => {
   const [showInfo, setShowInfo] = useState(false)
   const [index, setIndex] = useState(0)
+  const {addItem} = useCart()
   const handlers = useSwipeable({
     onSwiped: eventData => {
       if (eventData.dir === 'Right') {
@@ -92,10 +95,8 @@ const Item: React.FC<ItemProps> = ({
                       }
                     }}
                     className={classNames(
-                      'mx-2 w-2 h-2 rounded-full ring-1 ring-blue-700 ring-offset-2',
-                      index === i
-                        ? 'bg-blue-700'
-                        : 'bg-white hover:animate-ping',
+                      'mx-2 w-2 h-2 bg-white rounded-full ring-1 ring-offset-2',
+                      index === i ? 'bg-green-500' : 'bg-white',
                     )}
                   ></div>
                 )
@@ -106,7 +107,14 @@ const Item: React.FC<ItemProps> = ({
       </div>
 
       <div className="relative p-6 w-full text-left space-y-2 md:p-4 md:w-3/5">
-        <div className="flex"><p className="text-gray-700 text-2xl font-bold">{headline}</p> {amount === 0 ? <span className="bg-pink-400 text-white rounded ml-1 p-1 ">Slut i lager</span>: null}</div>
+        <div className="flex">
+          <p className="text-gray-700 text-2xl font-bold">{headline}</p>{' '}
+          {amount === 0 ? (
+            <span className="ml-1 p-1 text-green-800 bg-green-100 rounded">
+              Slut i lager
+            </span>
+          ) : null}
+        </div>
         <p className="text-gray-700 text-lg font-bold">{price} SEK</p>
         <div className="flex justify-start space-x-2">
           {productInfos && productInfos.length > 0 ? (
@@ -143,7 +151,18 @@ const Item: React.FC<ItemProps> = ({
           ) : null}
         </div>
         {amount > 0 ? (
-          <button className="absolute bottom-2 right-2 flex-row-reverse px-4 py-2 text-gray-800 hover:text-white font-medium hover:bg-gray-500 bg-rosa rounded">
+          <button
+            onClick={() => {
+              addItem({
+                id: _id,
+                price,
+                balance: amount,
+                image: images[0],
+                headline,
+              })
+            }}
+            className="absolute bottom-2 right-2 flex-row-reverse px-4 py-2 text-gray-800 hover:text-white font-medium hover:bg-gray-500 bg-rosa rounded"
+          >
             Lägg i kundvagn
           </button>
         ) : null}
@@ -169,9 +188,9 @@ export default function Collection() {
   return (
     <section className="mx-auto px-4 py-5 max-w-6xl sm:px-6 lg:px-4">
       <div className="grid gap-6 grid-cols-1 my-20 lg:grid-cols-2">
-        {data.map((item: ItemProps) => {
-          return <Item key={item._id} {...item} />
-        })}
+        {data.map((item: ItemProps) => (
+          <Item key={item._id} {...item} />
+        ))}
       </div>
     </section>
   )
