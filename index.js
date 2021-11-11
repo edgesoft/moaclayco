@@ -27,10 +27,10 @@ app.use(express.static('public/build', {immutable: true, maxAge: '1y'}))
 app.all(
   '*',
   MODE === 'production'
-    ? createRequestHandler({build: require('./build')})
+    ? createRequestHandler({build: require(BUILD_DIR)})
     : (req, res, next) => {
         purgeRequireCache()
-        const build = require('./build')
+        const build = require(BUILD_DIR)
         return createRequestHandler({build, mode: MODE})(req, res, next)
       },
 )
@@ -40,7 +40,7 @@ app.listen(port, () => {
   // preload the build so we're ready for the first request
   // we want the server to start accepting requests asap, so we wait until now
   // to preload the build
-  require('./build')
+  require(BUILD_DIR)
   console.log(`Express server listening on port ${port}`)
 })
 
