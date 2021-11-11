@@ -23,6 +23,7 @@
     "@stripe/react-stripe-js": "^1.6.0",
     "@stripe/stripe-js": "^1.21.1",
     "@tailwindcss/line-clamp": "^0.2.2",
+    "@vercel/node": "^1.12.1",
     "compression": "^1.7.4",
     "cross-env": "^7.0.3",
     "dotenv": "^10.0.0",
