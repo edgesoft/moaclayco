@@ -37,7 +37,8 @@
     "react-use-cart": "^1.13.0",
     "remix": "^0.20.1",
     "stripe": "^8.186.1",
-    "tailwindcss": "^2.2.19"
+    "tailwindcss": "^2.2.19",
+    "ts-tiny-invariant": "^1.0.5"
   },
   "devDependencies": {
     "@remix-run/dev": "^0.20.1",
