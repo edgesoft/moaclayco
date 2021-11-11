@@ -40,5 +40,5 @@ export default function Index() {
     emptyCart()
   }, [])
 
-  return <div className="ml-2 mr-2 mt-20">Tack för ditt köp!</div>
+  return <div className="ml-2 mr-2 mt-20">Tack för ditt köp! Ditt ordernummer är {data._id}</div>
 }
