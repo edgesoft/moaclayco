@@ -10,9 +10,11 @@ const OrderSchema = new Schema({
         city: String
     },
     createdAt: Date,
+    updatedAt: Date,
+    webhookAt: Date,
     status: {
         type: String,
-        enum: ['OPENED', 'PENDING', 'FAILED', 'SUCCESS']
+        enum: ['OPENED', 'PENDING', 'FAILED', 'CANCELED', 'SUCCESS']
     },
     items: [{
         itemRef: String,

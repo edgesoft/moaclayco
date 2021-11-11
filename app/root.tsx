@@ -8,9 +8,9 @@ import {CartProvider} from 'react-use-cart'
 export function loader() {
   return {
     ENV: {
-      STRIPE_PUBLIC_KEY: process.env.STRIPE_PUBLIC_KEY
-    }
-  };
+      STRIPE_PUBLIC_KEY: process.env.STRIPE_PUBLIC_KEY,
+    },
+  }
 }
 
 export let links: LinksFunction = () => {
@@ -22,7 +22,15 @@ const Header = (): JSX.Element => {
   const history = useNavigate()
   return (
     <Link to="/">
-      <div style={{backgroundImage: "url(https://moaclayco-prod.s3.eu-north-1.amazonaws.com/background3.jpg)", backgroundPosition: "center left", backgroundRepeat: 'no-repeat'}} className="space-between fixed z-10 left-0 top-0 flex p-4 min-w-full h-20 text-gray-600 font-note text-3xl bg-white border-b-2 border-gray-600 md:p-2 md:text-5xl">
+      <div
+        style={{
+          backgroundImage:
+            'url(https://moaclayco-prod.s3.eu-north-1.amazonaws.com/background3.jpg)',
+          backgroundPosition: 'center left',
+          backgroundRepeat: 'no-repeat',
+        }}
+        className="space-between fixed z-10 left-0 top-0 flex p-4 min-w-full h-20 text-gray-600 font-note text-3xl bg-white border-b-2 border-gray-600 md:p-2 md:text-5xl"
+      >
         <div className="flex-grow">Moa Clay Collection</div>
         <div
           onClick={e => {
@@ -66,7 +74,7 @@ function Document({
   children: React.ReactNode
   title?: string
 }) {
-  let data = useLoaderData();
+  let data = useLoaderData()
   return (
     <html lang="en">
       <head>
@@ -87,9 +95,7 @@ function Document({
         <Scripts />
         <script
           dangerouslySetInnerHTML={{
-            __html: `window.ENV = ${JSON.stringify(
-              data.ENV
-            )}`
+            __html: `window.ENV = ${JSON.stringify(data.ENV)}`,
           }}
         />
         {process.env.NODE_ENV === 'development' && <LiveReload />}
@@ -103,9 +109,9 @@ export default function App() {
     <CartProvider>
       <Document>
         <Outlet />
-        <div className="fixed bottom-0 flex flex-grow px-4 w-full bg-gray-50">
+        <div className="fixed bottom-0 flex flex-grow px-4 w-full bg-gray-50 h-14">
           <div className="flew-grow flex items-center p-1 md:p-3">
-            <a href="https://www.instagram.com/moaclayco/" target="_blank">
+            <a  className="h-10" href="https://www.instagram.com/moaclayco/" target="_blank">
               <svg
                 className="w-10 h-10 text-gray-500 hover:text-pink-600"
                 aria-hidden="true"
@@ -121,7 +127,7 @@ export default function App() {
             </a>
             <a
               href="https://twitter.com/moaclaycohl-Config"
-              className="hover:text-blue-400 text-gray-500"
+              className="hover:text-blue-400 text-gray-500 h-10"
             >
               <svg
                 className="w-10 h-10"
@@ -131,6 +137,25 @@ export default function App() {
               >
                 <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84"></path>
               </svg>
+            </a>
+            <a
+              href="https://www.tiktok.com/@moaclayco"
+              className="hover:text-black text-gray-500 h-10"
+            >
+              <svg
+                className="w-10 h-8"
+                viewBox="0 0 2859 3333"
+                fill="currentColor"
+                fillRule="evenodd"
+                clipRule="evenodd"
+              >
+                <path d="M2081 0c55 473 319 755 778 785v532c-266 26-499-61-770-225v995c0 1264-1378 1659-1932 753-356-583-138-1606 1004-1647v561c-87 14-180 36-265 65-254 86-398 247-358 531 77 544 1075 705 992-358V1h551z" />
+              </svg>
+            </a>
+            <a  href="https://www.pinterest.se/moaclayco" className="text-gray-500 hover:text-red-600 h-10">
+            <svg  fill="currentColor" className="w-10 h-9" viewBox="0 0 511.998 511.998">
+              <path d="M405.017,52.467C369.774,18.634,321.001,0,267.684,0C186.24,0,136.148,33.385,108.468,61.39  c-34.114,34.513-53.675,80.34-53.675,125.732c0,56.993,23.839,100.737,63.76,117.011c2.68,1.098,5.377,1.651,8.021,1.651  c8.422,0,15.095-5.511,17.407-14.35c1.348-5.071,4.47-17.582,5.828-23.013c2.906-10.725,0.558-15.884-5.78-23.353  c-11.546-13.662-16.923-29.817-16.923-50.842c0-62.451,46.502-128.823,132.689-128.823c68.386,0,110.866,38.868,110.866,101.434  c0,39.482-8.504,76.046-23.951,102.961c-10.734,18.702-29.609,40.995-58.585,40.995c-12.53,0-23.786-5.147-30.888-14.121  c-6.709-8.483-8.921-19.441-6.222-30.862c3.048-12.904,7.205-26.364,11.228-39.376c7.337-23.766,14.273-46.213,14.273-64.122  c0-30.632-18.832-51.215-46.857-51.215c-35.616,0-63.519,36.174-63.519,82.354c0,22.648,6.019,39.588,8.744,46.092  c-4.487,19.01-31.153,132.03-36.211,153.342c-2.925,12.441-20.543,110.705,8.618,118.54c32.764,8.803,62.051-86.899,65.032-97.713  c2.416-8.795,10.869-42.052,16.049-62.495c15.817,15.235,41.284,25.535,66.064,25.535c46.715,0,88.727-21.022,118.298-59.189  c28.679-37.02,44.474-88.618,44.474-145.282C457.206,127.983,438.182,84.311,405.017,52.467z" />
+            </svg>
             </a>
             <span className="p-2 invisible md:visible">
               All rights reserved © Moa Clay Co 2021

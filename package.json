@@ -17,9 +17,9 @@
     "build": "npm run build:css:prod && npm run build:remix"
   },
   "dependencies": {
-    "@remix-run/express": "^0.19.3",
-    "@remix-run/react": "^0.19.3",
-    "@remix-run/serve": "^0.19.3",
+    "@remix-run/express": "^0.20.1",
+    "@remix-run/react": "^0.20.1",
+    "@remix-run/serve": "^0.20.1",
     "@stripe/react-stripe-js": "^1.6.0",
     "@stripe/stripe-js": "^1.21.1",
     "@tailwindcss/line-clamp": "^0.2.2",
@@ -34,12 +34,12 @@
     "react-router-dom": "6.0.0-beta.6",
     "react-swipeable": "^6.2.0",
     "react-use-cart": "^1.13.0",
-    "remix": "^0.19.3",
+    "remix": "^0.20.1",
     "stripe": "^8.186.1",
     "tailwindcss": "^2.2.19"
   },
   "devDependencies": {
-    "@remix-run/dev": "^0.19.3",
+    "@remix-run/dev": "^0.20.1",
     "@tailwindcss/aspect-ratio": "^0.3.0",
     "@tailwindcss/forms": "^0.3.4",
     "@tailwindcss/typography": "^0.4.1",

@@ -4,7 +4,8 @@ const path = require('path')
 const express = require('express')
 const {createRequestHandler} = require('@remix-run/express')
 const compression = require('compression')
-require('./connector')
+const connector = require('./connector')
+connector()
 
 const MODE = process.env.NODE_ENV
 const BUILD_DIR = path.join(process.cwd(), 'build')
@@ -34,7 +35,7 @@ app.all(
       },
 )
 
-const port = process.env.PORT ?? 3000
+const port = process.env.PORT ?? 3001
 app.listen(port, () => {
   // preload the build so we're ready for the first request
   // we want the server to start accepting requests asap, so we wait until now

@@ -155,10 +155,10 @@
   dependencies:
     debug "^4.3.1"
 
-"@remix-run/dev@^0.19.3":
-  version "0.19.3"
-  resolved "https://npm.remix.run/download/@remix-run/dev/0.19.3/8638066077182993e1e34fcb404fb39beeb0fdb6a66b1fd96911286489a9e53f#837e7fdf125c2ffc80d96677a2689ce36d77adc2"
-  integrity sha512-+V8P3GEMEjb0nGNbOStLnrx6lIrt1tZdlfzlruFdBcBDJI066GislFjdAQaUX+dHjOVp/Vu7/8QcNCINoFlltA==
+"@remix-run/dev@^0.20.1":
+  version "0.20.1"
+  resolved "https://npm.remix.run/download/@remix-run/dev/0.20.1/559aca9b6679ccdcc450d4ac3f05327dbc431767bbcc153cbf668a89f2c6b98e#d85d61d802e4f9e6cc8033217958e32e21cae118"
+  integrity sha512-x9pSNxDhPm9xLHxvKO4NTron2nepuRn9myZSUB0neyZLChERcD9hoHssbLJzhSwrrjWxD/daP+i5gTRx9qc5FQ==
   dependencies:
     cacache "^15.0.5"
     chokidar "^3.5.1"
@@ -174,52 +174,50 @@
     ws "^7.4.5"
     xdm "^2.0.0"
 
-"@remix-run/express@0.19.3", "@remix-run/express@^0.19.3":
-  version "0.19.3"
-  resolved "https://npm.remix.run/download/@remix-run/express/0.19.3/78e13d73534839daa74453037707a2fb2817f414be73c4529fbc6978a5f7cb34#5deeb09ca8916d44336c420951d7f4bfcaff2a40"
-  integrity sha512-bTzLQFmbiyqnbWQ6V469wW9p3mfE715sOMBPf7KnvqKBZWJJW+S73aoGs9fupdcHqFmgMO4D+wylqJkCZDKxNw==
+"@remix-run/express@0.20.1", "@remix-run/express@^0.20.1":
+  version "0.20.1"
+  resolved "https://npm.remix.run/download/@remix-run/express/0.20.1/e2f2678bfd81b7ff031701a16c22aaaf5fa8e2a75a96cb4eb760678fe76a3ee5#6176b81c575860633b246e3a75e0a997fdeb8c6e"
+  integrity sha512-x0EzGkhrJFdRbjgDc00tnF3QXwbRrpZDUnFobD5Os+5fJIjkeLqGSENKdeWaWJ8cFTO+wfSzqcECZMh0EM6fBQ==
   dependencies:
-    "@remix-run/node" "0.19.3"
+    "@remix-run/node" "0.20.1"
 
-"@remix-run/node@0.19.3":
-  version "0.19.3"
-  resolved "https://npm.remix.run/download/@remix-run/node/0.19.3/39df8f314f989269c9650aa5b29570d7b9fc2b71b9ec248ba1f2eef35a06f4f6#62a6f3732fa4d6d4eecf38d8cb660ed104262b26"
-  integrity sha512-8J2bduT9dAxX03gl0Dvg3wiU40EkWsP6/4F7/n//N7y0jotWp0HCsfNdBgzYZ1haNwISGeQF5B0PVFDXWt4DQA==
+"@remix-run/node@0.20.1":
+  version "0.20.1"
+  resolved "https://npm.remix.run/download/@remix-run/node/0.20.1/79461ceb8a3c7e085fe9d16d770765774e2e5e4828c25e71940e11de990d8454#fdaf2f0d6e00689d40503005db7795dc65dd1b76"
+  integrity sha512-8TIo283aU2MK3p8eOmssHyT0rdhb6Re1py0pQyVo+HsdqLC5LbKwAiuejLZMteLowDkbBjubF2ENxWJC6JDb5w==
   dependencies:
-    "@remix-run/server-runtime" "0.19.3"
+    "@remix-run/server-runtime" "0.20.1"
     "@types/node-fetch" "^2.5.12"
     cookie-signature "^1.1.0"
     node-fetch "^2.6.1"
     source-map "^0.7.3"
 
-"@remix-run/react@^0.19.3":
-  version "0.19.3"
-  resolved "https://npm.remix.run/download/@remix-run/react/0.19.3/ecd0569aa41773decf9b7e78919a33c814e45be83721ea813e33a98aed5c6b7a#a2c9c077a8110331106bf83771773ebd674fe277"
-  integrity sha512-0Gguh6ObKu+2swtS5B5Dx/GyEluJN1uhMrCCjgoy+G1jJNHSZxyi4mH2S8TX5O/V7VFMgewCKHPa9J/DOZX4bA==
+"@remix-run/react@^0.20.1":
+  version "0.20.1"
+  resolved "https://npm.remix.run/download/@remix-run/react/0.20.1/857120293b653af53ea1a582fbb9b6453d2d10f8dbb09af517dd42d887c4eb58#9d875d0eaea8c7b7d5132d0fb72f873db71a2eaa"
+  integrity sha512-g6pqwEsrGLM0crhjP28AH28LCnYAl8OIREoXyQZ1nRy2/mhhsgOUMPYlQj5YEI4E3GuBsqpF/xJ8DHC/IKIrcg==
   dependencies:
     history "^5.0.0"
-    react-router-dom "6.0.0-beta.6"
 
-"@remix-run/serve@^0.19.3":
-  version "0.19.3"
-  resolved "https://npm.remix.run/download/@remix-run/serve/0.19.3/432d2e8ae50d184f7fda03cad20f98b5c06e34bb57dc079d8a2e402fe5d7584c#2dc850a01722e5dbfa2dd1777a1336dc84f5007a"
-  integrity sha512-W4AcwIzUyh7/wgCsWmtg0rTD7LjRUZiDaj62xE6uHthPAmpPInvRwxGLlw6qI+Drx2z84/6uzCBW4BM9qDrbXA==
+"@remix-run/serve@^0.20.1":
+  version "0.20.1"
+  resolved "https://npm.remix.run/download/@remix-run/serve/0.20.1/c2f2efa01d92061994f397043f8f5d15ef5445a7719c33ddc63848249fe7a408#16391ee0feb1392e57e70b5ec0d028d38ec2e0e6"
+  integrity sha512-QLhKCdOb9FdIcuvdl2k9aG+G3lhI3kqVtrlU8YSD5DlKmN0GebEJJNkNHzlEqgBQk6ahUjBftZvF7G5jnlXgLg==
   dependencies:
-    "@remix-run/express" "0.19.3"
+    "@remix-run/express" "0.20.1"
     compression "^1.7.4"
     express "^4.17.1"
     morgan "^1.10.0"
 
-"@remix-run/server-runtime@0.19.3":
-  version "0.19.3"
-  resolved "https://npm.remix.run/download/@remix-run/server-runtime/0.19.3/418141213943d8caefc2c3cd5737debc2965b2fe65093edc80c859cd39fe6fc3#ec639c00004e8b3a6f2dc2e45c234f15b51a85b0"
-  integrity sha512-7C4ZYhNLQ99jBgWqawf+GNw3wyipihWlhPLj1b1qQwKXkeCPUiAshI78ycjj5HoIVdjNHXcBRodXBg0L9kwOdg==
+"@remix-run/server-runtime@0.20.1":
+  version "0.20.1"
+  resolved "https://npm.remix.run/download/@remix-run/server-runtime/0.20.1/38925d5cd8fbb6808309d7b677dc50cd3bf0aeb97c8abee0f3c28bd5a9366a45#94deafc628655b1a0ded89f5d296f4e3c5e61f34"
+  integrity sha512-WAugslFVdWaU4S6nXKAZQ99+KBYoaV2pu9Vk6guxBB3SzuU7ipunE1AYcOL7bM8tYpfSRmBTnSPE1xKBo5asTQ==
   dependencies:
     "@types/cookie" "^0.4.0"
     cookie "^0.4.1"
     history "^5.0.0"
     jsesc "^3.0.1"
-    react-router-dom "6.0.0-beta.6"
     set-cookie-parser "^2.4.8"
     source-map "^0.7.3"
 
@@ -4160,10 +4158,10 @@ remark-rehype@^9.0.0:
     mdast-util-to-hast "^11.0.0"
     unified "^10.0.0"
 
-remix@^0.19.3:
-  version "0.19.3"
-  resolved "https://registry.yarnpkg.com/remix/-/remix-0.19.3.tgz#6d39888a2f1a38583844dc6bc7221f7237941310"
-  integrity sha512-TbO1i8mohBsoymSNe+bXOTwNVNxdJim6Tx7XbWQXqujspyMaiPx2Nzh7vkGB5c4OZ136oHvgE5e+/4w5kUDSHg==
+remix@^0.20.1:
+  version "0.20.1"
+  resolved "https://registry.yarnpkg.com/remix/-/remix-0.20.1.tgz#8ff36caeacad635759d9945caa244aefa941a717"
+  integrity sha512-xWFVjDskb66mfTwRmM63PaTTx0SjebG4neXXaDNMa8DfzsvTFqw+cwIUyZ1cBBKJeq4nHyR1CnU5Xt3IAle1GA==
   dependencies:
     fs-extra "^10.0.0"
 

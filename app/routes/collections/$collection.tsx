@@ -23,6 +23,7 @@ type ItemProps = {
   productInfos?: string[]
   headline: string
   instagram?: string
+  longDescription?: string
 }
 
 function classNames(...classes: Array<string>) {
@@ -37,6 +38,7 @@ const Item: React.FC<ItemProps> = ({
   price,
   productInfos,
   instagram,
+  longDescription
 }): JSX.Element => {
   const [showInfo, setShowInfo] = useState(false)
   const [index, setIndex] = useState(0)
@@ -85,7 +87,7 @@ const Item: React.FC<ItemProps> = ({
         ) : (
           <div className="flex flex-grow items-center -my-5">
             <div className="flex flex-grow justify-center">
-              {images.map((_, i) => {
+              {images.length > 1 && images.map((_, i) => {
                 return (
                   <div
                     key={i}
@@ -108,13 +110,19 @@ const Item: React.FC<ItemProps> = ({
 
       <div className="relative p-6 w-full text-left space-y-2 md:p-4 md:w-3/5">
         <div className="flex">
-          <p className="text-gray-700 text-2xl font-bold">{headline}</p>{' '}
+          <p className="text-gray-700 text-2xl font-bold">{headline}</p>
+         
           {amount === 0 ? (
             <span className="ml-1 p-1 text-green-800 bg-green-100 rounded">
               Slut i lager
             </span>
           ) : null}
         </div>
+         {longDescription ? 
+           <p className="text-gray-500 text-base font-normal leading-relaxed">
+          {longDescription}
+        </p>
+        :null}
         <p className="text-gray-700 text-lg font-bold">{price} SEK</p>
         <div className="flex justify-start space-x-2">
           {productInfos && productInfos.length > 0 ? (

@@ -8,7 +8,8 @@ const ItemSchema = new Schema({
   images: [String],
   instagram: String,
   collectionRef: String,
-  amount: Number
+  amount: Number,
+  longDescription: String
 
 },
 { collection: 'items' });
