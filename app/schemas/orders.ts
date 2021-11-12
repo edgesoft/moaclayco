@@ -7,7 +7,8 @@ const OrderSchema = new Schema({
         lastname: String,
         postaddress: String,
         zipcode: String,
-        city: String
+        city: String,
+        email: String
     },
     createdAt: Date,
     updatedAt: Date,
