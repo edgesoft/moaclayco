@@ -4,7 +4,8 @@ const path = require('path')
 const express = require('express')
 const {createRequestHandler} = require('@remix-run/express')
 const compression = require('compression')
-require('./connector')
+const connector = require('./connector')
+connector()
 
 const MODE = process.env.NODE_ENV
 const BUILD_DIR = path.join(process.cwd(), 'build')
@@ -26,20 +27,20 @@ app.use(express.static('public/build', {immutable: true, maxAge: '1y'}))
 app.all(
   '*',
   MODE === 'production'
-    ? createRequestHandler({build: require('./build')})
+    ? createRequestHandler({build: require(BUILD_DIR)})
     : (req, res, next) => {
         purgeRequireCache()
-        const build = require('./build')
+        const build = require(BUILD_DIR)
         return createRequestHandler({build, mode: MODE})(req, res, next)
       },
 )
 
-const port = process.env.PORT ?? 3000
+const port = process.env.PORT ?? 3001
 app.listen(port, () => {
   // preload the build so we're ready for the first request
   // we want the server to start accepting requests asap, so we wait until now
   // to preload the build
-  require('./build')
+  require(BUILD_DIR)
   console.log(`Express server listening on port ${port}`)
 })
 

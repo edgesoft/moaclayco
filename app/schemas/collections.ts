@@ -7,6 +7,7 @@ const collectionSchema = new Schema({
   longDescription:   String,
   image: String,
   instagram: String,
+  twitter: String,
   shortUrl: String
 
 },

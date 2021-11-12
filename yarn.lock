@@ -155,10 +155,10 @@
   dependencies:
     debug "^4.3.1"
 
-"@remix-run/dev@^0.19.3":
-  version "0.19.3"
-  resolved "https://npm.remix.run/download/@remix-run/dev/0.19.3/8638066077182993e1e34fcb404fb39beeb0fdb6a66b1fd96911286489a9e53f#837e7fdf125c2ffc80d96677a2689ce36d77adc2"
-  integrity sha512-+V8P3GEMEjb0nGNbOStLnrx6lIrt1tZdlfzlruFdBcBDJI066GislFjdAQaUX+dHjOVp/Vu7/8QcNCINoFlltA==
+"@remix-run/dev@^0.20.1":
+  version "0.20.1"
+  resolved "https://npm.remix.run/download/@remix-run/dev/0.20.1/559aca9b6679ccdcc450d4ac3f05327dbc431767bbcc153cbf668a89f2c6b98e#d85d61d802e4f9e6cc8033217958e32e21cae118"
+  integrity sha512-x9pSNxDhPm9xLHxvKO4NTron2nepuRn9myZSUB0neyZLChERcD9hoHssbLJzhSwrrjWxD/daP+i5gTRx9qc5FQ==
   dependencies:
     cacache "^15.0.5"
     chokidar "^3.5.1"
@@ -174,52 +174,50 @@
     ws "^7.4.5"
     xdm "^2.0.0"
 
-"@remix-run/express@0.19.3", "@remix-run/express@^0.19.3":
-  version "0.19.3"
-  resolved "https://npm.remix.run/download/@remix-run/express/0.19.3/78e13d73534839daa74453037707a2fb2817f414be73c4529fbc6978a5f7cb34#5deeb09ca8916d44336c420951d7f4bfcaff2a40"
-  integrity sha512-bTzLQFmbiyqnbWQ6V469wW9p3mfE715sOMBPf7KnvqKBZWJJW+S73aoGs9fupdcHqFmgMO4D+wylqJkCZDKxNw==
+"@remix-run/express@0.20.1", "@remix-run/express@^0.20.1":
+  version "0.20.1"
+  resolved "https://npm.remix.run/download/@remix-run/express/0.20.1/e2f2678bfd81b7ff031701a16c22aaaf5fa8e2a75a96cb4eb760678fe76a3ee5#6176b81c575860633b246e3a75e0a997fdeb8c6e"
+  integrity sha512-x0EzGkhrJFdRbjgDc00tnF3QXwbRrpZDUnFobD5Os+5fJIjkeLqGSENKdeWaWJ8cFTO+wfSzqcECZMh0EM6fBQ==
   dependencies:
-    "@remix-run/node" "0.19.3"
+    "@remix-run/node" "0.20.1"
 
-"@remix-run/node@0.19.3":
-  version "0.19.3"
-  resolved "https://npm.remix.run/download/@remix-run/node/0.19.3/39df8f314f989269c9650aa5b29570d7b9fc2b71b9ec248ba1f2eef35a06f4f6#62a6f3732fa4d6d4eecf38d8cb660ed104262b26"
-  integrity sha512-8J2bduT9dAxX03gl0Dvg3wiU40EkWsP6/4F7/n//N7y0jotWp0HCsfNdBgzYZ1haNwISGeQF5B0PVFDXWt4DQA==
+"@remix-run/node@0.20.1":
+  version "0.20.1"
+  resolved "https://npm.remix.run/download/@remix-run/node/0.20.1/79461ceb8a3c7e085fe9d16d770765774e2e5e4828c25e71940e11de990d8454#fdaf2f0d6e00689d40503005db7795dc65dd1b76"
+  integrity sha512-8TIo283aU2MK3p8eOmssHyT0rdhb6Re1py0pQyVo+HsdqLC5LbKwAiuejLZMteLowDkbBjubF2ENxWJC6JDb5w==
   dependencies:
-    "@remix-run/server-runtime" "0.19.3"
+    "@remix-run/server-runtime" "0.20.1"
     "@types/node-fetch" "^2.5.12"
     cookie-signature "^1.1.0"
     node-fetch "^2.6.1"
     source-map "^0.7.3"
 
-"@remix-run/react@^0.19.3":
-  version "0.19.3"
-  resolved "https://npm.remix.run/download/@remix-run/react/0.19.3/ecd0569aa41773decf9b7e78919a33c814e45be83721ea813e33a98aed5c6b7a#a2c9c077a8110331106bf83771773ebd674fe277"
-  integrity sha512-0Gguh6ObKu+2swtS5B5Dx/GyEluJN1uhMrCCjgoy+G1jJNHSZxyi4mH2S8TX5O/V7VFMgewCKHPa9J/DOZX4bA==
+"@remix-run/react@^0.20.1":
+  version "0.20.1"
+  resolved "https://npm.remix.run/download/@remix-run/react/0.20.1/857120293b653af53ea1a582fbb9b6453d2d10f8dbb09af517dd42d887c4eb58#9d875d0eaea8c7b7d5132d0fb72f873db71a2eaa"
+  integrity sha512-g6pqwEsrGLM0crhjP28AH28LCnYAl8OIREoXyQZ1nRy2/mhhsgOUMPYlQj5YEI4E3GuBsqpF/xJ8DHC/IKIrcg==
   dependencies:
     history "^5.0.0"
-    react-router-dom "6.0.0-beta.6"
 
-"@remix-run/serve@^0.19.3":
-  version "0.19.3"
-  resolved "https://npm.remix.run/download/@remix-run/serve/0.19.3/432d2e8ae50d184f7fda03cad20f98b5c06e34bb57dc079d8a2e402fe5d7584c#2dc850a01722e5dbfa2dd1777a1336dc84f5007a"
-  integrity sha512-W4AcwIzUyh7/wgCsWmtg0rTD7LjRUZiDaj62xE6uHthPAmpPInvRwxGLlw6qI+Drx2z84/6uzCBW4BM9qDrbXA==
+"@remix-run/serve@^0.20.1":
+  version "0.20.1"
+  resolved "https://npm.remix.run/download/@remix-run/serve/0.20.1/c2f2efa01d92061994f397043f8f5d15ef5445a7719c33ddc63848249fe7a408#16391ee0feb1392e57e70b5ec0d028d38ec2e0e6"
+  integrity sha512-QLhKCdOb9FdIcuvdl2k9aG+G3lhI3kqVtrlU8YSD5DlKmN0GebEJJNkNHzlEqgBQk6ahUjBftZvF7G5jnlXgLg==
   dependencies:
-    "@remix-run/express" "0.19.3"
+    "@remix-run/express" "0.20.1"
     compression "^1.7.4"
     express "^4.17.1"
     morgan "^1.10.0"
 
-"@remix-run/server-runtime@0.19.3":
-  version "0.19.3"
-  resolved "https://npm.remix.run/download/@remix-run/server-runtime/0.19.3/418141213943d8caefc2c3cd5737debc2965b2fe65093edc80c859cd39fe6fc3#ec639c00004e8b3a6f2dc2e45c234f15b51a85b0"
-  integrity sha512-7C4ZYhNLQ99jBgWqawf+GNw3wyipihWlhPLj1b1qQwKXkeCPUiAshI78ycjj5HoIVdjNHXcBRodXBg0L9kwOdg==
+"@remix-run/server-runtime@0.20.1":
+  version "0.20.1"
+  resolved "https://npm.remix.run/download/@remix-run/server-runtime/0.20.1/38925d5cd8fbb6808309d7b677dc50cd3bf0aeb97c8abee0f3c28bd5a9366a45#94deafc628655b1a0ded89f5d296f4e3c5e61f34"
+  integrity sha512-WAugslFVdWaU4S6nXKAZQ99+KBYoaV2pu9Vk6guxBB3SzuU7ipunE1AYcOL7bM8tYpfSRmBTnSPE1xKBo5asTQ==
   dependencies:
     "@types/cookie" "^0.4.0"
     cookie "^0.4.1"
     history "^5.0.0"
     jsesc "^3.0.1"
-    react-router-dom "6.0.0-beta.6"
     set-cookie-parser "^2.4.8"
     source-map "^0.7.3"
 
@@ -399,6 +397,13 @@
   resolved "https://registry.yarnpkg.com/@types/node/-/node-16.11.6.tgz#6bef7a2a0ad684cf6e90fcfe31cecabd9ce0a3ae"
   integrity sha512-ua7PgUoeQFjmWPcoo9khiPum3Pd60k4/2ZGXt18sm2Slk0W0xZTqt5Y0Ny1NyBiN1EVQ/+FaF9NcY4Qe6rwk5w==
 
+"@types/nodemailer@^6.4.4":
+  version "6.4.4"
+  resolved "https://registry.yarnpkg.com/@types/nodemailer/-/nodemailer-6.4.4.tgz#c265f7e7a51df587597b3a49a023acaf0c741f4b"
+  integrity sha512-Ksw4t7iliXeYGvIQcSIgWQ5BLuC/mljIEbjf615svhZL10PE9t+ei8O9gDaD3FPCasUJn9KTLwz2JFJyiiyuqw==
+  dependencies:
+    "@types/node" "*"
+
 "@types/normalize-package-data@^2.4.0":
   version "2.4.1"
   resolved "https://registry.yarnpkg.com/@types/normalize-package-data/-/normalize-package-data-2.4.1.tgz#d3357479a0fdfdd5907fe67e17e0a85c906e1301"
@@ -477,7 +482,7 @@
   resolved "https://registry.yarnpkg.com/@vercel/go/-/go-1.2.3.tgz#6f2bdba5681f9d64ee17060c5d63589e2d45e2d8"
   integrity sha512-BZCHRz43Qfr0DwZlZQCcofR+3cr+H+HK72/ZPkZy1Uq0NYjJMlmZ3ahuMgvJxT9lfC1RA6eOEUlUsZ+gqKcMCg==
 
-"@vercel/node@1.12.1":
+"@vercel/node@1.12.1", "@vercel/node@^1.12.1":
   version "1.12.1"
   resolved "https://registry.yarnpkg.com/@vercel/node/-/node-1.12.1.tgz#15f42f64690f904f8a52a387123ce0958657060f"
   integrity sha512-NcawIY05BvVkWlsowaxF2hl/hJg475U8JvT2FnGykFPMx31q1/FtqyTw/awSrKfOSRXR0InrbEIDIelmS9NzPA==
@@ -2022,6 +2027,13 @@ history@^5.0.0:
   dependencies:
     "@babel/runtime" "^7.7.6"
 
+history@^5.1.0:
+  version "5.1.0"
+  resolved "https://registry.yarnpkg.com/history/-/history-5.1.0.tgz#2e93c09c064194d38d52ed62afd0afc9d9b01ece"
+  integrity sha512-zPuQgPacm2vH2xdORvGGz1wQMuHSIB56yNAy5FnLuwOwgSYyPKptJtcMm6Ev+hRGeS+GzhbmRacHzvlESbFwDg==
+  dependencies:
+    "@babel/runtime" "^7.7.6"
+
 hosted-git-info@^2.1.4:
   version "2.8.9"
   resolved "https://registry.yarnpkg.com/hosted-git-info/-/hosted-git-info-2.8.9.tgz#dffc0bf9a21c02209090f2aa69429e1414daf3f9"
@@ -3347,10 +3359,22 @@ node-fetch@^2.6.1:
   dependencies:
     whatwg-url "^5.0.0"
 
+node-mailer@^0.1.1:
+  version "0.1.1"
+  resolved "https://registry.yarnpkg.com/node-mailer/-/node-mailer-0.1.1.tgz#609e14a9b2c34422540b3a66938163d1d2421500"
+  integrity sha1-YJ4UqbLDRCJUCzpmk4Fj0dJCFQA=
+  dependencies:
+    nodemailer ">= 0.1.15"
+
 node-releases@^2.0.1:
   version "2.0.1"
   resolved "https://registry.yarnpkg.com/node-releases/-/node-releases-2.0.1.tgz#3d1d395f204f1f2f29a54358b9fb678765ad2fc5"
   integrity sha512-CqyzN6z7Q6aMeF/ktcMVTzhAHCEpf8SOarwpzpf8pNBY2k5/oM34UHldUwp8VKI7uxct2HxSRdJjBaZeESzcxA==
+
+"nodemailer@>= 0.1.15":
+  version "6.7.0"
+  resolved "https://registry.yarnpkg.com/nodemailer/-/nodemailer-6.7.0.tgz#86614722c4e0c33d1b5b02aecb90d6d629932b0d"
+  integrity sha512-AtiTVUFHLiiDnMQ43zi0YgkzHOEWUkhDgPlBXrsDzJiJvB29Alo4OKxHQ0ugF3gRqRQIneCLtZU3yiUo7pItZw==
 
 normalize-package-data@^2.5.0:
   version "2.5.0"
@@ -3992,17 +4016,20 @@ react-is@^16.8.1:
   resolved "https://registry.yarnpkg.com/react-is/-/react-is-16.13.1.tgz#789729a4dc36de2999dc156dd6c1d9c18cea56a4"
   integrity sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==
 
-react-router-dom@6.0.0-beta.6:
-  version "6.0.0-beta.6"
-  resolved "https://registry.yarnpkg.com/react-router-dom/-/react-router-dom-6.0.0-beta.6.tgz#326c39382674c337b27f5d183026cdbab6373034"
-  integrity sha512-8pca4/YgQi+azEoY4KtfQMuhkIgRurmqa+mBXIICZRp71nPQX/x1lAnTw6Q2/J5dFu2rIRx1V+HA4hZ1AV0x2Q==
+react-router-dom@^6.0.2:
+  version "6.0.2"
+  resolved "https://registry.yarnpkg.com/react-router-dom/-/react-router-dom-6.0.2.tgz#860cefa697b9d4965eced3f91e82cdbc5995f3ad"
+  integrity sha512-cOpJ4B6raFutr0EG8O/M2fEoyQmwvZWomf1c6W2YXBZuFBx8oTk/zqjXghwScyhfrtnt0lANXV2182NQblRxFA==
   dependencies:
-    react-router "6.0.0-beta.6"
+    history "^5.1.0"
+    react-router "6.0.2"
 
-react-router@6.0.0-beta.6:
-  version "6.0.0-beta.6"
-  resolved "https://registry.yarnpkg.com/react-router/-/react-router-6.0.0-beta.6.tgz#147e8313d3ce5b4a53b8fc1dae6f20664f5df69a"
-  integrity sha512-wuwkFWb464LwWcGuO75kYfzWPE9f5Wgj9/cRVVh8kh/IjOIDpM+8nYCs11ukMJwnwT+3pIps9t/lB9Hnk67zpw==
+react-router@6.0.2:
+  version "6.0.2"
+  resolved "https://registry.yarnpkg.com/react-router/-/react-router-6.0.2.tgz#bd2b0fa84fd1d152671e9f654d9c0b1f5a7c86da"
+  integrity sha512-8/Wm3Ed8t7TuedXjAvV39+c8j0vwrI5qVsYqjFr5WkJjsJpEvNSoLRUbtqSEYzqaTUj1IV+sbPJxvO+accvU0Q==
+  dependencies:
+    history "^5.1.0"
 
 react-swipeable@^6.2.0:
   version "6.2.0"
@@ -4160,10 +4187,10 @@ remark-rehype@^9.0.0:
     mdast-util-to-hast "^11.0.0"
     unified "^10.0.0"
 
-remix@^0.19.3:
-  version "0.19.3"
-  resolved "https://registry.yarnpkg.com/remix/-/remix-0.19.3.tgz#6d39888a2f1a38583844dc6bc7221f7237941310"
-  integrity sha512-TbO1i8mohBsoymSNe+bXOTwNVNxdJim6Tx7XbWQXqujspyMaiPx2Nzh7vkGB5c4OZ136oHvgE5e+/4w5kUDSHg==
+remix@^0.20.1:
+  version "0.20.1"
+  resolved "https://registry.yarnpkg.com/remix/-/remix-0.20.1.tgz#8ff36caeacad635759d9945caa244aefa941a717"
+  integrity sha512-xWFVjDskb66mfTwRmM63PaTTx0SjebG4neXXaDNMa8DfzsvTFqw+cwIUyZ1cBBKJeq4nHyR1CnU5Xt3IAle1GA==
   dependencies:
     fs-extra "^10.0.0"
 
@@ -4736,6 +4763,11 @@ ts-node@8.9.1:
     make-error "^1.1.1"
     source-map-support "^0.5.17"
     yn "3.1.1"
+
+ts-tiny-invariant@^1.0.5:
+  version "1.0.5"
+  resolved "https://registry.yarnpkg.com/ts-tiny-invariant/-/ts-tiny-invariant-1.0.5.tgz#cd3534aa90fcc3277abc2f8c14bd8bcb57c6b317"
+  integrity sha512-md/ohza8w2Uj3YE/oPjZBQeNlmNH0+Hbva0SOkW9RNAyHeYoY6bzK6XvriW3Fo/sV7rEu6Mv+O+OFUkJK0euWw==
 
 tslib@1.9.3:
   version "1.9.3"
