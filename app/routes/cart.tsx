@@ -9,6 +9,7 @@ import {
   useFetcher,
   createCookie,
 } from 'remix'
+import Loader from '~/components/loader'
 
 import {Items} from '~/schemas/items'
 import {Orders} from '~/schemas/orders'
@@ -22,7 +23,6 @@ export let meta: MetaFunction = () => {
     description: 'Moa Clay Collection',
   }
 }
-
 
 type Id = {
   id: string
@@ -99,6 +99,7 @@ export let action: ActionFunction = async ({request}) => {
     postaddress: body.get('postaddress'),
     zipcode: body.get('zipcode'),
     city: body.get('city'),
+    email: body.get('email'),
   }
 
   const mappedItems = data.map((d: any) => {
@@ -163,13 +164,9 @@ const scrollToTop = () => {
 type InputProps = {
   name: string
   placeholder: string
-  showError: boolean
 }
 
-const Input: React.FC<InputProps> = ({
-  name,
-  placeholder
-}): JSX.Element => {
+const Input: React.FC<InputProps> = ({name, placeholder}): JSX.Element => {
   const [value, setValue] = useStickyState('', name)
   const [invalid, setInvalid] = useState(false)
 
@@ -200,9 +197,6 @@ export default function Index() {
   let ref = useRef(null)
   const [closeFreight, setCloseFreight] = useState(false)
   let navigation = useNavigate()
-
-  const checkError = (key: string) =>
-    cartFetcher.data && cartFetcher.data.errors && cartFetcher.data.errors[key]
 
   const hasItemsError = () =>
     cartFetcher.data && cartFetcher.data.errors && cartFetcher.data.errors.items
@@ -394,45 +388,28 @@ export default function Index() {
 
                       <div className="mt-2">
                         <label>Förnamn</label>
-                        <Input
-                          name="firstname"
-                          placeholder="Förnamn"
-                          showError={checkError('firstname')}
-                        />
+                        <Input name="firstname" placeholder="Förnamn" />
                       </div>
                       <div className="mt-2">
                         <label className="text-base">Efternamn</label>
-                        <Input
-                          name="lastname"
-                          placeholder="Efternamn"
-                          showError={checkError('lastname')}
-                        />
+                        <Input name="lastname" placeholder="Efternamn" />
                       </div>
-
+                      <div className="mt-2">
+                        <label className="text-base">Epost</label>
+                        <Input name="email" placeholder="Epost" />
+                      </div>
                       <div className="mt-2">
                         <label className="text-base">Postadress</label>
-                        <Input
-                          name="postaddress"
-                          placeholder="Postaddress"
-                          showError={checkError('postaddress')}
-                        />
+                        <Input name="postaddress" placeholder="Postaddress" />
                       </div>
                       <div className="flex mt-2">
                         <div className="w-1/3">
                           <label className="">Postnummer</label>
-                          <Input
-                            name="zipcode"
-                            placeholder="Postnr"
-                            showError={checkError('zipcode')}
-                          />
+                          <Input name="zipcode" placeholder="Postnr" />
                         </div>
                         <div className="pl-2 w-2/3">
                           <label className="">Ort</label>
-                          <Input
-                            name="city"
-                            placeholder="Ort"
-                            showError={checkError('city')}
-                          />
+                          <Input name="city" placeholder="Ort" />
                         </div>
                       </div>
                       <div className="flex flex-row-reverse flex-grow my-4">
@@ -478,9 +455,12 @@ export default function Index() {
                     <p className="text-sm">Titta på fler kollektioner</p>
                   </div>
                 </div>
-                <button  onClick={() => {
-                  setCloseFreight(true)
-                }} className="absolute right-2 top-2 mr-1 text-green-900 text-2xl font-normal leading-none bg-transparent outline-none focus:outline-none">
+                <button
+                  onClick={() => {
+                    setCloseFreight(true)
+                  }}
+                  className="absolute right-2 top-2 mr-1 text-green-900 text-2xl font-normal leading-none bg-transparent outline-none focus:outline-none"
+                >
                   <span>×</span>
                 </button>
               </div>
@@ -488,11 +468,7 @@ export default function Index() {
           </div>
         ) : null}
       </div>
-      {cartFetcher.state === 'submitting' ? (
-        <div className="fixed left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2">
-          <div className="w-32 h-32 bg-blue-300 border-blue-500 rounded-full animate-ping ring-2 ring-blue-800"></div>
-        </div>
-      ) : null}
+      {cartFetcher.state === 'submitting' ? <Loader /> : null}
     </>
   )
 }
