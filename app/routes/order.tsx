@@ -1,7 +1,14 @@
-import { useEffect } from 'react'
-import { useCart } from 'react-use-cart'
-import { createCookie, LoaderFunction, MetaFunction, redirect, useLoaderData } from 'remix'
-import { Orders } from '~/schemas/orders'
+import {useEffect} from 'react'
+import {useNavigate} from 'react-router'
+import {useCart} from 'react-use-cart'
+import {
+  createCookie,
+  LoaderFunction,
+  MetaFunction,
+  redirect,
+  useLoaderData,
+} from 'remix'
+import {Orders} from '~/schemas/orders'
 
 export let loader: LoaderFunction = async ({request}) => {
   let url = new URL(await request.url)
@@ -14,10 +21,15 @@ export let loader: LoaderFunction = async ({request}) => {
   const order = await Orders.findOne({'paymentIntent.id': paymentIntent})
 
   if (!order) {
-    return redirect("/")
+    return redirect('/')
   }
 
-  return new Response(JSON.stringify(order), {
+  const serialize = {
+    ...order.toObject(),
+    redirect_status: body.get('redirect_status'),
+  }
+
+  return new Response(JSON.stringify(serialize), {
     status: 200,
     headers: {
       'Set-Cookie': await cookie.serialize(null),
@@ -34,11 +46,55 @@ export let meta: MetaFunction = () => {
 
 export default function Index() {
   let data = useLoaderData()
-  console.log(data)
+  let navigation = useNavigate()
+  try {
+    data = JSON.parse(data)
+  } catch (e) {}
+
   const {emptyCart} = useCart()
   useEffect(() => {
     emptyCart()
   }, [])
 
-  return <div className="ml-2 mr-2 mt-20">Tack för ditt köp! Ditt ordernummer är {data._id}</div>
+  return (
+    <div className="ml-4 mr-2 mt-20">
+      <div className="py-4">
+        {data.redirect_status === 'succeeded' ? (
+          <>
+            <p className="text-gray-700 text-2xl font-bold">
+              Tack för ditt köp!
+            </p>
+            <p className="py-2">
+              Ditt ordernummer är{' '}
+              <span className="font-semibold">{data._id}</span>
+            </p>
+
+            <p className="pt-4 text-base">
+              Vi kommer att skicka ordern så fort som möjligt. Om du har frågor
+              om din order så är du välkommen att skicka frågor till &nbsp;
+              <span className="text-blue-600">moclayco@gmail.com</span>. Ange
+              ordernummer i din ämnesrad
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-gray-700 text-2xl font-bold">
+              Ditt köp gick inte igenom
+            </p>
+            <p className="py-2">
+              Du har avbrytit ditt köp eller så har betalningen inte gått igenom
+            </p>
+          </>
+        )}
+        <button
+          onClick={() => {
+            navigation('/')
+          }}
+          className="mt-2 p-2 text-white bg-blue-600 rounded"
+        >
+          Se kollektioner
+        </button>
+      </div>
+    </div>
+  )
 }
