@@ -5,6 +5,4 @@ const stripeClient = new Stripe(process.env.STRIPE_SRV || "", {
 });
 
 
-
-export const clientId = process.env.STRIPE_CLIENT || ""
-export  default stripeClient
+export default stripeClient

@@ -2,6 +2,9 @@ import React from "react";
 
 function useStickyState(defaultValue: string, key: string) {
     const [value, setValue] = React.useState(() => {
+      if (typeof window === 'undefined') {
+        return defaultValue
+      }
       const stickyValue = window.localStorage.getItem(`clay.${key}`);
       return stickyValue !== null
         ? JSON.parse(stickyValue)

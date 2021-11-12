@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState} from 'react'
-import {useNavigate} from 'react-router'
+import {useNavigate} from 'react-router-dom'
 import {useCart} from 'react-use-cart'
 import {
   ActionFunction,
@@ -14,7 +14,8 @@ import Loader from '~/components/loader'
 import {Items} from '~/schemas/items'
 import {Orders} from '~/schemas/orders'
 import {classNames} from '~/utils/classnames'
-import {FREE_FREIGHT, FREIGHT_COST} from '~/utils/constants'
+import {FREE_FREIGHT} from '~/utils/constants'
+import getFreightCost from '~/utils/getFreightCost'
 import useStickyState from '../hooks/useStickyState'
 
 export let meta: MetaFunction = () => {
@@ -143,10 +144,6 @@ export let action: ActionFunction = async ({request}) => {
       'Set-Cookie': await cookie.serialize(order._id),
     },
   })
-}
-
-const getFreightCost = (totalSum: number) => {
-  return totalSum >= FREE_FREIGHT ? 0 : FREIGHT_COST
 }
 
 const scrollToTop = () => {
