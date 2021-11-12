@@ -24,6 +24,7 @@ import {useEffect, useRef, useState} from 'react'
 import {classNames} from '~/utils/classnames'
 import Loader from '~/components/loader'
 import Terms from '~/components/terms'
+import { Order } from '~/types'
 
 declare global {
   interface Window {
@@ -36,14 +37,7 @@ if (typeof window !== 'undefined') {
   stripePromise = loadStripe(window ? window.ENV.STRIPE_PUBLIC_KEY : '')
 }
 
-type Order = {
-  _id: string
-  totalSum: number
-  paymentIntent?: {
-    id: string
-    client_secret: string
-  }
-}
+
 
 export let loader: LoaderFunction = async ({request}) => {
   let url = new URL(await request.url)

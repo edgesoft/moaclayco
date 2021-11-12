@@ -3,31 +3,19 @@ import {useEffect, useState} from 'react'
 import {useSwipeable} from 'react-swipeable'
 import {Items} from '~/schemas/items'
 import {useCart} from 'react-use-cart'
+import useScrollToTop from '~/hooks/useScrollToTop'
+import {classNames} from '~/utils/classnames'
+import {ItemProps} from '~/types'
 
 export let loader: LoaderFunction = async ({params}) => {
   return Items.find({collectionRef: params.collection})
 }
 
-export let meta: MetaFunction = () => {
+export let meta: MetaFunction = ({data}) => {
   return {
-    title: 'Moa Clay Collection',
-    description: 'Moa Clay Collection',
+    title: 'Moa Clay Collection - artiklar',
+    description: data.map((d: ItemProps) => d.headline).join(', '),
   }
-}
-
-type ItemProps = {
-  _id: string
-  images: string[]
-  amount: number
-  price: number
-  productInfos?: string[]
-  headline: string
-  instagram?: string
-  longDescription?: string
-}
-
-function classNames(...classes: Array<string>) {
-  return classes.filter(Boolean).join(' ')
 }
 
 const Item: React.FC<ItemProps> = ({
@@ -38,7 +26,7 @@ const Item: React.FC<ItemProps> = ({
   price,
   productInfos,
   instagram,
-  longDescription
+  longDescription,
 }): JSX.Element => {
   const [showInfo, setShowInfo] = useState(false)
   const [index, setIndex] = useState(0)
@@ -87,22 +75,23 @@ const Item: React.FC<ItemProps> = ({
         ) : (
           <div className="flex flex-grow items-center -my-5">
             <div className="flex flex-grow justify-center">
-              {images.length > 1 && images.map((_, i) => {
-                return (
-                  <div
-                    key={i}
-                    onClick={() => {
-                      if (index !== i) {
-                        setIndex(i)
-                      }
-                    }}
-                    className={classNames(
-                      'mx-2 w-2 h-2 bg-white rounded-full ring-1 ring-offset-2',
-                      index === i ? 'bg-green-500' : 'bg-white',
-                    )}
-                  ></div>
-                )
-              })}
+              {images.length > 1 &&
+                images.map((_, i) => {
+                  return (
+                    <div
+                      key={i}
+                      onClick={() => {
+                        if (index !== i) {
+                          setIndex(i)
+                        }
+                      }}
+                      className={classNames(
+                        'mx-2 w-2 h-2 bg-white rounded-full ring-1 ring-offset-2',
+                        index === i ? 'bg-green-500' : 'bg-white',
+                      )}
+                    ></div>
+                  )
+                })}
             </div>
           </div>
         )}
@@ -111,18 +100,18 @@ const Item: React.FC<ItemProps> = ({
       <div className="relative p-6 w-full text-left space-y-2 md:p-4 md:w-3/5">
         <div className="flex">
           <p className="text-gray-700 text-2xl font-bold">{headline}</p>
-         
+
           {amount === 0 ? (
             <span className="ml-1 p-1 text-green-800 bg-green-100 rounded">
               Slut i lager
             </span>
           ) : null}
         </div>
-         {longDescription ? 
-           <p className="text-gray-500 text-base font-normal leading-relaxed">
-          {longDescription}
-        </p>
-        :null}
+        {longDescription ? (
+          <p className="text-gray-500 text-base font-normal leading-relaxed">
+            {longDescription}
+          </p>
+        ) : null}
         <p className="text-gray-700 text-lg font-bold">{price} SEK</p>
         <div className="flex justify-start space-x-2">
           {productInfos && productInfos.length > 0 ? (
@@ -180,17 +169,7 @@ const Item: React.FC<ItemProps> = ({
 }
 
 export default function Collection() {
-  useEffect(() => {
-    try {
-      window.scroll({
-        top: 0,
-        left: 0,
-        behavior: 'auto',
-      })
-    } catch (error) {
-      window.scrollTo(0, 0)
-    }
-  }, [])
+  useScrollToTop()
   let data = useLoaderData()
 
   return (

@@ -90,7 +90,7 @@ export default function Index() {
           onClick={() => {
             navigation('/')
           }}
-          className="mt-2 p-2 text-white bg-blue-600 rounded"
+          className="mt-2 p-2 text-gray-700 font-semibold bg-rosa rounded"
         >
           Se kollektioner
         </button>

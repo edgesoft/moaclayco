@@ -1,8 +1,13 @@
 import {useState} from 'react'
 
+
 function useLocalStorage<T>(key: string, initialValue: T) {
   let loaded = false
   const [storedValue, setStoredValue] = useState<T>(() => {
+
+    if (typeof window === 'undefined') {
+      return initialValue
+    }
     try {
       const item = window.localStorage.getItem(key)
       loaded = true

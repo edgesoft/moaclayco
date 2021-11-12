@@ -1,29 +1,19 @@
-import type {MetaFunction, LinksFunction, LoaderFunction} from 'remix'
+import type {MetaFunction, LoaderFunction} from 'remix'
 import {useLoaderData} from 'remix'
 import {useNavigate} from 'react-router-dom'
 import {Collections} from '../schemas/collections'
-import {useEffect} from 'react'
+import {CollectionProps} from '~/types'
+import useScrollToTop from '~/hooks/useScrollToTop'
 
 export let loader: LoaderFunction = async () => {
   return Collections.find()
 }
 
-export let meta: MetaFunction = () => {
+export let meta: MetaFunction = ({data}) => {
   return {
-    title: 'Moa Clay Collection',
-    description: 'Moa Clay Collection',
+    title: 'Moa Clay Collection - kollektioner',
+    description: data.map((d: CollectionProps) => d.headline).join(', '),
   }
-}
-
-type CollectionProps = {
-  _id?: string
-  image: string
-  headline: string
-  longDescription: string
-  shortDescription: string
-  instagram?: string
-  twitter?: string
-  shortUrl: string
 }
 
 const Collection: React.FC<CollectionProps> = ({
@@ -89,17 +79,7 @@ const Collection: React.FC<CollectionProps> = ({
 }
 
 export default function Index() {
-  useEffect(() => {
-    try {
-      window.scroll({
-        top: 0,
-        left: 0,
-        behavior: 'auto',
-      })
-    } catch (error) {
-      window.scrollTo(0, 0)
-    }
-  }, [])
+  useScrollToTop()
   let data = useLoaderData()
   return (
     <section className="mx-auto px-4 py-5 max-w-6xl sm:px-6 lg:px-4">
