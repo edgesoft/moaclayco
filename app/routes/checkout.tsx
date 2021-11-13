@@ -187,8 +187,7 @@ export default function Index() {
   return (
     <Elements stripe={stripePromise} options={options}>
       <>
-     
-        {!show || transition.state === 'loading' ? <Loader /> : null}
+        <Loader forceSpinner={!show} transition={transition}/>
         <section
           className={classNames(
             show && transition.state !== 'loading'

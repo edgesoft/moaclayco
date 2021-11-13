@@ -1,6 +1,7 @@
 import type {LinksFunction} from 'remix'
 import {Meta, Links, Scripts, useLoaderData, LiveReload, useCatch} from 'remix'
 import tailwindStyles from './styles/tailwind.css'
+import appStyles from './styles/app.css'
 import {Link, Outlet} from 'react-router-dom'
 import {CartProvider} from 'react-use-cart'
 import Cookies from './components/cookies'
@@ -16,7 +17,10 @@ export function loader() {
 }
 
 export let links: LinksFunction = () => {
-  return [{rel: 'stylesheet', href: tailwindStyles}]
+  return [
+    {rel: 'stylesheet', href: appStyles},
+    {rel: 'stylesheet', href: tailwindStyles},
+  ]
 }
 
 function Document({
@@ -35,7 +39,6 @@ function Document({
           name="viewport"
           content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes"
         />
-
         <link rel="icon" href="/favicon.png" type="image/png" />
         {title ? <title>{title}</title> : null}
         <Meta />

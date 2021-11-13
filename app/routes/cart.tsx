@@ -464,7 +464,7 @@ export default function Index() {
           </div>
         ) : null}
       </div>
-      {cartFetcher.state === 'submitting' ? <Loader /> : null}
+      <Loader transition={cartFetcher}/>
     </>
   )
 }
