@@ -72,8 +72,8 @@ export default function Index() {
             <p className="pt-4 text-base">
               Vi kommer att skicka ordern så fort som möjligt. Om du har frågor
               om din order så är du välkommen att skicka frågor till &nbsp;
-              <span className="text-blue-600">moclayco@gmail.com</span>. Ange
-              ordernummer i din ämnesrad
+              <span className="text-blue-600">support@moaclayco.com</span>. Ange
+              ordernummer i din ämnesrad.
             </p>
           </>
         ) : (
