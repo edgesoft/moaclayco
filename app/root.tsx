@@ -1,7 +1,7 @@
 import type {LinksFunction} from 'remix'
 import {Meta, Links, Scripts, useLoaderData, LiveReload, useCatch} from 'remix'
 import tailwindStyles from './styles/tailwind.css'
-import {Outlet} from 'react-router-dom'
+import {Link, Outlet} from 'react-router-dom'
 import {CartProvider} from 'react-use-cart'
 import Cookies from './components/cookies'
 import Header from './components/header'
@@ -19,7 +19,6 @@ export let links: LinksFunction = () => {
   return [{rel: 'stylesheet', href: tailwindStyles}]
 }
 
-
 function Document({
   children,
   title,
@@ -34,7 +33,7 @@ function Document({
         <meta charSet="utf-8" />
         <meta
           name="viewport"
-          content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"
+          content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes"
         />
 
         <link rel="icon" href="/favicon.png" type="image/png" />
@@ -46,11 +45,13 @@ function Document({
         <Header />
         {children}
         <Scripts />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `window.ENV = ${JSON.stringify(data.ENV)}`,
-          }}
-        />
+        {data ? (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `window.ENV = ${JSON.stringify(data.ENV)}`,
+            }}
+          />
+        ) : null}
         {process.env.NODE_ENV === 'development' && <LiveReload />}
       </body>
     </html>
@@ -62,7 +63,7 @@ export default function App() {
     <CartProvider>
       <Document>
         <Outlet />
-        <Footer/>
+        <Footer />
         <Cookies />
       </Document>
     </CartProvider>
@@ -71,15 +72,20 @@ export default function App() {
 
 export function CatchBoundary() {
   let caught = useCatch()
-
   switch (caught.status) {
     case 401:
     case 404:
       return (
         <Document title={`${caught.status} ${caught.statusText}`}>
-          <h1>
-            {caught.status} {caught.statusText}
-          </h1>
+          <div className="mt-20 p-2">
+            <h1>Sidan kunde inte hittas</h1>
+            <Link to="/">
+              <button className="mt-2 p-2 text-gray-700 font-semibold bg-rosa rounded">
+                Se kollektioner
+              </button>
+            </Link>
+          </div>
+          <Footer />
         </Document>
       )
 
