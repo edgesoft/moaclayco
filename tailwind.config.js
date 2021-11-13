@@ -6,19 +6,21 @@ module.exports = {
   mode: process.env.NODE_ENV ? 'jit' : undefined,
   purge: [],
   darkMode: false, // or 'media' or 'class'
+  corePlugin: {
+    outline: false,
+  },
   theme: {
     extend: {
       colors: {
-        'rosa': '#f0d5c8',
+        rosa: '#f0d5c8',
       },
       fontFamily: {
         note: ['Noteworthy'],
       },
-    }
+    },
   },
   variants: {
-    extend: {
-    },
+    extend: {},
   },
   purge: {
     mode: 'layers',
