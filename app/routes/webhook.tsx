@@ -21,7 +21,7 @@ const sendMail = async (order: Order) => {
   let info = await transporter.sendMail({
     from: 'support@moaclayco.com',
     to: order.customer.email,
-    bcc: "moaclayco@gmail.com,wicket.programmer@gmail.com",
+    bcc: "moaclayco@gmail.com,wicket.programmer@gmail.com,support@moaclayco.com",
     subject: `Order ${order._id} (moaclayco.com)`,
     text: `Hej ${order.customer.firstname} ${order.customer.lastname}!\nTack för din order (${order._id})\n\nVi kommer att behandla ordern så snart vi kan.\n\nMed vänliga hälsningar Moa Clay Collection`,
   })
