@@ -1,8 +1,9 @@
-const Footer = ():JSX.Element | null => {
+const Footer = (): JSX.Element | null => {
   return (
     <div className="fixed bottom-0 flex flex-grow px-4 w-full h-14 bg-gray-50">
       <div className="flew-grow flex items-center p-1 md:p-3">
         <a
+          title="instagram"
           className="h-10"
           href="https://www.instagram.com/moaclayco/"
           target="_blank"
@@ -21,6 +22,7 @@ const Footer = ():JSX.Element | null => {
           </svg>
         </a>
         <a
+          title="twitter"
           href="https://twitter.com/moaclaycohl-Config"
           className="h-10 hover:text-blue-400 text-gray-500"
         >
@@ -34,6 +36,7 @@ const Footer = ():JSX.Element | null => {
           </svg>
         </a>
         <a
+          title="tiktok"
           href="https://www.tiktok.com/@moaclayco"
           className="h-10 hover:text-black text-gray-500"
         >
@@ -48,6 +51,7 @@ const Footer = ():JSX.Element | null => {
           </svg>
         </a>
         <a
+          title="pinterest"
           href="https://www.pinterest.se/moaclayco"
           className="h-10 text-gray-500 hover:text-red-600"
         >
