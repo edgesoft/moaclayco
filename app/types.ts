@@ -26,6 +26,7 @@ export type CollectionProps = {
   instagram?: string
   twitter?: string
   shortUrl: string
+  index?: number
 }
 
 export type ItemProps = {

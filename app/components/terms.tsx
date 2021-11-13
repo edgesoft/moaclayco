@@ -45,7 +45,7 @@ export default function Terms({show}: Show) {
                     www.moaclayco.com
                     <br />
                     <br />
-                    E-postadress: moaclayco@gmail.com<br/><br/>
+                    E-postadress: supoort@moaclayco.com<br/><br/>
                   </p>
                   <h3 className="text-gray-900 text-lg">
                     Betalning och priser
@@ -113,7 +113,7 @@ export default function Terms({show}: Show) {
                       Reklamationer
                     </h3>
                     Vid reklamation vänligen kontakta Moaclayco kundservice:
-                    moaclayco@gmail.com
+                    support@moaclayco.com
                     <br />
                     <br />
                     <h3 className="text-gray-900 text-lg">
