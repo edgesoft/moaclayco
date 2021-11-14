@@ -21,7 +21,7 @@ async function dbConnect() {
 
   if (!cached.promise) {
     const opts = {
-      minPoolSize: 2,
+      minPoolSize: 4,
       useNewUrlParser: true,
       useUnifiedTopology: true,
       connectTimeoutMS: 10000,

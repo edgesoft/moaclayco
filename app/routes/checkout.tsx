@@ -24,7 +24,8 @@ import {useEffect, useRef, useState} from 'react'
 import {classNames} from '~/utils/classnames'
 import Loader from '~/components/loader'
 import Terms from '~/components/terms'
-import { Order } from '~/types'
+import {Order} from '~/types'
+import Feedback from '~/components/feedback'
 
 declare global {
   interface Window {
@@ -36,8 +37,6 @@ let stripePromise: Stripe | PromiseLike<Stripe | null> | null = null
 if (typeof window !== 'undefined') {
   stripePromise = loadStripe(window ? window.ENV.STRIPE_PUBLIC_KEY : '')
 }
-
-
 
 export let loader: LoaderFunction = async ({request}) => {
   let url = new URL(await request.url)
@@ -137,7 +136,7 @@ export default function Index() {
 
     return (
       <form onSubmit={handleSubmit}>
-        {showTerm ? <Terms show={setShowTerm}/> : null}
+        {showTerm ? <Terms show={setShowTerm} /> : null}
         <PaymentElement
           onReady={(e: StripePaymentElement) => {
             setShow(true)
@@ -149,9 +148,12 @@ export default function Index() {
             ref={termsRef}
             type="checkbox"
           />{' '}
-          <span className="-mt-2 px-1 py-1 underline" onClick={() => {
-            setShowTerm(true)
-          }}>
+          <span
+            className="-mt-2 px-1 py-1 underline"
+            onClick={() => {
+              setShowTerm(true)
+            }}
+          >
             Jag godkänner villkoren
           </span>
         </div>
@@ -161,25 +163,12 @@ export default function Index() {
         >
           Gå vidare till betalning
         </button>
-        {error ? (
-          <div className="fixed z-10 bottom-2 left-0 w-screen opacity-95">
-            <div className="relative flex m-1 px-4 py-2 text-red-900 bg-red-100 border-t-4 border-red-500 rounded-b shadow-md">
-              <div className="py-1">
-                <svg
-                  className="mr-4 w-6 h-6 text-red-500 fill-current"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
-                >
-                  <path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm12.73-1.41A8 8 0 1 0 4.34 4.34a8 8 0 0 0 11.32 11.32zM9 11V9h2v6H9v-4zm0-6h2v2H9V5z" />
-                </svg>
-              </div>
-              <div>
-                <p className="font-bold">Fel i formulär</p>
-                <p className="text-sm">{error}</p>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        <Feedback
+          headline="Fel i formulär"
+          forceInvisble={!error}
+          type="error"
+          message={error}
+        />
       </form>
     )
   }
@@ -187,7 +176,7 @@ export default function Index() {
   return (
     <Elements stripe={stripePromise} options={options}>
       <>
-        <Loader forceSpinner={!show} transition={transition}/>
+        <Loader forceSpinner={!show} transition={transition} />
         <section
           className={classNames(
             show && transition.state !== 'loading'

@@ -28,6 +28,11 @@ const OrderSchema = new Schema({
     paymentIntent: {
         id: String,
         client_secret: String
+    },
+    discount: {
+        code: String,
+        percentage: Number,
+        amount: Number
     }
 
 },

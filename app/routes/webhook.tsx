@@ -5,6 +5,7 @@ import { Items } from '~/schemas/items'
 import { Orders } from '~/schemas/orders'
 import { OrderItem, Order} from '~/types'
 import nodemailer from 'nodemailer'
+import { Discounts } from '~/schemas/discounts'
 
 
 const sendMail = async (order: Order) => {
@@ -33,12 +34,15 @@ const sendMail = async (order: Order) => {
 
 const fromPaymentIntent = async (id: string, status: string) => {
 
-  const order = await Orders.findOne({
+  const order: Order = await Orders.findOne({
     'paymentIntent.id': id,
   })
 
   if (order) {
     await Orders.updateOne({_id: order._id}, {status, webhookAt: new Date()})
+    if (order.discount && order.discount.amount > 0) {
+      await Discounts.updateOne({code: order.discount.code}, {used: true, usedAt: new Date()})
+    }
     if (status === 'SUCCESS') {
       order.items.map(async (i: OrderItem) => {
         await Items.updateOne(
