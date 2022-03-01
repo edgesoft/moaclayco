@@ -17,9 +17,9 @@
     "build": "npm run build:css:prod && npm run build:remix"
   },
   "dependencies": {
-    "@remix-run/express": "^0.20.1",
-    "@remix-run/react": "^0.20.1",
-    "@remix-run/serve": "^0.20.1",
+    "@remix-run/express": "^1.0.6",
+    "@remix-run/react": "^1.0.6",
+    "@remix-run/serve": "^1.0.6",
     "@stripe/react-stripe-js": "^1.6.0",
     "@stripe/stripe-js": "^1.21.1",
     "@vercel/node": "^1.12.1",
@@ -35,7 +35,7 @@
     "react-router-hash-link": "^2.4.3",
     "react-swipeable": "^6.2.0",
     "react-use-cart": "^1.13.0",
-    "remix": "^0.20.1",
+    "remix": "^1.0.6",
     "stripe": "^8.186.1",
     "tailwindcss": "^2.2.19",
     "vercel": "^23.1.2"

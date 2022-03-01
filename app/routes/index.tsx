@@ -1,6 +1,5 @@
-import {MetaFunction, LoaderFunction, useTransition} from 'remix'
+import {MetaFunction, LoaderFunction, useTransition, Link} from 'remix'
 import {useLoaderData} from 'remix'
-import {Link} from 'react-router-dom'
 import {Collections} from '../schemas/collections'
 import {CollectionProps} from '~/types'
 import useScrollToTop from '~/hooks/useScrollToTop'
@@ -28,7 +27,7 @@ const Collection: React.FC<CollectionProps> = ({
   index
 }): JSX.Element => {
   return (
-    <Link to={`/collections/${shortUrl}`}
+    <Link to={`/collections/${shortUrl}`} prefetch="intent"
       className="md:hover:-translate-y-2 md:hover:scale-105 flex flex-col w-full bg-gray-50 rounded-lg shadow-lg overflow-hidden transform transition duration-300 ease-in-out md:flex-row"
     >
       <div className="w-full h-80 md:w-2/5">

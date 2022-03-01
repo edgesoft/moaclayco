@@ -258,10 +258,22 @@ const Item: React.FC<ItemProps> = ({
   )
 }
 
+const hash = typeof window === 'undefined' ? "" : window.location.hash
+
+function useScroll(hash: string) {
+  useEffect(() => {
+    if (!hash)
+      window.scrollTo(0, 0)
+    
+  }, [])
+}
+
 export default function Collection() {
-  //useScrollToTop()
+  const hash = typeof window === 'undefined' ? "" : window.location.hash
+  useScroll(hash)
   let data = useLoaderData()
   let transition = useTransition()
+
 
   return (
     <>

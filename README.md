@@ -8,6 +8,12 @@ From your terminal:
 yarn  dev
 ```
 
+create images
+
+```
+convert -thumbnail 700x -quality 90 IMG_3720.HEIC 3720_thumb.jpg
+```
+
 ## Stage
 
 From your terminal:
@@ -18,7 +24,7 @@ yarn build
 ./node_modules/vercel/dist/index.js alias `build` stage.moaclayco.com
 ```
 
-## Productio
+## Production
 
 From your terminal:
 

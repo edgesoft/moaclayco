@@ -1,4 +1,4 @@
-import type {LinksFunction} from 'remix'
+import {LinksFunction, ScrollRestoration} from 'remix'
 import {Meta, Links, Scripts, useLoaderData, LiveReload, useCatch} from 'remix'
 import tailwindStyles from './styles/tailwind.css'
 import appStyles from './styles/app.css'

@@ -1,11 +1,12 @@
-import { Link, useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
+import {Link} from 'remix'
 import { useCart } from "react-use-cart"
 
 const Header = (): JSX.Element => {
     const {totalItems} = useCart()
     const history = useNavigate()
     return (
-      <Link to="/">
+      <Link to="/" prefetch="intent">
         <div
           style={{
             backgroundImage:

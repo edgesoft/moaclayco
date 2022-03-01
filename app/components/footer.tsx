@@ -23,7 +23,7 @@ const Footer = (): JSX.Element | null => {
         </a>
         <a
           title="twitter"
-          href="https://twitter.com/moaclaycohl-Config"
+          href="https://twitter.com/moaclayco"
           className="h-10 hover:text-blue-400 text-gray-500"
         >
           <svg
