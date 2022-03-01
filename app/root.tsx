@@ -1,4 +1,4 @@
-import {LinksFunction, ScrollRestoration} from 'remix'
+import {LinksFunction, LoaderFunction, redirect, ScrollRestoration} from 'remix'
 import {Meta, Links, Scripts, useLoaderData, LiveReload, useCatch} from 'remix'
 import tailwindStyles from './styles/tailwind.css'
 import appStyles from './styles/app.css'
@@ -8,13 +8,34 @@ import Cookies from './components/cookies'
 import Header from './components/header'
 import Footer from './components/footer'
 
-export function loader() {
+export const loader: LoaderFunction = async ({ request }) => {
+
+  let url = new URL(request.url);
+  let hostname = url.hostname;
+  let proto = request.headers.get("X-Forwarded-Proto") ?? url.protocol;
+
+  url.host =
+    request.headers.get("X-Forwarded-Host") ??
+    request.headers.get("host") ??
+    url.host;
+  url.protocol = "https:";
+
+  if (proto === "http" && hostname !== "localhost") {
+    return redirect(url.toString(), {
+      headers: {
+        "X-Forwarded-Proto": "https",
+      },
+    });
+  }
+
   return {
     ENV: {
       STRIPE_PUBLIC_KEY: process.env.STRIPE_PUBLIC_KEY,
     },
   }
 }
+
+
 
 export let links: LinksFunction = () => {
   return [
