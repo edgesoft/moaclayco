@@ -1,13 +1,13 @@
 {
   "private": true,
-  "name": "remix-app-template",
+  "name": "moaclayco",
   "description": "",
   "license": "",
   "scripts": {
     "css": "tailwindcss --output ./app/styles/tailwind.css --config ./tailwind.config.js --watch",
     "dev2": "remix run",
     "postinstall": "remix setup node",
-    "start": "remix-serve build",
+    "start": "cross-env NODE_ENV=production node index.js",
     "dev": "pm2-dev ./other/pm2.config.js",
     "build:css": "postcss styles/**/*.css --base styles --dir app/styles",
     "build:css:prod": "npm run build:css -- --env production",
@@ -17,13 +17,13 @@
     "build": "npm run build:css:prod && npm run build:remix"
   },
   "dependencies": {
-    "@remix-run/express": "^1.0.6",
-    "@remix-run/react": "^1.0.6",
-    "@remix-run/serve": "^1.0.6",
+    "@remix-run/express": "^1.2.3",
+    "@remix-run/react": "^1.2.3",
+    "@remix-run/serve": "^1.2.3",
     "@stripe/react-stripe-js": "^1.6.0",
     "@stripe/stripe-js": "^1.21.1",
-    "@vercel/node": "^1.12.1",
     "compression": "^1.7.4",
+    "cross-env": "^7.0.3",
     "dotenv": "^10.0.0",
     "express": "^4.17.1",
     "framer-motion": "^5.3.0",
@@ -35,13 +35,12 @@
     "react-router-hash-link": "^2.4.3",
     "react-swipeable": "^6.2.0",
     "react-use-cart": "^1.13.0",
-    "remix": "^1.0.6",
+    "remix": "^1.2.3",
     "stripe": "^8.186.1",
-    "tailwindcss": "^2.2.19",
-    "vercel": "^23.1.2"
+    "tailwindcss": "^2.2.19"
   },
   "devDependencies": {
-    "@remix-run/dev": "^0.20.1",
+    "@remix-run/dev": "^1.2.3",
     "@tailwindcss/aspect-ratio": "^0.3.0",
     "@tailwindcss/forms": "^0.3.4",
     "@tailwindcss/line-clamp": "^0.2.2",
@@ -53,7 +52,6 @@
     "@types/react-router-hash-link": "^2.4.4",
     "@types/stripe": "^8.0.417",
     "autoprefixer": "^10.4.0",
-    "cross-env": "^7.0.3",
     "pm2": "^5.1.2",
     "postcss": "^8.3.11",
     "postcss-cli": "^9.0.1",
