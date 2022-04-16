@@ -5,6 +5,9 @@
 From your terminal:
 
 ```sh
+export FLYCTL_INSTALL="/home/developer/.fly"
+export PATH="$FLYCTL_INSTALL/bin:$PATH"
+
 yarn  dev
 ```
 

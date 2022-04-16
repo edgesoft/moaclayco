@@ -28,7 +28,7 @@ app.all(
       },
 )
 
-const port = process.env.PORT ?? 3001
+const port = process.env.PORT ?? 8080
 app.listen(port, () => {
   require(BUILD_DIR)
   console.log(`Express server listening on port ${port}`)

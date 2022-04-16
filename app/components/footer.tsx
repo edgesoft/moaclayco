@@ -64,7 +64,7 @@ const Footer = (): JSX.Element | null => {
           </svg>
         </a>
         <span className="p-2 invisible md:visible">
-          All rights reserved © Moa Clay Co 2021
+          All rights reserved © Moa Clay Co 2022
         </span>
       </div>
     </div>
