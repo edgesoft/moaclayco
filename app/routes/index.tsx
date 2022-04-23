@@ -6,7 +6,7 @@ import useScrollToTop from '~/hooks/useScrollToTop'
 import Loader from '~/components/loader'
 
 export let loader: LoaderFunction = async () => {
-  return Collections.find()
+  return Collections.find().sort({sortOrder: 1})
 }
 
 export let meta: MetaFunction = ({data}) => {

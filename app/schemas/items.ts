@@ -9,7 +9,8 @@ const ItemSchema = new Schema({
   instagram: String,
   collectionRef: String,
   amount: Number,
-  longDescription: String
+  longDescription: String,
+  sortOrder: Number,
 
 },
 { collection: 'items' });
