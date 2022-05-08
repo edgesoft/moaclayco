@@ -15,7 +15,7 @@ import Loader from '~/components/loader'
 import useMediaQuery from '~/hooks/useMediaQuery'
 
 export let loader: LoaderFunction = async ({params}) => {
-  return Items.find({collectionRef: params.collection})
+  return Items.find({collectionRef: params.collection}).sort({_id: -1})
 }
 
 export let meta: MetaFunction = ({data}) => {
