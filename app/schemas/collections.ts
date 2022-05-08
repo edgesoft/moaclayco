@@ -8,7 +8,8 @@ const collectionSchema = new Schema({
   image: String,
   instagram: String,
   twitter: String,
-  shortUrl: String
+  shortUrl: String,
+  sortOrder: Number
 
 },
 { collection: 'collections' });
