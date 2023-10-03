@@ -1,8 +1,9 @@
 import { useNavigate } from "react-router-dom";
 import { Link } from "@remix-run/react";
+import { useCart } from "react-use-cart";
 
 const Header = (): JSX.Element => {
-  const totalItems = 0;
+  const { totalItems } = useCart();
   const history = useNavigate();
   return (
     <Link to="/" prefetch="intent">
