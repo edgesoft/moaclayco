@@ -8,13 +8,17 @@ import {
   ScrollRestoration,
   useLoaderData,
 } from "@remix-run/react";
-import styles from "./tailwind.css";
 import Header from "./components/header";
 import Footer from "./components/footer";
 import { CartProvider } from "react-use-cart";
 import Cookies from "./components/cookies";
+import tailwindStyles from "./styles/tailwind.css";
+import appStyles from "./styles/app.css";
 
-export const links: LinksFunction = () => [{ rel: "stylesheet", href: styles }];
+export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: appStyles },
+  { rel: "stylesheet", href: tailwindStyles },
+];
 
 export const loader: LoaderFunction = async ({ request }) => {
   let url = new URL(request.url);
@@ -49,7 +53,7 @@ function Document({
   children: React.ReactNode;
   title?: string;
 }) {
-  let data: {ENV: {STRIPE_PUBLIC_KEY: string}} = useLoaderData();
+  let data: { ENV: { STRIPE_PUBLIC_KEY: string } } = useLoaderData();
   return (
     <html lang="en">
       <head>
