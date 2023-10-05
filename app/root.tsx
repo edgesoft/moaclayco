@@ -14,6 +14,7 @@ import { CartProvider } from "react-use-cart";
 import Cookies from "./components/cookies";
 import tailwindStyles from "./styles/tailwind.css";
 import appStyles from "./styles/app.css";
+import { Collections } from "./schemas/collections";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: appStyles },
@@ -21,6 +22,7 @@ export const links: LinksFunction = () => [
 ];
 
 export const loader: LoaderFunction = async ({ request }) => {
+  const collections = await Collections.find().sort({ sortOrder: 1 });
   let url = new URL(request.url);
   let hostname = url.hostname;
   let proto = request.headers.get("X-Forwarded-Proto") ?? url.protocol;
@@ -43,6 +45,7 @@ export const loader: LoaderFunction = async ({ request }) => {
     ENV: {
       STRIPE_PUBLIC_KEY: process.env.STRIPE_PUBLIC_KEY,
     },
+    collections,
   };
 };
 
