@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@tailwind screens;
+
+@font-face {
+  font-family: "Noteworthy";
+  src: url("/fonts/Noteworthy-Lt.woff") format("woff");
+  font-style: normal;
+  font-display: swap;
+}

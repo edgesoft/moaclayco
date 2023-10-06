@@ -1,5 +1,5 @@
-import { ActionFunction, json } from "remix";
-import { Discounts } from "~/schemas/discounts";
+import { ActionFunction, json } from "@remix-run/node"
+import { Discounts } from "../schemas/discounts";
 
 
 

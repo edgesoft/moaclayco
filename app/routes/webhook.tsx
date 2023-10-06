@@ -1,5 +1,5 @@
 import mongoose from 'mongoose'
-import { ActionFunction, LoaderFunction } from 'remix'
+import { ActionFunction, LoaderFunction } from '@remix-run/node'
 import { Stripe } from 'stripe'
 import { Items } from '~/schemas/items'
 import { Orders } from '~/schemas/orders'
@@ -34,7 +34,7 @@ const sendMail = async (order: Order) => {
 
 const fromPaymentIntent = async (id: string, status: string) => {
 
-  const order: Order = await Orders.findOne({
+  const order: Order | null = await Orders.findOne({
     'paymentIntent.id': id,
   })
 
@@ -52,12 +52,16 @@ const fromPaymentIntent = async (id: string, status: string) => {
       })
       await sendMail(order)
     }
+  } else {
+    console.log("Could not find order")
   }
 }
 
-export let loader: LoaderFunction = async ({request}) => {
+export let action: ActionFunction = async ({request}) => {
+
   const sig = request.headers.get('Stripe-Signature')
   let body = await request.text()
+
   try {
     let event = JSON.parse(body)
     let paymentIntent = event.data.object as Stripe.PaymentIntent
@@ -77,10 +81,3 @@ export let loader: LoaderFunction = async ({request}) => {
   return new Response().ok
 }
 
-export let action: ActionFunction = async () => {
-  return new Response().ok
-}
-
-export default function Index() {
-  return null
-}

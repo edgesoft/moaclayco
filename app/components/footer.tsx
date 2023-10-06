@@ -64,11 +64,11 @@ const Footer = (): JSX.Element | null => {
           </svg>
         </a>
         <span className="p-2 invisible md:visible">
-          All rights reserved © Moa Clay Co 2022
+          All rights reserved © Moa Clay Co {new Date().getFullYear()}
         </span>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default Footer
+export default Footer;

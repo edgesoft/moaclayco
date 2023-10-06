@@ -5,9 +5,12 @@ import {
   createCookie,
   LoaderFunction,
   MetaFunction,
-  redirect,
-  useLoaderData,
-} from 'remix'
+  redirect
+} from "@remix-run/node"
+import {
+    useLoaderData
+  } from "@remix-run/react"
+  
 import {Orders} from '~/schemas/orders'
 
 export let loader: LoaderFunction = async ({request}) => {
@@ -38,17 +41,22 @@ export let loader: LoaderFunction = async ({request}) => {
 }
 
 export let meta: MetaFunction = () => {
-  return {
-    title: 'Moa Clay Collection',
-    description: 'Moa Clay Collection',
+  return [{
+    title: 'Moa Clay Collection'
+  },
+  {
+    name: "description",
+    content: 'Moa Clay Collection'
   }
+]
 }
 
 export default function Index() {
-  let data = useLoaderData()
+  let d = useLoaderData()
+  let data = null
   let navigation = useNavigate()
   try {
-    data = JSON.parse(data)
+    data = JSON.parse(d)
   } catch (e) {}
 
   const {emptyCart} = useCart()
@@ -62,7 +70,7 @@ export default function Index() {
         {data.redirect_status === 'succeeded' ? (
           <>
             <p className="text-gray-700 text-2xl font-bold">
-              Tack för ditt köp!
+              Tack så mycket för din beställning!
             </p>
             <p className="py-2">
               Ditt ordernummer är{' '}
@@ -70,6 +78,8 @@ export default function Index() {
             </p>
 
             <p className="pt-4 text-base">
+              Du kommer få en orderbekräftelse på din mail med ditt ordernummer.
+              <br/><br/>
               Vi kommer att skicka ordern så fort som möjligt. Om du har frågor
               om din order så är du välkommen att skicka frågor till &nbsp;
               <span className="text-blue-600">support@moaclayco.com</span>. Ange
@@ -82,7 +92,7 @@ export default function Index() {
               Ditt köp gick inte igenom
             </p>
             <p className="py-2">
-              Du har avbrytit ditt köp eller så har betalningen inte gått igenom
+              Du har avbrytit ditt köp eller så har betalningen inte gått igenom.
             </p>
           </>
         )}

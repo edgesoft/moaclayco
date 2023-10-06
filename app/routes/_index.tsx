@@ -1,20 +1,24 @@
-import {MetaFunction, LoaderFunction, useTransition, Link} from 'remix'
-import {useLoaderData} from 'remix'
-import {Collections} from '../schemas/collections'
-import {CollectionProps} from '~/types'
-import useScrollToTop from '~/hooks/useScrollToTop'
-import Loader from '~/components/loader'
+import type { MetaFunction, LoaderFunction } from "@remix-run/node";
+import { useLoaderData, Link } from "@remix-run/react";
+import { Collections } from "../schemas/collections";
+import { CollectionProps } from "~/types";
 
 export let loader: LoaderFunction = async () => {
-  return Collections.find().sort({sortOrder: 1})
-}
+  return Collections.find().sort({ sortOrder: 1 });
+};
 
-export let meta: MetaFunction = ({data}) => {
-  return {
-    title: 'Moa Clay Collection - kollektioner',
-    description: data.map((d: CollectionProps) => d.headline).join(', '),
-  }
-}
+export let meta: MetaFunction = (d) => {
+  const data = d.data as CollectionProps[];
+  return [
+    {
+      title: "Moa Clay Collection - kollektioner",
+    },
+    {
+      name: "description",
+      content: data.map((d: CollectionProps) => d.headline).join(", "),
+    },
+  ];
+};
 
 const Collection: React.FC<CollectionProps> = ({
   shortUrl,
@@ -24,14 +28,21 @@ const Collection: React.FC<CollectionProps> = ({
   shortDescription,
   instagram,
   twitter,
-  index
+  index,
 }): JSX.Element => {
   return (
-    <Link to={`/collections/${shortUrl}`} prefetch="intent"
+    <Link
+      to={`/collections/${shortUrl}`}
+      prefetch="intent"
       className="md:hover:-translate-y-2 md:hover:scale-105 flex flex-col w-full bg-gray-50 rounded-lg shadow-lg overflow-hidden transform transition duration-300 ease-in-out md:flex-row"
     >
       <div className="w-full h-80 md:w-2/5">
-        <img className="w-full h-full object-cover object-center" loading={(index || 0 ) < 3 ? "eager" : "lazy"} src={image} alt={headline} />
+        <img
+          className="w-full h-full object-cover object-center"
+          loading={(index || 0) < 3 ? "eager" : "lazy"}
+          src={image}
+          alt={headline}
+        />
       </div>
       <div className="p-6 w-full text-left space-y-2 md:p-4 md:w-3/5">
         <p className="text-gray-700 text-xl font-bold">{headline}</p>
@@ -44,8 +55,8 @@ const Collection: React.FC<CollectionProps> = ({
         <div className="flex justify-start space-x-2">
           {instagram ? (
             <svg
-              onClick={e => {
-                window.open(instagram, '_blank')
+              onClick={(e) => {
+                window.open(instagram, "_blank");
               }}
               className="w-6 h-6 hover:animate-ping"
               aria-hidden="true"
@@ -72,25 +83,19 @@ const Collection: React.FC<CollectionProps> = ({
         </div>
       </div>
     </Link>
-  )
-}
+  );
+};
 
 export default function Index() {
-  useScrollToTop()
-  let data = useLoaderData()
-  let transition = useTransition();
-
+  let data: CollectionProps[] = useLoaderData();
   return (
-    <>
-    <Loader transition={transition}/>
     <section className="mx-auto px-4 py-5 max-w-6xl sm:px-6 lg:px-4">
       <div className="grid gap-6 grid-cols-1 my-20 lg:grid-cols-2">
         {data &&
           data.map((d: CollectionProps, i: number) => {
-            return <Collection index={i} {...d} key={d._id} />
+            return <Collection index={i} {...d} key={d._id} />;
           })}
       </div>
     </section>
-    </>
-  )
+  );
 }

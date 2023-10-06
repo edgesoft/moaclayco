@@ -1,145 +1,152 @@
-import {
-  MetaFunction,
-  LoaderFunction,
-  ActionFunction,
-  useTransition,
-} from 'remix'
-import {useLoaderData} from 'remix'
-
+import { MetaFunction, LoaderFunction } from "@remix-run/node";
+import { useLoaderData, useNavigation } from "@remix-run/react";
 import {
   Elements,
   PaymentElement,
   useElements,
   useStripe,
-} from '@stripe/react-stripe-js'
-import stripeClient from '~/stripeClient'
+} from "@stripe/react-stripe-js";
+import stripeClient from "../stripeClient";
 import {
   loadStripe,
   Stripe,
   StripeElementLocale,
   StripePaymentElement,
-} from '@stripe/stripe-js'
-import {Orders} from '~/schemas/orders'
-import {useEffect, useRef, useState} from 'react'
-import {classNames} from '~/utils/classnames'
-import Loader from '~/components/loader'
-import Terms from '~/components/terms'
-import {Order} from '~/types'
-import Feedback from '~/components/feedback'
+} from "@stripe/stripe-js";
+import { Orders } from "~/schemas/orders";
+import { useEffect, useRef, useState } from "react";
+import { classNames } from "~/utils/classnames";
+import Loader from "../components/loader";
+import Terms from "../components/terms";
+import { Order } from "../types";
+import Feedback from "../components/feedback";
 
 declare global {
   interface Window {
-    ENV: any
+    ENV: any;
   }
 }
 
-let stripePromise: Stripe | PromiseLike<Stripe | null> | null = null
-if (typeof window !== 'undefined') {
-  stripePromise = loadStripe(window ? window.ENV.STRIPE_PUBLIC_KEY : '')
+let stripePromise: Stripe | PromiseLike<Stripe | null> | null = null;
+if (typeof window !== "undefined") {
+  stripePromise = loadStripe(window ? window.ENV.STRIPE_PUBLIC_KEY : "");
 }
 
-export let loader: LoaderFunction = async ({request}) => {
-  let url = new URL(await request.url)
-  let body = new URLSearchParams(url.search)
-  const order: Order = await Orders.findOne({_id: body.get('order')})
+export let loader: LoaderFunction = async ({ request }) => {
+  let url = new URL(await request.url);
+  let body = new URLSearchParams(url.search);
+  const order: Order | null = await Orders.findOne({ _id: body.get("order") });
+
+  if (!order) {
+    throw new Error("Order not found");
+  }
 
   if (order && order.paymentIntent?.id) {
     const paymentIntent = await stripeClient.paymentIntents.update(
       order.paymentIntent.id,
       {
         amount: order.totalSum * 100,
-        currency: 'sek',
-        payment_method_types: ['klarna', 'card'],
-      },
-    )
-    return {clientSecret: paymentIntent.client_secret}
+        currency: "sek",
+        payment_method_types: ["klarna", "card"],
+      }
+    );
+    return { clientSecret: paymentIntent.client_secret };
   }
 
   const paymentIntent = await stripeClient.paymentIntents.create({
     amount: order.totalSum * 100,
-    currency: 'sek',
-    payment_method_types: ['klarna', 'card'],
-  })
+    currency: "sek",
+    payment_method_types: ["klarna", "card"],
+  });
 
   await Orders.updateOne(
-    {_id: order._id},
+    { _id: order._id },
     {
       paymentIntent: {
         id: paymentIntent.id,
         client_secret: paymentIntent.client_secret,
       },
-    },
-  )
+    }
+  );
 
-  return {clientSecret: paymentIntent.client_secret}
-}
+  return { clientSecret: paymentIntent.client_secret };
+};
 
 export let meta: MetaFunction = () => {
-  return {
-    title: 'Moa Clay Collection',
-    description: 'Moa Clay Collection',
-  }
-}
+  return [
+    {
+      title: "Moa Clay Collection",
+    },
+    {
+      name: "description",
+      content: "Moa Clay Collection",
+    },
+  ];
+};
 
 interface Props {
-  setShow: (show: boolean) => void
+  setShow: (show: boolean) => void;
 }
 
+type ClientType = {
+  clientSecret?: string;
+};
+
 export default function Index() {
-  let data = useLoaderData()
-  let transition = useTransition()
-  const [show, setShow] = useState(false)
-  const locale: StripeElementLocale = 'sv'
+  let data: ClientType = useLoaderData();
+  let transition = useNavigation();
+  const [show, setShow] = useState(false);
+  const locale: StripeElementLocale = "sv";
 
   const options = {
-    clientSecret: data.clientSecret as string,
+    clientSecret: data.clientSecret,
     locale,
-  }
+  };
 
-  const CheckoutForm = ({setShow}: Props) => {
-    const stripe = useStripe()
-    const elements = useElements()
-    const termsRef: React.RefObject<HTMLInputElement> = useRef(null)
-    const [error, showError] = useState<string | undefined>(undefined)
-    const [showTerm, setShowTerm] = useState<boolean>(false)
+  const CheckoutForm = ({ setShow }: Props) => {
+    const stripe = useStripe();
+    const elements = useElements();
+    const termsRef: React.RefObject<HTMLInputElement> = useRef(null);
+    const [error, showError] = useState<string | undefined>(undefined);
+    const [showTerm, setShowTerm] = useState<boolean>(false);
 
     useEffect(() => {
       if (error) {
         setTimeout(() => {
-          showError(undefined)
-        }, 2000)
+          showError(undefined);
+        }, 2000);
       }
-    }, [error])
+    }, [error]);
 
     const handleSubmit = async (event: React.FormEvent) => {
-      event.preventDefault()
+      event.preventDefault();
 
       if (!stripe || !elements) {
-        return
+        return;
       }
-      const agreeTerms = termsRef.current && termsRef.current.checked
+      const agreeTerms = termsRef.current && termsRef.current.checked;
       if (agreeTerms) {
         const result = await stripe.confirmPayment({
           elements,
           confirmParams: {
             return_url: `${location.protocol}//${location.host}/order`,
           },
-        })
+        });
 
         if (result.error) {
-          showError(result.error.message)
+          showError(result.error.message);
         }
       } else {
-        showError('Du måste godkänna villkoren')
+        showError("Du måste godkänna villkoren");
       }
-    }
+    };
 
     return (
       <form onSubmit={handleSubmit}>
         {showTerm ? <Terms show={setShowTerm} /> : null}
         <PaymentElement
           onReady={(e: StripePaymentElement) => {
-            setShow(true)
+            setShow(true);
           }}
         />
         <div className="flex mt-3">
@@ -147,11 +154,11 @@ export default function Index() {
             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
             ref={termsRef}
             type="checkbox"
-          />{' '}
+          />{" "}
           <span
             className="-mt-2 px-1 py-1 underline"
             onClick={() => {
-              setShowTerm(true)
+              setShowTerm(true);
             }}
           >
             Jag godkänner villkoren
@@ -170,8 +177,8 @@ export default function Index() {
           message={error}
         />
       </form>
-    )
-  }
+    );
+  };
 
   return (
     <Elements stripe={stripePromise} options={options}>
@@ -179,9 +186,9 @@ export default function Index() {
         <Loader forceSpinner={!show} transition={transition} />
         <section
           className={classNames(
-            show && transition.state !== 'loading'
-              ? 'mx-auto px-4 py-5 max-w-6xl sm:px-6 lg:px-4 visible'
-              : 'hidden',
+            show && transition.state !== "loading"
+              ? "mx-auto px-4 py-5 max-w-6xl sm:px-6 lg:px-4 visible"
+              : "hidden"
           )}
         >
           <div className="grid gap-6 grid-cols-1 my-20 lg:grid-cols-2">
@@ -195,5 +202,5 @@ export default function Index() {
         </section>
       </>
     </Elements>
-  )
+  );
 }

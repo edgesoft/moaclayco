@@ -3,30 +3,32 @@ import {useNavigate} from 'react-router-dom'
 import {useCart} from 'react-use-cart'
 import {AnimatePresence, motion} from 'framer-motion'
 import {
-  ActionFunction,
-  json,
   MetaFunction,
-  redirect,
-  useFetcher,
-  createCookie,
-} from 'remix'
+  useFetcher
+} from "@remix-run/react"
+
+
 import Loader from '~/components/loader'
 import {HashLink} from 'react-router-hash-link'
 
-import {Items} from '~/schemas/items'
-import {Orders} from '~/schemas/orders'
+import {Items} from '../schemas/items'
+import {Orders} from '../schemas/orders'
 import {Discounts} from '~/schemas/discounts'
 import {classNames} from '~/utils/classnames'
 import {FREE_FREIGHT} from '~/utils/constants'
 import getFreightCost from '~/utils/getFreightCost'
 import useStickyState from '../hooks/useStickyState'
-import Feedback from '~/components/feedback'
+import Feedback from '../components/feedback'
+import { ActionFunction, createCookie, json, redirect } from '@remix-run/node'
 
 export let meta: MetaFunction = () => {
-  return {
-    title: 'Moa Clay Collection',
-    description: 'Moa Clay Collection',
-  }
+  return [{
+    title: 'Moa Clay Collection'
+  },
+{
+    name: "description",
+    content: 'Moa Clay Collection'
+}]
 }
 
 type Id = {

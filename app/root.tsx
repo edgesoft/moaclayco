@@ -1,15 +1,28 @@
-import {LinksFunction, LoaderFunction, redirect, ScrollRestoration} from 'remix'
-import {Meta, Links, Scripts, useLoaderData, LiveReload, useCatch} from 'remix'
-import tailwindStyles from './styles/tailwind.css'
-import appStyles from './styles/app.css'
-import {Link, Outlet} from 'react-router-dom'
-import {CartProvider} from 'react-use-cart'
-import Cookies from './components/cookies'
-import Header from './components/header'
-import Footer from './components/footer'
+import { LinksFunction, LoaderFunction, redirect } from "@remix-run/node";
+import {
+  Links,
+  LiveReload,
+  Meta,
+  Outlet,
+  Scripts,
+  ScrollRestoration,
+  useLoaderData,
+} from "@remix-run/react";
+import Header from "./components/header";
+import Footer from "./components/footer";
+import { CartProvider } from "react-use-cart";
+import Cookies from "./components/cookies";
+import tailwindStyles from "./styles/tailwind.css";
+import appStyles from "./styles/app.css";
+import { Collections } from "./schemas/collections";
+
+export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: appStyles },
+  { rel: "stylesheet", href: tailwindStyles },
+];
 
 export const loader: LoaderFunction = async ({ request }) => {
-
+  const collections = await Collections.find().sort({ sortOrder: 1 });
   let url = new URL(request.url);
   let hostname = url.hostname;
   let proto = request.headers.get("X-Forwarded-Proto") ?? url.protocol;
@@ -32,26 +45,18 @@ export const loader: LoaderFunction = async ({ request }) => {
     ENV: {
       STRIPE_PUBLIC_KEY: process.env.STRIPE_PUBLIC_KEY,
     },
-  }
-}
-
-
-
-export let links: LinksFunction = () => {
-  return [
-    {rel: 'stylesheet', href: appStyles},
-    {rel: 'stylesheet', href: tailwindStyles},
-  ]
-}
+    collections,
+  };
+};
 
 function Document({
   children,
   title,
 }: {
-  children: React.ReactNode
-  title?: string
+  children: React.ReactNode;
+  title?: string;
 }) {
-  let data = useLoaderData()
+  let data: { ENV: { STRIPE_PUBLIC_KEY: string } } = useLoaderData();
   return (
     <html lang="en">
       <head>
@@ -68,6 +73,8 @@ function Document({
       <body>
         <Header />
         {children}
+        <ScrollRestoration />
+        <LiveReload />
         <Scripts />
         {data ? (
           <script
@@ -76,10 +83,10 @@ function Document({
             }}
           />
         ) : null}
-        {process.env.NODE_ENV === 'development' && <LiveReload />}
+        {process.env.NODE_ENV === "development" && <LiveReload />}
       </body>
     </html>
-  )
+  );
 }
 
 export default function App() {
@@ -87,50 +94,9 @@ export default function App() {
     <CartProvider>
       <Document>
         <Outlet />
-        <Footer />
         <Cookies />
+        <Footer />
       </Document>
     </CartProvider>
-  )
-}
-
-export function CatchBoundary() {
-  let caught = useCatch()
-  switch (caught.status) {
-    case 401:
-    case 404:
-      return (
-        <Document title={`${caught.status} ${caught.statusText}`}>
-          <div className="mt-20 p-2">
-            <h1>Sidan kunde inte hittas</h1>
-            <Link to="/">
-              <button className="mt-2 p-2 text-gray-700 font-semibold bg-rosa rounded">
-                Se kollektioner
-              </button>
-            </Link>
-          </div>
-          <Footer />
-        </Document>
-      )
-
-    default:
-      throw new Error(
-        `Unexpected caught response with status: ${caught.status}`,
-      )
-  }
-}
-
-export function ErrorBoundary({error}: {error: Error}) {
-  console.error(error)
-
-  return (
-    <Document title="Uh-oh!">
-      <h1>App Error</h1>
-      <pre>{error.message}</pre>
-      <p>
-        Replace this UI with what you want users to see when your app throws
-        uncaught errors.
-      </p>
-    </Document>
-  )
+  );
 }

@@ -1,4 +1,5 @@
-import type { Transition } from '@remix-run/react/transition'
+import { useNavigation } from "@remix-run/react";
+type Navigation = ReturnType<typeof useNavigation>;
 import {useEffect, useState} from 'react'
 
 type Fetcher = {
@@ -6,7 +7,7 @@ type Fetcher = {
 }
 
 type LoaderProps = {
-  transition: Transition | Fetcher
+  transition: Navigation | Fetcher
   forceSpinner?: boolean
 }
 
