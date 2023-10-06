@@ -1,5 +1,5 @@
 app = "moaclayco"
-primary_region = "arn"
+primary_region = "fra"
 
 [build]
 
