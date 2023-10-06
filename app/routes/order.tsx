@@ -70,7 +70,7 @@ export default function Index() {
         {data.redirect_status === 'succeeded' ? (
           <>
             <p className="text-gray-700 text-2xl font-bold">
-              Tack för ditt köp!
+              Tack så mycket för din beställning!
             </p>
             <p className="py-2">
               Ditt ordernummer är{' '}
@@ -78,6 +78,8 @@ export default function Index() {
             </p>
 
             <p className="pt-4 text-base">
+              Du kommer få en orderbekräftelse på din mail med ditt ordernummer.
+              <br/><br/>
               Vi kommer att skicka ordern så fort som möjligt. Om du har frågor
               om din order så är du välkommen att skicka frågor till &nbsp;
               <span className="text-blue-600">support@moaclayco.com</span>. Ange
@@ -90,7 +92,7 @@ export default function Index() {
               Ditt köp gick inte igenom
             </p>
             <p className="py-2">
-              Du har avbrytit ditt köp eller så har betalningen inte gått igenom
+              Du har avbrytit ditt köp eller så har betalningen inte gått igenom.
             </p>
           </>
         )}
