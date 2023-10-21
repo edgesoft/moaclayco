@@ -14,22 +14,25 @@ import { renderToPipeableStream } from "react-dom/server";
 import connector from '../connector'
 import cron from 'node-cron';
 import fetch from 'node-fetch';
+import { getNextUrl } from "./utils/getNextUrl";
 
 connector()
 
-const pings = [
-  'https://moaclayco.com',
-  'https://moaclayco-dev.fly.dev'
-]
-
-cron.schedule('*/5 * * * * *', function() {
-  pings.forEach((p) => {
-    fetch(p)
-    .then(() => {})
-    .catch(error => console.error(`Error pinging app: ${p}`, error));
-  });
-});
-
+let heartbeat = false;
+function setupHeartBeat(request: Request) {
+  if (heartbeat) return;
+  heartbeat = true;
+  const { port, proto, hostname } = getNextUrl(request);
+  const url = `${proto}://${hostname}`;
+  if (hostname !== "localhost") {
+    console.log(`setup heartbeat for ${url}`);
+    cron.schedule("*/5 * * * * *", () => {
+      fetch(url)
+        .then(() => {})
+        .catch((error) => console.error(`Error pinging app:`, error));
+    });
+  }
+}
 const ABORT_DELAY = 5_000;
 
 export default function handleRequest(
@@ -39,6 +42,7 @@ export default function handleRequest(
   remixContext: EntryContext,
   loadContext: AppLoadContext
 ) {
+  setupHeartBeat(request);
   return isbot(request.headers.get("user-agent"))
     ? handleBotRequest(
         request,
