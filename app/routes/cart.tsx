@@ -541,7 +541,7 @@ function Cart() {
                           ) : null}
                         </AnimatePresence>
                       </div>
-                      <div>
+                      <div className="lg:mb-20">
                         Totalt:{" "}
                         {cartTotal +
                           freightCost -

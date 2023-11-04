@@ -5,10 +5,12 @@ import { useSwipeable } from "react-swipeable";
 import { Items } from "../schemas/items";
 import { useCart } from "react-use-cart";
 import { classNames } from "../utils/classnames";
-import { AdditionalItem, ItemProps } from "~/types";
+import { ItemProps } from "~/types";
 import Loader from "../components/loader";
-import useMediaQuery from "../hooks/useMediaQuery";
-import { AnimatePresence, motion } from "framer-motion";
+import AdditionalCartItem, {
+  AdditionCartItemType,
+} from "~/components/item/additionalItem";
+import Magnifier from "~/components/item/magnifier";
 
 export let loader: LoaderFunction = async ({ params }) => {
   return Items.find({ collectionRef: params.collection }).sort({ _id: -1 });
@@ -27,146 +29,6 @@ export let meta: MetaFunction = (d) => {
   ];
 };
 
-type MagnifierProps = {
-  imageUrl: string | undefined;
-  close: (p: string | undefined) => void;
-};
-
-const Magnifier: React.FC<MagnifierProps> = ({
-  imageUrl,
-  close,
-}): JSX.Element | null => {
-  const [isLoaded, setIsLoaded] = useState(false);
-  const isDesktop = useMediaQuery("(min-width: 960px)");
-
-  useEffect(() => {
-    if (imageUrl) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
-  }, [imageUrl]);
-
-  if (!imageUrl) return null;
-
-  return (
-    <div className="fixed z-10 left-0 top-0 w-full h-full overflow-scroll">
-      <div
-        className={classNames(
-          "relative min-w-max min-h-screen overflow-hidden"
-        )}
-      >
-        <img
-          className={classNames(isLoaded ? "visible" : "hidden")}
-          onLoad={() => {
-            setIsLoaded(true);
-          }}
-          width={isDesktop ? 2000 : 1000}
-          src={`${imageUrl}?twic=v1/resize=2000/quality=100`}
-        />
-
-        <img
-          className={classNames(isLoaded ? "hidden" : "visible")}
-          width={2000}
-          src={`${imageUrl}?twic=v1/resize=40/quality=10`}
-        />
-
-        <div
-          className="fixed right-1 top-1 text-white"
-          onClick={() => {
-            setIsLoaded(false);
-            close(undefined);
-          }}
-        >
-          <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-            <path
-              fillRule="evenodd"
-              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-type AdditionalItemProps = {
-  item: AdditionalItem;
-  handleSwitch: (
-    item: AdditionalItem,
-    on: boolean,
-    additionalIndex: number
-  ) => void;
-  additionalIndex: number;
-};
-
-type AdditionCartItem = {
-  item: AdditionalItem;
-  index: number;
-  additionalIndex: number;
-};
-
-const Addition: React.FC<AdditionalItemProps> = ({
-  item,
-  handleSwitch,
-  additionalIndex,
-}): JSX.Element => {
-  const [on, setOn] = useState(false);
-  return (
-    <span
-     onClick={() => {
-              setOn(!on);
-              handleSwitch(item, !on, additionalIndex);
-            }}
-      className={classNames(
-        "relative mb-1 mr-1 cursor-pointer inline-flex rounded-full px-2 py-1 text-xs font-semibold leading-5 transition-all duration-200",
-        `${
-          on ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-400"
-        }`
-      )}
-    >
-      <div className={classNames("mr-1 -mt-0.5 flex")}>
-        <label className="flex cursor-pointer">
-          <input type="hidden" name="_action" value={"disable"} />
-          <input type="submit" name="id" style={{ display: "none" }} />
-          <div
-            className="relative top-1 -left-0.5"
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              setOn(!on);
-              handleSwitch(item, !on, additionalIndex);
-            }}
-          >
-            <input type="checkbox" className="sr-only" />
-            <div
-              className={classNames(
-                "block  h-4 w-6 rounded-full transition-all duration-200",
-                `${on ? "bg-emerald-600" : "bg-slate-400"}`
-              )}
-            ></div>
-            <AnimatePresence initial={false}>
-              <motion.div
-                transition={{
-                  delay: 0.13,
-                  type: "spring",
-                  stiffness: 8000,
-                  damping: 20,
-                }}
-                animate={{ left: on ? 3 : 12 }}
-                className={classNames(
-                  "dot absolute top-1 h-2 w-2 rounded-full bg-white transition"
-                )}
-              ></motion.div>
-            </AnimatePresence>
-          </div>
-        </label>
-      </div>
-      {item.name} +{item.price} SEK
-    </span>
-  );
-};
 
 const Item: React.FC<ItemProps> = ({
   _id,
@@ -183,7 +45,7 @@ const Item: React.FC<ItemProps> = ({
   const [showInfo, setShowInfo] = useState(false);
   const [showImage, setShowImage] = useState<string | undefined>(undefined);
   const [index, setIndex] = useState(0);
-  const [additions, setAdditions] = useState<AdditionCartItem[]>([]);
+  const [additions, setAdditions] = useState<AdditionCartItemType[]>([]);
   const { addItem, getItem, items } = useCart();
   const handlers = useSwipeable({
     onSwiped: (eventData) => {
@@ -324,7 +186,7 @@ const Item: React.FC<ItemProps> = ({
               ? additionalItems.map((item, index) => {
                   return (
                     <div key={index}>
-                      <Addition
+                      <AdditionalCartItem
                         item={item}
                         additionalIndex={index}
                         handleSwitch={(item, on, additionalIndex) => {
@@ -368,7 +230,6 @@ const Item: React.FC<ItemProps> = ({
                     parentId: _id,
                     price: a.item.price,
                     index: itemIndex,
-                    balance: 1000,
                     image: null,
                     headline: a.item.name,
                     collectionRef: null,
