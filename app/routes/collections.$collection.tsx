@@ -115,8 +115,12 @@ const Addition: React.FC<AdditionalItemProps> = ({
   const [on, setOn] = useState(false);
   return (
     <span
+     onClick={() => {
+              setOn(!on);
+              handleSwitch(item, !on, additionalIndex);
+            }}
       className={classNames(
-        "relative mb-1 mr-1 inline-flex rounded-full px-2 py-1 text-xs font-semibold leading-5 transition-all duration-200",
+        "relative mb-1 mr-1 cursor-pointer inline-flex rounded-full px-2 py-1 text-xs font-semibold leading-5 transition-all duration-200",
         `${
           on ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-400"
         }`
@@ -128,7 +132,9 @@ const Addition: React.FC<AdditionalItemProps> = ({
           <input type="submit" name="id" style={{ display: "none" }} />
           <div
             className="relative top-1 -left-0.5"
-            onClick={() => {
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
               setOn(!on);
               handleSwitch(item, !on, additionalIndex);
             }}
