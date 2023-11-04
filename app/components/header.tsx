@@ -2,22 +2,12 @@ import { useNavigate } from "react-router-dom";
 import { Link, useLoaderData } from "@remix-run/react";
 import { useCart } from "react-use-cart";
 import { AnimatePresence, motion } from "framer-motion";
-import React, { ReactNode, Suspense, useEffect, useRef, useState } from "react";
+import React, { ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { CollectionProps } from "~/types";
 import useOnClickOutside from "~/hooks/useClickOutside";
+import ClientOnly from "./ClientOnly";
 
-let hydrating = true;
 
-function useHydrated() {
-  let [hydrated, setHydrated] = useState(() => !hydrating);
-
-  useEffect(function hydrate() {
-    hydrating = false;
-    setHydrated(true);
-  }, []);
-
-  return hydrated;
-}
 
 type IndexLoadingType = {
   ENV: string;
@@ -144,17 +134,12 @@ function Hamburger() {
   );
 }
 
-type Props = {
-  children(): ReactNode;
-  fallback?: ReactNode;
-};
-
-function ClientOnly({ children, fallback = null }: Props) {
-  return useHydrated() ? <>{children()}</> : <>{fallback}</>;
-}
 
 const CartComponent = (): JSX.Element => {
-  const { totalItems } = useCart();
+  const { items } = useCart();
+  const totalItems = useMemo(() => {
+  return items.reduce((count, item) => item.parentId == null ? count + item.quantity : count, 0);
+  }, [items]);
   const history = useNavigate();
   return (
     <div

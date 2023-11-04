@@ -5,9 +5,10 @@ import { useSwipeable } from "react-swipeable";
 import { Items } from "../schemas/items";
 import { useCart } from "react-use-cart";
 import { classNames } from "../utils/classnames";
-import { ItemProps } from "~/types";
+import { AdditionalItem, ItemProps } from "~/types";
 import Loader from "../components/loader";
 import useMediaQuery from "../hooks/useMediaQuery";
+import { AnimatePresence, motion } from "framer-motion";
 
 export let loader: LoaderFunction = async ({ params }) => {
   return Items.find({ collectionRef: params.collection }).sort({ _id: -1 });
@@ -90,6 +91,77 @@ const Magnifier: React.FC<MagnifierProps> = ({
   );
 };
 
+type AdditionalItemProps = {
+  item: AdditionalItem;
+  handleSwitch: (
+    item: AdditionalItem,
+    on: boolean,
+    additionalIndex: number
+  ) => void;
+  additionalIndex: number;
+};
+
+type AdditionCartItem = {
+  item: AdditionalItem;
+  index: number;
+  additionalIndex: number;
+};
+
+const Addition: React.FC<AdditionalItemProps> = ({
+  item,
+  handleSwitch,
+  additionalIndex,
+}): JSX.Element => {
+  const [on, setOn] = useState(false);
+  return (
+    <span
+      className={classNames(
+        "relative mb-1 mr-1 inline-flex rounded-full px-2 py-1 text-xs font-semibold leading-5 transition-all duration-200",
+        `${
+          on ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-400"
+        }`
+      )}
+    >
+      <div className={classNames("mr-1 -mt-0.5 flex")}>
+        <label className="flex cursor-pointer">
+          <input type="hidden" name="_action" value={"disable"} />
+          <input type="submit" name="id" style={{ display: "none" }} />
+          <div
+            className="relative top-1 -left-0.5"
+            onClick={() => {
+              setOn(!on);
+              handleSwitch(item, !on, additionalIndex);
+            }}
+          >
+            <input type="checkbox" className="sr-only" />
+            <div
+              className={classNames(
+                "block  h-4 w-6 rounded-full transition-all duration-200",
+                `${on ? "bg-emerald-600" : "bg-slate-400"}`
+              )}
+            ></div>
+            <AnimatePresence initial={false}>
+              <motion.div
+                transition={{
+                  delay: 0.13,
+                  type: "spring",
+                  stiffness: 8000,
+                  damping: 20,
+                }}
+                animate={{ left: on ? 3 : 12 }}
+                className={classNames(
+                  "dot absolute top-1 h-2 w-2 rounded-full bg-white transition"
+                )}
+              ></motion.div>
+            </AnimatePresence>
+          </div>
+        </label>
+      </div>
+      {item.name} +{item.price} SEK
+    </span>
+  );
+};
+
 const Item: React.FC<ItemProps> = ({
   _id,
   images,
@@ -97,6 +169,7 @@ const Item: React.FC<ItemProps> = ({
   amount,
   price,
   productInfos,
+  additionalItems,
   collectionRef,
   instagram,
   longDescription,
@@ -104,7 +177,8 @@ const Item: React.FC<ItemProps> = ({
   const [showInfo, setShowInfo] = useState(false);
   const [showImage, setShowImage] = useState<string | undefined>(undefined);
   const [index, setIndex] = useState(0);
-  const { addItem } = useCart();
+  const [additions, setAdditions] = useState<AdditionCartItem[]>([]);
+  const { addItem, getItem, items } = useCart();
   const handlers = useSwipeable({
     onSwiped: (eventData) => {
       if (eventData.dir === "Right") {
@@ -239,16 +313,60 @@ const Item: React.FC<ItemProps> = ({
               </svg>
             ) : null}
           </div>
+          <div className={additionalItems ? `pb-10` : ``}>
+            {additionalItems
+              ? additionalItems.map((item, index) => {
+                  return (
+                    <div key={index}>
+                      <Addition
+                        item={item}
+                        additionalIndex={index}
+                        handleSwitch={(item, on, additionalIndex) => {
+                          if (on) {
+                            // add
+                            additions.push({ item, additionalIndex, index });
+                          } else {
+                            // remove
+                            const i = additions.findIndex(
+                              (item) => item.index === index
+                            );
+                            additions.splice(i, 1);
+                          }
+                          setAdditions(additions);
+                        }}
+                      />
+                    </div>
+                  );
+                })
+              : null}
+          </div>
           {amount > 0 ? (
             <button
               onClick={() => {
+                const item = getItem(_id);
+                const itemIndex = item ? item.quantity : 0;
+
                 addItem({
                   id: _id,
+                  parentId: null,
                   price,
                   balance: amount,
                   image: images[0],
                   headline,
                   collectionRef,
+                });
+
+                additions.forEach((a) => {
+                  addItem({
+                    id: `${_id}_${itemIndex}_${a.additionalIndex}`,
+                    parentId: _id,
+                    price: a.item.price,
+                    index: itemIndex,
+                    balance: 1000,
+                    image: null,
+                    headline: a.item.name,
+                    collectionRef: null,
+                  });
                 });
               }}
               className="absolute bottom-2 right-2 flex-row-reverse px-4 py-2 text-gray-800 hover:text-white font-medium hover:bg-gray-500 bg-rosa rounded"
@@ -275,7 +393,6 @@ export default function Collection() {
   useScroll(hash);
   let data: ItemProps[] = useLoaderData();
   let transition = useNavigation();
-
   return (
     <>
       <Loader transition={transition} />

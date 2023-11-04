@@ -21,7 +21,14 @@ const OrderSchema = new Schema({
         itemRef: String,
         name: String,
         price: Number,
-        quantity: Number
+        quantity: Number,
+        additionalItems: [
+            {
+                name: String,
+                price: Number,
+                packinfo: String
+            }
+        ]
     }],
     totalSum: Number,
     freightCost: Number,
