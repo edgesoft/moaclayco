@@ -125,7 +125,7 @@ export default function Orders() {
         <table className="min-w-full text-sm text-left text-gray-500">
           <thead className="text-xs text-gray-700 uppercase bg-gray-50">
             <tr>
-              <th scope="col" className="max-w-xs pl-2 py-3">
+              <th scope="col" className="max-w-xs pl-2 pr-2 py-3">
                 ORDER NR
               </th>
               <th
@@ -160,7 +160,7 @@ export default function Orders() {
                     className="bg-white border-b border-gray-200"
                     onClick={() => handleRowClick(d._id)}
                   >
-                    <td className="max-w-xs pl-2 py-4 tracking-wider">
+                    <td className="max-w-xs pl-2 pr-2 py-4 tracking-wider">
                       {d._id.substring(0, 10)}{" "}
                     </td>
                     <td className="pr-2 py-4 w-32">
