@@ -3,10 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useCart } from "react-use-cart";
 import { AnimatePresence, motion } from "framer-motion";
 import { MetaFunction, useFetcher } from "@remix-run/react";
-
 import Loader from "~/components/loader";
 import { HashLink } from "react-router-hash-link";
-
 import { Items } from "../schemas/items";
 import { Orders } from "../schemas/orders";
 import { Discounts } from "~/schemas/discounts";
@@ -59,13 +57,15 @@ export let action: ActionFunction = async ({ request }) => {
   const data = JSON.parse(body.get("items") || "");
   const [items, discount] = await Promise.all([
     Items.find(
-      { _id: { $in: data.filter((d:any) => !d.parentId).map((d: Id) => d.id) } },
+      {
+        _id: { $in: data.filter((d: any) => !d.parentId).map((d: Id) => d.id) },
+      },
       { amount: 1, price: 1 }
     ),
     Discounts.findOne({ code: body.get("discount") }),
   ]);
 
-  if (items.length !== data.filter((d:any) => !d.parentId).length) {
+  if (items.length !== data.filter((d: any) => !d.parentId).length) {
     return json({
       key: new Date().getTime(),
       errors: {
@@ -76,7 +76,9 @@ export let action: ActionFunction = async ({ request }) => {
   }
 
   const itemErrors = items.reduce<ErrorItemVal>((acc, item) => {
-    const s = data.filter((d:any) => !d.parentId).find((d: Id) => d.id === item.id);
+    const s = data
+      .filter((d: any) => !d.parentId)
+      .find((d: Id) => d.id === item.id);
     if (s.price !== item.price) {
       acc[s.id] = {
         error: `Priset är uppdaterat`,
@@ -126,23 +128,25 @@ export let action: ActionFunction = async ({ request }) => {
     };
   }
 
-
-
-  const mappedItems = data.filter((item:any) => !item.parentId).map((item: any) => {
-    return {
-      itemRef: item.id,
-      name: item.headline,
-      price: item.price,
-      quantity: item.quantity,
-      additionalItems: data.filter((a:any) => a.parentId === item.id).map((a:any) => {
-        return {
-          name: a.headline,
-          price: a.price,
-          packinfo: `Till artikel ${a.index + 1}`
-        }
-      })
-    };
-  });
+  const mappedItems = data
+    .filter((item: any) => !item.parentId)
+    .map((item: any) => {
+      return {
+        itemRef: item.id,
+        name: item.headline,
+        price: item.price,
+        quantity: item.quantity,
+        additionalItems: data
+          .filter((a: any) => a.parentId === item.id)
+          .map((a: any) => {
+            return {
+              name: a.headline,
+              price: a.price,
+              packinfo: `Till artikel ${a.index + 1}`,
+            };
+          }),
+      };
+    });
 
   const orderData = {
     items: mappedItems,
@@ -250,9 +254,6 @@ const getLastError = (data: any): string | undefined => {
   return data.errors.message;
 };
 
-
-
-
 function Cart() {
   const { items, updateItemQuantity, cartTotal, removeItem } = useCart();
   let cartFetcher = useFetcher();
@@ -299,7 +300,7 @@ function Cart() {
         const part = additionalItem.id.split("_");
         const key = `${item.id}_${part[2]}`;
         if (acc[key]) {
-          acc[key].balance += 1; 
+          acc[key].balance += 1;
         } else {
           acc[key] = {
             id: key,
@@ -456,17 +457,22 @@ function Cart() {
                                     e.preventDefault();
                                     e.stopPropagation();
 
-                                    const index = item.quantity - 1
-                                    const additionalItems = items.filter(i => i.parentId === item.id && i.index === index)
+                                    const index = item.quantity - 1;
+                                    const additionalItems = items.filter(
+                                      (i) =>
+                                        i.parentId === item.id &&
+                                        i.index === index
+                                    );
 
-                                    if (additionalItems && additionalItems.length > 0) {
-
-                                      additionalItems.forEach(item => {
-                                        removeItem(item.id)
-                                      })
-                                      
+                                    if (
+                                      additionalItems &&
+                                      additionalItems.length > 0
+                                    ) {
+                                      additionalItems.forEach((item) => {
+                                        removeItem(item.id);
+                                      });
                                     }
-                                   
+
                                     updateItemQuantity(
                                       item.id,
                                       (item.quantity || 0) - 1
@@ -476,7 +482,6 @@ function Cart() {
                                 >
                                   -
                                 </button>
-                              
                               </td>
                             </tr>
                             {additionalData(item)}
@@ -633,7 +638,6 @@ function Cart() {
   );
 }
 
-
-export default function Index(){
-  return  <ClientOnly fallback={null}>{() => <Cart />}</ClientOnly>
+export default function Index() {
+  return <ClientOnly fallback={null}>{() => <Cart />}</ClientOnly>;
 }
