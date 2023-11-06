@@ -66,7 +66,7 @@ const OrderLabel: React.FC<OrderLabelProp> = ({
   const label = getLabel(status);
   return (
     <span
-      className={`inline-block ${label.color} text-white text-xs px-2 py-1 rounded-full uppercase font-semibold tracking-wide`}
+      className={`${label.color} text-white inline-flex px-2 text-xs font-semibold leading-5 rounded-full`}
     >
       {label.headline}
     </span>
@@ -130,22 +130,22 @@ export default function Orders() {
               </th>
               <th
                 scope="col"
-                className="pr-6 py-3 tracking-wider text-center align-middle"
+                className="pr-2 py-3 w-32"
               >
                 STATUS
               </th>
-              <th scope="col" className="px-2 py-3 tracking-wider  ">
+              <th scope="col" className="py-3 tracking-wider">
                 DATUM
               </th>
               <th
                 scope="col"
-                className="px-6 py-3 tracking-wider hidden sm:table-cell"
+                className="px-4 py-3 tracking-wider hidden sm:table-cell"
               >
                 NAMN
               </th>
               <th
                 scope="col"
-                className="px-6 py-3 tracking-wider hidden sm:table-cell"
+                className="px-4 py-3 tracking-wider hidden sm:table-cell"
               >
                 PRIS
               </th>
@@ -160,19 +160,19 @@ export default function Orders() {
                     className="bg-white border-b border-gray-200"
                     onClick={() => handleRowClick(d._id)}
                   >
-                    <td className="max-w-xs pl-2 py-4">
+                    <td className="max-w-xs pl-2 py-4 tracking-wider">
                       {d._id.substring(0, 10)}{" "}
                     </td>
-                    <td className="pr-6 py-4 tracking-wider text-center align-middle">
+                    <td className="pr-2 py-4 w-32">
                       <OrderLabel status={d.status} />
                     </td>
-                    <td className="px-2 py-4 tracking-wider">
+                    <td className="w-36 py-4 tracking-wider">
                       {d.createdAt.substring(0, 16).replace("T", " ")}
                     </td>
-                    <td className="px-6 py-4 tracking-wider  hidden sm:table-cell">
+                    <td className="px-4 py-4 tracking-wider  hidden sm:table-cell">
                       {`${d.customer.firstname} ${d.customer.lastname}`}
                     </td>
-                    <td className="px-6 py-4 tracking-wider  hidden sm:table-cell">
+                    <td className="px-4 py-4 tracking-wider  hidden sm:table-cell">
                       {`${formatSwedishPrice(d.totalSum)}`}
                     </td>
                   </tr>
