@@ -6,7 +6,7 @@ import {
   useNavigate,
   useParams,
 } from "@remix-run/react";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 
 export let loader: LoaderFunction = async ({ params }) => {
   return OrderEntity.find(
@@ -88,11 +88,19 @@ export default function Orders() {
   let data: Order[] = useLoaderData();
   let navigate = useNavigate();
   let { id } = useParams();
+  let [showDetail, setShowDetail] = useState(id)
 
   // Store the scroll position before navigation
   const handleRowClick = (orderId: string) => {
     sessionStorage.setItem("scrollPosition", window.scrollY.toString());
-    navigate(`/admin/orders/${orderId}`);
+    if (showDetail && showDetail === orderId) {
+        setShowDetail(undefined)
+        navigate(`/admin/orders`)
+    } else {
+        setShowDetail(orderId)
+        navigate(`/admin/orders/${orderId}`);
+    }
+   
   };
 
   // Restore the scroll position after navigation
