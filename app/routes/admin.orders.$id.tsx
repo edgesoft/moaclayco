@@ -152,13 +152,13 @@ export default function OrderDetail() {
         <table className="w-full text-sm text-left text-gray-500">
           <thead className="text-xs text-gray-700 uppercase bg-gray-50">
             <tr>
-              <th scope="col" className="px-6 py-3">
+              <th scope="col" className="px-2 py-3">
                 NAMN
               </th>
-              <th scope="col" className="px-6 py-3">
+              <th scope="col" className="px-2 py-3">
                 ANTAL
               </th>
-              <th scope="col" className="px-6 py-3">
+              <th scope="col" className="px-2 py-3">
                 ST PRIS
               </th>
             </tr>
@@ -174,13 +174,13 @@ export default function OrderDetail() {
                       : "border-b"
                   )}
                 >
-                  <td className="px-6 py-4">{item.name}</td>
-                  <td className="px-6 py-4">
+                  <td className="px-2 py-4">{item.name}</td>
+                  <td className="px-2 py-4">
                     <span className="inline-flex px-2 text-xs font-semibold leading-5 rounded-full text-green-800 bg-green-100">
                       {item.quantity}
                     </span>
                   </td>
-                  <td className="px-6 py-4">{item.price} SEK</td>
+                  <td className="px-2 py-4">{item.price} SEK</td>
                 </tr>
                 {item.additionalItems &&
                   item.additionalItems.map((a, subIndex) => {
