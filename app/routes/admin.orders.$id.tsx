@@ -4,8 +4,11 @@ import { useFetcher, useLoaderData } from "@remix-run/react";
 import { classNames } from "~/utils/classnames";
 import React, { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { auth } from "~/services/auth.server";
 
-export let loader: LoaderFunction = async ({ params }) => {
+export let loader: LoaderFunction = async ({ request, params }) => {
+  await auth.isAuthenticated(request, { failureRedirect: "/login" });
+
   return Orders.findOne({
     _id: params.id,
   });

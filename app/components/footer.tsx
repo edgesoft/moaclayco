@@ -1,6 +1,6 @@
 const Footer = (): JSX.Element | null => {
   return (
-    <div className="fixed bottom-0 flex flex-grow px-4 w-full h-14 bg-gray-50">
+    <div className="fixed z-1 bottom-0 flex flex-grow px-4 w-full h-14 bg-gray-50">
       <div className="flew-grow flex items-center p-1 md:p-3">
         <a
           title="instagram"

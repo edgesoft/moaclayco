@@ -59,3 +59,10 @@ export type AdditionalItem = {
     instagram?: string
     longDescription?: string
   }
+
+
+  export type User = {
+    firstname: string
+    lastname: string
+    email: string
+  }

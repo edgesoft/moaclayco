@@ -15,6 +15,7 @@ import Cookies from "./components/cookies";
 import tailwindStyles from "./styles/tailwind.css";
 import appStyles from "./styles/app.css";
 import { Collections } from "./schemas/collections";
+import { auth } from "./services/auth.server";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: appStyles },
@@ -41,7 +42,10 @@ export const loader: LoaderFunction = async ({ request }) => {
     });
   }
 
+  let user = await auth.isAuthenticated(request);
+
   return {
+    user,
     ENV: {
       STRIPE_PUBLIC_KEY: process.env.STRIPE_PUBLIC_KEY,
     },
@@ -71,6 +75,7 @@ function Document({
         <Links />
       </head>
       <body>
+     
         <Header />
         {children}
         <ScrollRestoration />
@@ -84,6 +89,7 @@ function Document({
           />
         ) : null}
         {process.env.NODE_ENV === "development" && <LiveReload />}
+        <div id="portal"/>
       </body>
     </html>
   );

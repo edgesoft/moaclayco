@@ -7,8 +7,12 @@ import {
   useParams,
 } from "@remix-run/react";
 import React, { useEffect, useState } from "react";
+import { auth } from "~/services/auth.server";
 
-export let loader: LoaderFunction = async ({ params }) => {
+export let loader: LoaderFunction = async ({ request, params }) => {
+
+  await auth.isAuthenticated(request, { failureRedirect: "/login" });
+
   return OrderEntity.find(
     {
       status: { $in: ["SUCCESS", "FAILED", "SHIPPED", "CANCELLED"] },
