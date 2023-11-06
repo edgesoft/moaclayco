@@ -137,7 +137,7 @@ export default function OrderDetail() {
             <p className="text-gray-600">
               {firstname} {lastname}
             </p>
-            <p className="text-gray-600 border-b border-dashed border-gray-300">
+            <p className="text-gray-600">
               <a href={`mailto: ${email}`}>{email}</a>
             </p>
             <p className="text-gray-600">{postaddress}</p>
