@@ -194,17 +194,17 @@ export default function OrderDetail() {
                             : ""
                         )}
                       >
-                        <td className="px-6 pb-4 text-xs">
+                        <td className="px-2 pb-4 text-xs">
                           {a.name}
                           <br />
                           {a.packinfo}
                         </td>
-                        <td className="px-6 pb-4 ">
+                        <td className="px-2 pb-4 ">
                           <span className="inline-flex px-2 text-xs font-semibold leading-5 rounded-full text-green-800 bg-green-100">
                             1
                           </span>
                         </td>
-                        <td className="px-6 pb-4 ">{a.price} SEK</td>
+                        <td className="px-2 pb-4 ">{a.price} SEK</td>
                       </tr>
                     );
                   })}
