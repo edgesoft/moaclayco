@@ -28,6 +28,8 @@
     "react-router-hash-link": "^2.4.3",
     "react-swipeable": "^7.0.1",
     "react-use-cart": "^1.13.0",
+    "remix-auth": "^3.6.0",
+    "remix-auth-email-link": "^2.1.0",
     "stripe": "^13.8.0"
   },
   "devDependencies": {
