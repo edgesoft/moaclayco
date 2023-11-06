@@ -139,7 +139,7 @@ export default function Orders() {
               </th>
               <th
                 scope="col"
-                className="pr-4 py-3 tracking-wider hidden sm:table-cell"
+                className="pr-4 py-3 tracking-wider hidden md:table-cell"
               >
                 NAMN
               </th>
@@ -166,10 +166,10 @@ export default function Orders() {
                     <td className="pr-2 py-4 w-32">
                       <OrderLabel status={d.status} />
                     </td>
-                    <td className="w-36 py-4 tracking-wider">
+                    <td className="w-36 whitespace-nowrap py-4 tracking-wider">
                       {d.createdAt.substring(0, 16).replace("T", " ")}
                     </td>
-                    <td className="pr-4 py-4 tracking-wider  hidden sm:table-cell">
+                    <td className="pr-4 py-4 tracking-wider  hidden md:table-cell">
                       {`${d.customer.firstname} ${d.customer.lastname}`}
                     </td>
                     <td className="pr-4 py-4 tracking-wider  hidden sm:table-cell">
