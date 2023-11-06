@@ -134,18 +134,18 @@ export default function Orders() {
               >
                 STATUS
               </th>
-              <th scope="col" className="py-3 tracking-wider">
+              <th scope="col" className="w-36 py-3 tracking-wider">
                 DATUM
               </th>
               <th
                 scope="col"
-                className="px-4 py-3 tracking-wider hidden sm:table-cell"
+                className="pr-4 py-3 tracking-wider hidden sm:table-cell"
               >
                 NAMN
               </th>
               <th
                 scope="col"
-                className="px-4 py-3 tracking-wider hidden sm:table-cell"
+                className="pr-4 py-3 tracking-wider hidden sm:table-cell"
               >
                 PRIS
               </th>
@@ -169,10 +169,10 @@ export default function Orders() {
                     <td className="w-36 py-4 tracking-wider">
                       {d.createdAt.substring(0, 16).replace("T", " ")}
                     </td>
-                    <td className="px-4 py-4 tracking-wider  hidden sm:table-cell">
+                    <td className="pr-4 py-4 tracking-wider  hidden sm:table-cell">
                       {`${d.customer.firstname} ${d.customer.lastname}`}
                     </td>
-                    <td className="px-4 py-4 tracking-wider  hidden sm:table-cell">
+                    <td className="pr-4 py-4 tracking-wider  hidden sm:table-cell">
                       {`${formatSwedishPrice(d.totalSum)}`}
                     </td>
                   </tr>
