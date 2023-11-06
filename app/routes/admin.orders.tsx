@@ -126,7 +126,7 @@ export default function Orders() {
               >
                 STATUS
               </th>
-              <th scope="col" className="px-6 py-3 tracking-wider  ">
+              <th scope="col" className="px-2 py-3 tracking-wider  ">
                 DATUM
               </th>
               <th
@@ -158,7 +158,7 @@ export default function Orders() {
                     <td className="pr-6 py-4 tracking-wider text-center align-middle">
                       <OrderLabel status={d.status} />
                     </td>
-                    <td className="px-6 py-4 tracking-wider">
+                    <td className="px-2 py-4 tracking-wider">
                       {d.createdAt.substring(0, 16).replace("T", " ")}
                     </td>
                     <td className="px-6 py-4 tracking-wider  hidden sm:table-cell">
