@@ -1,5 +1,9 @@
 import { MetaFunction, LoaderFunction } from "@remix-run/node";
-import { useNavigation, useLoaderData } from "@remix-run/react";
+import {
+  useNavigation,
+  useLoaderData,
+  useOutletContext,
+} from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { useSwipeable } from "react-swipeable";
 import { Items } from "../schemas/items";
@@ -28,7 +32,6 @@ export let meta: MetaFunction = (d) => {
     },
   ];
 };
-
 
 const Item: React.FC<ItemProps> = ({
   _id,
@@ -259,6 +262,7 @@ export default function Collection() {
   const hash = typeof window === "undefined" ? "" : window.location.hash;
   useScroll(hash);
   let data: ItemProps[] = useLoaderData();
+  const parentData = useOutletContext();
   let transition = useNavigation();
   return (
     <>
@@ -269,6 +273,28 @@ export default function Collection() {
             <Item key={item._id} {...item} />
           ))}
         </div>
+        {parentData && parentData.user ? (
+          <div className="fixed right-5 md:right-10 bottom-16 md:bottom-20">
+            <button
+              className="bg-blue-500 hover:bg-blue-700 text-white font-bold p-2 rounded-full inline-flex items-center justify-center shadow-lg transform transition duration-150 ease-in-out hover:scale-110"
+              style={{ width: "3rem", height: "3rem" }} // Adjust the size as needed
+            >
+              <svg
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                className="w-6 h-6"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+            </button>
+          </div>
+        ) : null}
       </section>
     </>
   );
