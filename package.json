@@ -11,6 +11,8 @@
     "typecheck": "tsc"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.441.0",
+    "@aws-sdk/lib-storage": "^3.441.0",
     "@remix-run/css-bundle": "^2.0.1",
     "@remix-run/node": "^2.0.1",
     "@remix-run/react": "^2.0.1",
@@ -26,11 +28,14 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-hash-link": "^2.4.3",
+    "react-select": "^5.8.0",
     "react-swipeable": "^7.0.1",
     "react-use-cart": "^1.13.0",
     "remix-auth": "^3.6.0",
     "remix-auth-email-link": "^2.1.0",
-    "stripe": "^13.8.0"
+    "sharp": "^0.32.6",
+    "stripe": "^13.8.0",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@remix-run/dev": "^2.0.1",
@@ -41,6 +46,7 @@
     "@types/react-dom": "^18.2.7",
     "@types/react-router-hash-link": "^2.4.7",
     "@types/stripe": "^8.0.417",
+    "@types/uuid": "^9.0.6",
     "eslint": "^8.38.0",
     "tailwindcss": "^3.3.3",
     "typescript": "^5.1.6"
