@@ -3,6 +3,8 @@ import {
   useNavigation,
   useLoaderData,
   useOutletContext,
+  useParams,
+  useNavigate,
 } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { useSwipeable } from "react-swipeable";
@@ -264,6 +266,8 @@ export default function Collection() {
   let data: ItemProps[] = useLoaderData();
   const parentData = useOutletContext();
   let transition = useNavigation();
+  let navigation = useNavigate()
+  let { collection } = useParams();
   return (
     <>
       <Loader transition={transition} />
@@ -276,6 +280,9 @@ export default function Collection() {
         {parentData && parentData.user ? (
           <div className="fixed right-5 md:right-10 bottom-16 md:bottom-20">
             <button
+              onClick={() => {
+                navigation(`/items/${collection}/new`)
+              }}
               className="bg-blue-500 hover:bg-blue-700 text-white font-bold p-2 rounded-full inline-flex items-center justify-center shadow-lg transform transition duration-150 ease-in-out hover:scale-110"
               style={{ width: "3rem", height: "3rem" }} // Adjust the size as needed
             >
