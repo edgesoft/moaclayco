@@ -2,36 +2,34 @@ import { useNavigate } from "react-router-dom";
 import { Link, useLoaderData } from "@remix-run/react";
 import { useCart } from "react-use-cart";
 import { AnimatePresence, motion } from "framer-motion";
-import React, { ReactNode, Suspense, useEffect, useRef, useState } from "react";
-import { CollectionProps } from "~/types";
+import React, { useMemo, useRef } from "react";
+import { CollectionProps, User } from "~/types";
 import useOnClickOutside from "~/hooks/useClickOutside";
-
-let hydrating = true;
-
-function useHydrated() {
-  let [hydrated, setHydrated] = useState(() => !hydrating);
-
-  useEffect(function hydrate() {
-    hydrating = false;
-    setHydrated(true);
-  }, []);
-
-  return hydrated;
-}
+import ClientOnly from "./ClientOnly";
+import { disableBodyScroll, enableBodyScroll } from "~/utils/scroll";
 
 type IndexLoadingType = {
+  user: User,
   ENV: string;
   collections: CollectionProps[];
 };
+
 
 function Hamburger() {
   const [menu, setMenu] = React.useState(false);
   const ref = useRef(null);
   let data: IndexLoadingType = useLoaderData();
-  useOnClickOutside(ref, () => setMenu(false));
+  useOnClickOutside(ref, () => {
+    enableBodyScroll()
+    setMenu(false)
+  });
+
   const history = useNavigate();
   const x = typeof window !== "undefined" ? window.innerWidth : 0;
-  return (
+
+  
+
+  return menu ? (
     <>
       <AnimatePresence>
         {menu && (
@@ -41,7 +39,7 @@ function Hamburger() {
               initial={{ x: x, opacity: 0 }}
               animate={{ x: x - 280, opacity: 1 }}
               transition={{ ease: "easeInOut", duration: 0.3 }}
-              className="fixed z-20 top-0 opacity-95 w-full border-l -right-0 sm:right-2 overflow-y-scroll"
+              className="fixed z-20 top-0 opacity-95 bg-white  w-full border-l -right-0 sm:right-2 overflow-y-scroll"
             >
               <div
                 style={{ width: 280 }}
@@ -52,6 +50,7 @@ function Hamburger() {
                   className="relative flex items-stretch cursor-pointer"
                   style={{ width: 280 }}
                   onClick={() => {
+                    enableBodyScroll();
                     setMenu(false);
                   }}
                 >
@@ -74,6 +73,7 @@ function Hamburger() {
                   className="flex m-2 w-full cursor-pointer"
                   onClick={() => {
                     history(`/`);
+                    enableBodyScroll();
                     setMenu(false);
                   }}
                 >
@@ -88,6 +88,40 @@ function Hamburger() {
                   </div>
                   <span className="m-3 md:my-3">Startsida</span>
                 </div>
+                <div
+                  className="flex m-2 w-full cursor-pointer"
+                  onClick={() => {
+                    setMenu(false);
+                    enableBodyScroll();
+                    history(data.user ? `/logout` : `/login`)
+                  }}
+                >
+                  <div className="flex-shrink-0 w-12 h-12 md:w-18 md:h-18 text-green-800">
+                    <svg
+                      className="h-10 w-105"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path>
+                    </svg>
+                  </div>
+                  <span className="m-3 md:my-3">{data.user ? "Logga ut" : "Logga in"}</span>
+                </div>
+                {data.user ? 
+                <div
+                className="flex m-2 w-full cursor-pointer"
+                onClick={() => {
+                  setMenu(false);
+                  enableBodyScroll();
+                  history('/admin/orders')
+                }}
+              >
+                <div className="flex-shrink-0 w-12 h-12 md:w-18 md:h-18 text-violet-500">
+                <svg className="h-10 w-10" viewBox="0 0 20 20" fill="currentColor"><path d="M11 17a1 1 0 001.447.894l4-2A1 1 0 0017 15V9.236a1 1 0 00-1.447-.894l-4 2a1 1 0 00-.553.894V17zM15.211 6.276a1 1 0 000-1.788l-4.764-2.382a1 1 0 00-.894 0L4.789 4.488a1 1 0 000 1.788l4.764 2.382a1 1 0 00.894 0l4.764-2.382zM4.447 8.342A1 1 0 003 9.236V15a1 1 0 00.553.894l4 2A1 1 0 009 17v-5.764a1 1 0 00-.553-.894l-4-2z"></path></svg>
+                </div>
+                <span className="m-3 md:my-3">Ordrar</span>
+              </div>
+                : null }
 
                 <div className="flex m-2 w-full">
                   <div
@@ -102,6 +136,7 @@ function Hamburger() {
                         key={d._id}
                         className="flex m-2 w-full"
                         onClick={() => {
+                          enableBodyScroll();
                           history(`/collections/${d.shortUrl}`);
                           setMenu(false);
                         }}
@@ -122,39 +157,36 @@ function Hamburger() {
           </>
         )}
       </AnimatePresence>
-      {!menu && (
-        <div
-          className="absolute right-1 md:right-1 w-10 h-10 flex md:py-3"
-          onClick={(e) => {
-            setMenu(true);
-          }}
-        >
-          <div className="flex justify-center text-gray-600 w-10 h-10 items-center">
-            <svg className="h-8 w-10" viewBox="0 0 20 20" fill="currentColor">
-              <path
-                fillRule="evenodd"
-                d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </div>
-        </div>
-      )}
     </>
+  ) : (
+      <div
+        className="absolute right-1 md:right-1 w-10 h-10 flex md:py-3"
+        onClick={(e) => {
+          disableBodyScroll();
+          setMenu(true);
+        }}
+      >
+        <div className="flex justify-center text-gray-600 w-10 h-10 items-center">
+          <svg className="h-8 w-10" viewBox="0 0 20 20" fill="currentColor">
+            <path
+              fillRule="evenodd"
+              d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </div>
+      </div>
   );
 }
 
-type Props = {
-  children(): ReactNode;
-  fallback?: ReactNode;
-};
-
-function ClientOnly({ children, fallback = null }: Props) {
-  return useHydrated() ? <>{children()}</> : <>{fallback}</>;
-}
-
 const CartComponent = (): JSX.Element => {
-  const { totalItems } = useCart();
+  const { items } = useCart();
+  const totalItems = useMemo(() => {
+    return items.reduce(
+      (count, item) => (item.parentId == null ? count + item.quantity : count),
+      0
+    );
+  }, [items]);
   const history = useNavigate();
   return (
     <div

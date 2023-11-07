@@ -15,10 +15,14 @@ import Cookies from "./components/cookies";
 import tailwindStyles from "./styles/tailwind.css";
 import appStyles from "./styles/app.css";
 import { Collections } from "./schemas/collections";
+import { auth } from "./services/auth.server";
+import s from "react-toastify/dist/ReactToastify.css";
+import { ToastContainer, toast } from "react-toastify";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: appStyles },
   { rel: "stylesheet", href: tailwindStyles },
+  { rel: "stylesheet", href: s },
 ];
 
 export const loader: LoaderFunction = async ({ request }) => {
@@ -41,7 +45,10 @@ export const loader: LoaderFunction = async ({ request }) => {
     });
   }
 
+  let user = await auth.isAuthenticated(request);
+
   return {
+    user,
     ENV: {
       STRIPE_PUBLIC_KEY: process.env.STRIPE_PUBLIC_KEY,
     },
@@ -71,8 +78,10 @@ function Document({
         <Links />
       </head>
       <body>
+     
         <Header />
         {children}
+        <ToastContainer />
         <ScrollRestoration />
         <LiveReload />
         <Scripts />
@@ -84,16 +93,18 @@ function Document({
           />
         ) : null}
         {process.env.NODE_ENV === "development" && <LiveReload />}
+        <div id="portal"/>
       </body>
     </html>
   );
 }
 
 export default function App() {
+  const data = useLoaderData();
   return (
     <CartProvider>
       <Document>
-        <Outlet />
+       <Outlet context={data} />
         <Cookies />
         <Footer />
       </Document>

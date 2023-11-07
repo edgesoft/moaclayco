@@ -19,7 +19,7 @@ The following docker run command uses moaclayco as the image created from the `D
 
 
 ## Deployment
-The `fly-prod.toml` and `Dockerfile-prod` is used for production. The github workflow is set up to build with these files when pused to the `master` branch. `fly-stage` and `Dockerfile-stage` is used for the stage environment. It should be pushed to the `next` branch. The stage fly application has the following url `https://moaclayco-dev.fly.dev/`. All code should be tested there before pushing to master. 
+The `fly-prod.toml` and `Dockerfile-prod` is used for production. The github workflow is set up to build with these files when pused to the `master` branch. `fly-stage` and `Dockerfile-stage` is used for the stage environment. It should be pushed to the `next` branch. The stage fly application has the following url `https://moaclayco-stage.fly.dev/`. All code should be tested there before pushing to master. 
 
 the `.env` file should contain the following keys.
 

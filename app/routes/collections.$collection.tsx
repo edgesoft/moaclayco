@@ -1,5 +1,12 @@
 import { MetaFunction, LoaderFunction } from "@remix-run/node";
-import { useNavigation, useLoaderData } from "@remix-run/react";
+import {
+  useNavigation,
+  useLoaderData,
+  useOutletContext,
+  useParams,
+  useNavigate,
+  Link,
+} from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { useSwipeable } from "react-swipeable";
 import { Items } from "../schemas/items";
@@ -7,7 +14,10 @@ import { useCart } from "react-use-cart";
 import { classNames } from "../utils/classnames";
 import { ItemProps } from "~/types";
 import Loader from "../components/loader";
-import useMediaQuery from "../hooks/useMediaQuery";
+import AdditionalCartItem, {
+  AdditionCartItemType,
+} from "~/components/item/additionalItem";
+import Magnifier from "~/components/item/magnifier";
 
 export let loader: LoaderFunction = async ({ params }) => {
   return Items.find({ collectionRef: params.collection }).sort({ _id: -1 });
@@ -26,70 +36,6 @@ export let meta: MetaFunction = (d) => {
   ];
 };
 
-type MagnifierProps = {
-  imageUrl: string | undefined;
-  close: (p: string | undefined) => void;
-};
-
-const Magnifier: React.FC<MagnifierProps> = ({
-  imageUrl,
-  close,
-}): JSX.Element | null => {
-  const [isLoaded, setIsLoaded] = useState(false);
-  const isDesktop = useMediaQuery("(min-width: 960px)");
-
-  useEffect(() => {
-    if (imageUrl) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
-  }, [imageUrl]);
-
-  if (!imageUrl) return null;
-
-  return (
-    <div className="fixed z-10 left-0 top-0 w-full h-full overflow-scroll">
-      <div
-        className={classNames(
-          "relative min-w-max min-h-screen overflow-hidden"
-        )}
-      >
-        <img
-          className={classNames(isLoaded ? "visible" : "hidden")}
-          onLoad={() => {
-            setIsLoaded(true);
-          }}
-          width={isDesktop ? 2000 : 1000}
-          src={`${imageUrl}?twic=v1/resize=2000/quality=100`}
-        />
-
-        <img
-          className={classNames(isLoaded ? "hidden" : "visible")}
-          width={2000}
-          src={`${imageUrl}?twic=v1/resize=40/quality=10`}
-        />
-
-        <div
-          className="fixed right-1 top-1 text-white"
-          onClick={() => {
-            setIsLoaded(false);
-            close(undefined);
-          }}
-        >
-          <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-            <path
-              fillRule="evenodd"
-              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const Item: React.FC<ItemProps> = ({
   _id,
   images,
@@ -97,6 +43,7 @@ const Item: React.FC<ItemProps> = ({
   amount,
   price,
   productInfos,
+  additionalItems,
   collectionRef,
   instagram,
   longDescription,
@@ -104,7 +51,10 @@ const Item: React.FC<ItemProps> = ({
   const [showInfo, setShowInfo] = useState(false);
   const [showImage, setShowImage] = useState<string | undefined>(undefined);
   const [index, setIndex] = useState(0);
-  const { addItem } = useCart();
+  const [additions, setAdditions] = useState<AdditionCartItemType[]>([]);
+  const { addItem, getItem, items } = useCart();
+  const {user} = useOutletContext();
+
   const handlers = useSwipeable({
     onSwiped: (eventData) => {
       if (eventData.dir === "Right") {
@@ -191,7 +141,26 @@ const Item: React.FC<ItemProps> = ({
 
         <div className="relative p-6 w-full text-left space-y-2 md:p-4 md:w-3/5">
           <div className="flex">
-            <p className="text-gray-700 text-2xl font-bold">{headline}</p>
+            <p className="text-gray-700 text-2xl font-bold flex">
+              {user? 
+              <Link to={`/items/${collectionRef}/${_id}/edit`}>
+              <svg
+                className="mt-1 h-7 w-7 cursor-pointer hover:text-violet-400"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <title>{`Ändra ${headline}`}</title>
+                <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z"></path>
+                <path
+                  fillRule="evenodd"
+                  d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                  clipRule="evenodd"
+                ></path>
+              </svg>
+              </Link>
+              : null }
+              <span>{headline}</span>
+            </p>
 
             {amount === 0 ? (
               <span className="ml-1 p-1 text-green-800 bg-green-100 rounded">
@@ -239,16 +208,59 @@ const Item: React.FC<ItemProps> = ({
               </svg>
             ) : null}
           </div>
+          <div className={additionalItems ? `pb-10` : ``}>
+            {additionalItems
+              ? additionalItems.map((item, index) => {
+                  return (
+                    <div key={index}>
+                      <AdditionalCartItem
+                        item={item}
+                        additionalIndex={index}
+                        handleSwitch={(item, on, additionalIndex) => {
+                          if (on) {
+                            // add
+                            additions.push({ item, additionalIndex, index });
+                          } else {
+                            // remove
+                            const i = additions.findIndex(
+                              (item) => item.index === index
+                            );
+                            additions.splice(i, 1);
+                          }
+                          setAdditions(additions);
+                        }}
+                      />
+                    </div>
+                  );
+                })
+              : null}
+          </div>
           {amount > 0 ? (
             <button
               onClick={() => {
+                const item = getItem(_id);
+                const itemIndex = item ? item.quantity : 0;
+
                 addItem({
                   id: _id,
+                  parentId: null,
                   price,
                   balance: amount,
                   image: images[0],
                   headline,
                   collectionRef,
+                });
+
+                additions.forEach((a) => {
+                  addItem({
+                    id: `${_id}_${itemIndex}_${a.additionalIndex}`,
+                    parentId: _id,
+                    price: a.item.price,
+                    index: itemIndex,
+                    image: null,
+                    headline: a.item.name,
+                    collectionRef: null,
+                  });
                 });
               }}
               className="absolute bottom-2 right-2 flex-row-reverse px-4 py-2 text-gray-800 hover:text-white font-medium hover:bg-gray-500 bg-rosa rounded"
@@ -274,8 +286,10 @@ export default function Collection() {
   const hash = typeof window === "undefined" ? "" : window.location.hash;
   useScroll(hash);
   let data: ItemProps[] = useLoaderData();
+  const parentData = useOutletContext();
   let transition = useNavigation();
-
+  let navigation = useNavigate();
+  let { collection } = useParams();
   return (
     <>
       <Loader transition={transition} />
@@ -285,6 +299,31 @@ export default function Collection() {
             <Item key={item._id} {...item} />
           ))}
         </div>
+        {parentData && parentData.user ? (
+          <div className="fixed right-5 md:right-10 bottom-16 md:bottom-20">
+            <button
+              onClick={() => {
+                navigation(`/items/${collection}/new`);
+              }}
+              className="bg-blue-500 hover:bg-blue-700 text-white font-bold p-2 rounded-full inline-flex items-center justify-center shadow-lg transform transition duration-150 ease-in-out hover:scale-110"
+              style={{ width: "3rem", height: "3rem" }} // Adjust the size as needed
+            >
+              <svg
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                className="w-6 h-6"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+            </button>
+          </div>
+        ) : null}
       </section>
     </>
   );

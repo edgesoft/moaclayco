@@ -15,13 +15,21 @@ const OrderSchema = new Schema({
     webhookAt: Date,
     status: {
         type: String,
-        enum: ['OPENED', 'PENDING', 'FAILED', 'CANCELED', 'SUCCESS']
+        enum: ['OPENED', 'PENDING', 'FAILED', 'CANCELED', 'SUCCESS', 'SHIPPED']
     },
     items: [{
         itemRef: String,
         name: String,
         price: Number,
-        quantity: Number
+        quantity: Number,
+        image: String,
+        additionalItems: [
+            {
+                name: String,
+                price: Number,
+                packinfo: String
+            }
+        ]
     }],
     totalSum: Number,
     freightCost: Number,

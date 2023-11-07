@@ -75,7 +75,7 @@ const Feedback: React.FC<FeedbackProp> = ({
               </div>
               <div>
                 <p className="font-bold">{value}</p>
-                <p className="text-sm">{message}</p>
+                <p className="text-sm cursor-pointer">{message}</p>
               </div>
             </div>
             {!visibleInMillis ? (

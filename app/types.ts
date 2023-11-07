@@ -1,6 +1,13 @@
 export type OrderItem = {
     itemRef: string
-    quantity: number
+    quantity: number,
+    additionalItems: [
+      {
+        name: string,
+        price: number,
+        packinfo: string
+      }
+    ]
   }
   
   export type Order = {
@@ -35,14 +42,27 @@ export type OrderItem = {
     index?: number
   }
   
+export type AdditionalItem = {
+  price: number
+  name: string
+}
+
   export type ItemProps = {
     _id: string
     images: string[]
     amount: number
     price: number
-    productInfos?: string[]
     headline: string
     collectionRef: string
+    productInfos?: string[]
+    additionalItems?: AdditionalItem[]
     instagram?: string
     longDescription?: string
+  }
+
+
+  export type User = {
+    firstname: string
+    lastname: string
+    email: string
   }
