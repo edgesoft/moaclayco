@@ -96,10 +96,11 @@ function Document({
 }
 
 export default function App() {
+  const data = useLoaderData();
   return (
     <CartProvider>
       <Document>
-        <Outlet />
+       <Outlet context={data} />
         <Cookies />
         <Footer />
       </Document>
