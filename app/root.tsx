@@ -16,10 +16,13 @@ import tailwindStyles from "./styles/tailwind.css";
 import appStyles from "./styles/app.css";
 import { Collections } from "./schemas/collections";
 import { auth } from "./services/auth.server";
+import s from "react-toastify/dist/ReactToastify.css";
+import { ToastContainer, toast } from "react-toastify";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: appStyles },
   { rel: "stylesheet", href: tailwindStyles },
+  { rel: "stylesheet", href: s },
 ];
 
 export const loader: LoaderFunction = async ({ request }) => {
@@ -78,6 +81,7 @@ function Document({
      
         <Header />
         {children}
+        <ToastContainer />
         <ScrollRestoration />
         <LiveReload />
         <Scripts />
