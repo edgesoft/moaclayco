@@ -5,5 +5,5 @@ import ItemComponent from "~/components/admin/item";
 export const loader = ItemLoader;
 export const action = ItemAction;
 
-const NewItem = ItemComponent;
-export default NewItem;
+const Edit = ItemComponent;
+export default Edit;

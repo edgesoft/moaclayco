@@ -8,8 +8,9 @@ import { v4 as uuidv4 } from 'uuid';
 const awsRegion = process.env.AWS_REGION;
 const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
 const awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+const awsItemPath = process.env.AWS_ITEM_PATH
 
-if (!awsRegion || !awsAccessKeyId || !awsSecretAccessKey) {
+if (!awsRegion || !awsAccessKeyId || !awsSecretAccessKey || !awsItemPath) {
   throw new Error("AWS configuration is not complete. Please check your environment variables.");
 }
 
@@ -34,7 +35,7 @@ export async function uploadToS3(file: File | Blob, collectionRef: string) {
 
   const uploadParams = {
     Bucket: process.env.AWS_S3_BUCKET_NAME,
-    Key: `items/${collectionRef}/${uniqueFileName}`,
+    Key: `${awsItemPath}/${collectionRef}/${uniqueFileName}`,
     Body: fileStream,
     ContentType: "webp",
   };

@@ -5,6 +5,7 @@ import {
   useOutletContext,
   useParams,
   useNavigate,
+  Link,
 } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { useSwipeable } from "react-swipeable";
@@ -52,6 +53,8 @@ const Item: React.FC<ItemProps> = ({
   const [index, setIndex] = useState(0);
   const [additions, setAdditions] = useState<AdditionCartItemType[]>([]);
   const { addItem, getItem, items } = useCart();
+  const {user} = useOutletContext();
+
   const handlers = useSwipeable({
     onSwiped: (eventData) => {
       if (eventData.dir === "Right") {
@@ -138,7 +141,26 @@ const Item: React.FC<ItemProps> = ({
 
         <div className="relative p-6 w-full text-left space-y-2 md:p-4 md:w-3/5">
           <div className="flex">
-            <p className="text-gray-700 text-2xl font-bold">{headline}</p>
+            <p className="text-gray-700 text-2xl font-bold flex">
+              {user? 
+              <Link to={`/items/${collectionRef}/${_id}/edit`}>
+              <svg
+                className="mt-1 h-7 w-7 cursor-pointer hover:text-violet-400"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <title>{`Ändra ${headline}`}</title>
+                <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z"></path>
+                <path
+                  fillRule="evenodd"
+                  d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                  clipRule="evenodd"
+                ></path>
+              </svg>
+              </Link>
+              : null }
+              <span>{headline}</span>
+            </p>
 
             {amount === 0 ? (
               <span className="ml-1 p-1 text-green-800 bg-green-100 rounded">
@@ -266,7 +288,7 @@ export default function Collection() {
   let data: ItemProps[] = useLoaderData();
   const parentData = useOutletContext();
   let transition = useNavigation();
-  let navigation = useNavigate()
+  let navigation = useNavigate();
   let { collection } = useParams();
   return (
     <>
@@ -281,7 +303,7 @@ export default function Collection() {
           <div className="fixed right-5 md:right-10 bottom-16 md:bottom-20">
             <button
               onClick={() => {
-                navigation(`/items/${collection}/new`)
+                navigation(`/items/${collection}/new`);
               }}
               className="bg-blue-500 hover:bg-blue-700 text-white font-bold p-2 rounded-full inline-flex items-center justify-center shadow-lg transform transition duration-150 ease-in-out hover:scale-110"
               style={{ width: "3rem", height: "3rem" }} // Adjust the size as needed

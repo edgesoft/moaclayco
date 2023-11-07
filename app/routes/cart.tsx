@@ -134,6 +134,7 @@ export let action: ActionFunction = async ({ request }) => {
       return {
         itemRef: item.id,
         name: item.headline,
+        image: item.image,
         price: item.price,
         quantity: item.quantity,
         additionalItems: data
