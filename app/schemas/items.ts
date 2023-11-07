@@ -11,7 +11,10 @@ const ItemSchema = new Schema({
   amount: Number,
   longDescription: String,
   sortOrder: Number,
-
+  additionalItems: [{
+    name: String,
+    price: Number
+  }]
 },
 { collection: 'items' });
 
