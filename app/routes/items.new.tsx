@@ -337,7 +337,7 @@ export default function Item() {
             <ClientOnly fallback={null}>{() => <ProductInfo />}</ClientOnly>
           </div>
           {/* Bilder section */}
-          <div className="w-full">
+          <div className="w-full pb-20">
             <FileUpload />
           </div>
         </div>
