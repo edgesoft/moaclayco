@@ -5,26 +5,37 @@ import { classNames } from "~/utils/classnames";
 import React, { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { auth } from "~/services/auth.server";
+import stripeClient from "../stripeClient";
 
 export let loader: LoaderFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
 
-  return Orders.findOne({
+  const order = await Orders.findOne({
     _id: params.id,
   });
+
+  if (order.status === "FAILED") {
+    try {
+      const intent = await stripeClient.paymentIntents.retrieve(
+        order.paymentIntent.id
+      );
+      return { order, intent };
+    } catch (e) {}
+  }
+  return { order, intent: null };
 };
 
-export let meta: MetaFunction = ({data}) => {
-    return [
-      {
-        title: `Moa Clay Collection (order: ${data._id})`,
-      },
-      {
-        name: "description",
-        content: `Order: ${data._id}`,
-      },
-    ];
-  };
+export let meta: MetaFunction = ({ data }) => {
+  return [
+    {
+      title: `Moa Clay Collection (order: ${data._id})`,
+    },
+    {
+      name: "description",
+      content: `Order: ${data._id}`,
+    },
+  ];
+};
 
 export let action: ActionFunction = async ({ request, params }) => {
   let body = new URLSearchParams(await request.text());
@@ -40,17 +51,21 @@ export let action: ActionFunction = async ({ request, params }) => {
 
 export default function OrderDetail() {
   let {
-    _id,
-    customer: { firstname, lastname, email, postaddress, zipcode, city },
-    totalSum,
-    items,
-    webhookAt,
-    freightCost,
-    status,
+    order: {
+      _id,
+      customer: { firstname, lastname, email, postaddress, zipcode, city },
+      totalSum,
+      items,
+      webhookAt,
+      freightCost,
+      status,
+    },
+    intent,
   } = useLoaderData();
   const [on, setOn] = useState(status === "SHIPPED");
   let orderFetcher = useFetcher();
   let ref = useRef(null);
+
 
   return (
     <div className=" mx-auto p-2 bg-white rounded-lg shadow-xl">
@@ -68,6 +83,18 @@ export default function OrderDetail() {
             <p className="text-gray-600">
               Fraktkostnad: <strong>{freightCost} SEK</strong>
             </p>
+            {intent ? (
+              <p className="text-gray-600">
+                <span
+                  className={classNames(
+                    "relative mb-1 mr-1 cursor-pointer inline-flex rounded-full px-2 py-1 text-xs font-semibold leading-5 transition-all duration-200 select-none",
+                    "bg-red-100 text-red-800"
+                  )}
+                >
+                  {intent.last_payment_error.message.length > 55 ? `${intent.last_payment_error.message.substring(0,54)}...`:intent.last_payment_error.message }
+                </span>
+              </p>
+            ) : null}
 
             {status === "SUCCESS" || status === "SHIPPED" ? (
               <orderFetcher.Form ref={ref} method="post">
