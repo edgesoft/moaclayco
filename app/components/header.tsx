@@ -7,6 +7,7 @@ import { CollectionProps, User } from "~/types";
 import useOnClickOutside from "~/hooks/useClickOutside";
 import ClientOnly from "./ClientOnly";
 import { disableBodyScroll, enableBodyScroll } from "~/utils/scroll";
+import { classNames } from "~/utils/classnames";
 
 type IndexLoadingType = {
   user: User,
@@ -141,7 +142,9 @@ function Hamburger() {
                           setMenu(false);
                         }}
                       >
-                        <div className="flex-shrink-0 w-12 h-12 md:w-18 md:h-18">
+                        <div className={classNames("flex-shrink-0 w-12 h-12 md:w-18 md:h-18",
+                          i === data.collections.length - 1? "mb-20" : ""
+                        )}>
                           <img
                             className="w-full h-full rounded-full  object-cover object-center"
                             src={d.image}
@@ -183,7 +186,7 @@ const CartComponent = (): JSX.Element => {
   const { items } = useCart();
   const totalItems = useMemo(() => {
     return items.reduce(
-      (count, item) => (item.parentId == null ? count + item.quantity : count),
+      (count, item) => (item.parentId == null ? count + (item.quantity || 0) : count),
       0
     );
   }, [items]);
