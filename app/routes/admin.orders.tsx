@@ -124,7 +124,7 @@ export default function Orders() {
   }, [id]); // Dependency on `id` ensures scroll restoration when a new row is clicked
 
   return (
-    <div className="w-full mt-20 p-1 pt-4">
+    <div className="w-full mt-20 p-1 pt-4 mb-20">
       <div className="overflow-x-auto shadow-md sm:rounded-lg">
         <table className="min-w-full text-sm text-left text-gray-500">
           <thead className="text-xs text-gray-700 uppercase bg-gray-50">
