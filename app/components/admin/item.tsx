@@ -1,6 +1,7 @@
 import {
   Form,
   useActionData,
+  useFetcher,
   useLoaderData,
   useParams,
 } from "@remix-run/react";
@@ -11,6 +12,8 @@ import ClientOnly from "~/components/ClientOnly";
 import { toast } from "react-toastify";
 import { ItemLoader } from "../../loaders/item";
 import { ItemAction } from "~/actions/item";
+import { HashLink } from "react-router-hash-link";
+import { CollectionProps, ItemProps } from "~/types";
 
 const options = [
   { value: "Längd", label: "Längd" },
@@ -193,7 +196,9 @@ function ProductInfo() {
   const [selectValue, setSeletValue] = useState(null);
   const [inputValue, setInputValue] = useState(null);
   const [productInfos, setProductInfos] = useState(
-    item && item.productInfos ? item.productInfos.map((i) => getProductInfo(i)) : []
+    item && item.productInfos
+      ? item.productInfos.map((i) => getProductInfo(i))
+      : []
   );
 
   // sync
@@ -241,7 +246,7 @@ function ProductInfo() {
                 />
               </div>
 
-              {/* Input and button side by side on all screens */}
+              {/* Input and button side by sidea on all screens */}
               <div className="flex w-full lg:flex-nowrap px-2 py-2">
                 <input
                   ref={inputRef}
@@ -336,6 +341,25 @@ interface ImageInfo {
 
 function FileUpload() {
   const { item } = useLoaderData();
+  const fetcher = useFetcher(); // useFetcher is part of Remix's data fetching API
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  let { collection } = useParams();
+
+  const handleDelete = async (imageName: string) => {
+    // This will call an endpoint on your server that should handle the deletion from S3
+    fetcher.submit(
+      {
+        imageName: imageName,
+        collection: collection ? collection : "",
+        id: item._id,
+      },
+      { method: "delete", action: "/admin/upload/delete" }
+    );
+
+    // Optimistically remove the image from the state
+    setImages(images.filter((image) => image.name !== imageName));
+  };
 
   const [images, setImages] = useState<ImageInfo[]>(
     item
@@ -345,9 +369,6 @@ function FileUpload() {
         }))
       : []
   );
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  let { collection } = useParams();
 
   useEffect(() => {
     fileRef.current.value = images.map((i) => i.thumbnail).join(",");
@@ -445,6 +466,7 @@ function FileUpload() {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      handleDelete(image.name);
                     }}
                     className="ml-4 w-8 h-8 flex items-center justify-center text-gray-600 hover:text-gray-800"
                   >
@@ -481,9 +503,14 @@ interface ActionData {
   errors?: ActionDataErrors;
 }
 
+type LoaderDataItemProps = {
+  collection: CollectionProps,
+  item: ItemProps
+}
+
 export default function ItemComponent() {
   const actionData = useActionData<ActionData>();
-  const { collection, item } = useLoaderData();
+  const { collection, item } = useLoaderData<LoaderDataItemProps>();
 
   useEffect(() => {
     if (actionData?.errors) {
@@ -504,6 +531,19 @@ export default function ItemComponent() {
     }
   }, [actionData]);
 
+  const changeUrl = () => {
+    return (
+      <>
+        <span>Ändra</span> {""}
+        <HashLink to={`/collections/${collection.shortUrl}#${item._id}`}>
+          <span className="ml-2 border-b-2 border-dashed border-blue-500">
+            {item.headline}
+          </span>
+        </HashLink>
+      </>
+    );
+  };
+
   return (
     <Form method="post">
       <div className="mt-20 p-2">
@@ -515,9 +555,7 @@ export default function ItemComponent() {
           >
             <circle cx="4" cy="4" r="3" />
           </svg>
-          {item
-            ? `Ändra ${item.headline}`
-            : `Ny artikel / ${collection.headline}`}
+          {item ? changeUrl() : `Ny artikel / ${collection.headline}`}
         </span>
       </div>
       <div className="flex flex-col lg:flex-row gap-4 p-2">
