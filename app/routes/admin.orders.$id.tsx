@@ -6,6 +6,9 @@ import React, { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { auth } from "~/services/auth.server";
 import stripeClient from "../stripeClient";
+import { sendMail } from "./webhook";
+import { Template } from "~/components/mail/order";
+import { Order } from "~/types";
 
 export let loader: LoaderFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
@@ -40,12 +43,21 @@ export let meta: MetaFunction = ({ data }) => {
 export let action: ActionFunction = async ({ request, params }) => {
   let body = new URLSearchParams(await request.text());
   const data = JSON.parse(body.get("on") || "");
-  await Orders.updateOne(
-    {
-      _id: params.id,
-    },
-    { status: Boolean(data) ? "SHIPPED" : "SUCCESS" }
-  );
+  const order: Order | null = await Orders.findOne({ _id: params.id,}).lean()
+
+  if (order) {
+    await Orders.updateOne(
+      {
+        _id: params.id,
+      },
+      { status: Boolean(data) ? "SHIPPED" : "SUCCESS" }
+    );
+  
+    if (Boolean(data)) {
+      sendMail(order, Template.SHIPPING)
+    }
+  }
+ 
   return {};
 };
 
