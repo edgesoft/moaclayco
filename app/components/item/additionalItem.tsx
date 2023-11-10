@@ -1,23 +1,9 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
-import { AdditionalItem } from "~/types";
+import {  AdditionalItemProps } from "~/types";
 import { classNames } from "~/utils/classnames";
 
-type AdditionalItemProps = {
-  item: AdditionalItem;
-  handleSwitch: (
-    item: AdditionalItem,
-    on: boolean,
-    additionalIndex: number
-  ) => void;
-  additionalIndex: number;
-};
 
-export type AdditionCartItemType = {
-  item: AdditionalItem;
-  index: number;
-  additionalIndex: number;
-};
 
 const AdditionalCartItem: React.FC<AdditionalItemProps> = ({
   item,

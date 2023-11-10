@@ -1,21 +1,19 @@
 import type { MetaFunction, LoaderFunction } from "@remix-run/node";
-import { useLoaderData, Link } from "@remix-run/react";
-import { Collections } from "../schemas/collections";
+import { Link, useOutletContext, useNavigate } from "@remix-run/react";
 import { CollectionProps } from "~/types";
+import { IndexProps } from "~/root";
 
-export let loader: LoaderFunction = async () => {
-  return Collections.find().sort({ sortOrder: 1 });
-};
+export let meta: MetaFunction = ({matches}) => {
 
-export let meta: MetaFunction = (d) => {
-  const data = d.data as CollectionProps[];
+  const {data} = matches[0];
+  const {collections} = data as IndexProps;
   return [
     {
       title: "Moa Clay Collection - kollektioner",
     },
     {
       name: "description",
-      content: data.map((d: CollectionProps) => d.headline).join(", "),
+      content: collections.map((d) => d.headline).join(", "),
     },
   ];
 };
@@ -30,13 +28,35 @@ const Collection: React.FC<CollectionProps> = ({
   twitter,
   index,
 }): JSX.Element => {
+  const { user } = useOutletContext<IndexProps>();
   return (
     <Link
       to={`/collections/${shortUrl}`}
       prefetch="intent"
       className="md:hover:-translate-y-2 md:hover:scale-105 flex flex-col w-full bg-gray-50 rounded-lg shadow-lg overflow-hidden transform transition duration-300 ease-in-out md:flex-row"
     >
-      <div className="w-full h-80 md:w-2/5">
+      <div className="relative w-full h-80 md:w-2/5">
+      {user? 
+             
+              <svg
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                }}
+                className="absolute bottom-1 right-1 mt-0 h-6 w-6 cursor-pointer text-white"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <title>{`Ändra ${headline}`}</title>
+                <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z"></path>
+                <path
+                  fillRule="evenodd"
+                  d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                  clipRule="evenodd"
+                ></path>
+              </svg>
+           
+              : null }
         <img
           className="w-full h-full object-cover object-center"
           loading={(index || 0) < 3 ? "eager" : "lazy"}
@@ -87,15 +107,41 @@ const Collection: React.FC<CollectionProps> = ({
 };
 
 export default function Index() {
-  let data: CollectionProps[] = useLoaderData();
+  const { user, collections } = useOutletContext<IndexProps>();
+  let navigation = useNavigate();
   return (
     <section className="mx-auto px-4 py-5 max-w-6xl sm:px-6 lg:px-4">
       <div className="grid gap-6 grid-cols-1 my-20 lg:grid-cols-2">
-        {data &&
-          data.map((d: CollectionProps, i: number) => {
+        {collections &&
+          collections.map((d: CollectionProps, i: number) => {
             return <Collection index={i} {...d} key={d._id} />;
           })}
       </div>
+      {user ? (
+          <div className="fixed right-5 md:right-10 bottom-16 md:bottom-20">
+            <button
+              onClick={() => {
+                navigation(`/collections/new`);
+              }}
+              className="bg-blue-500 hover:bg-blue-700 text-white font-bold p-2 rounded-full inline-flex items-center justify-center shadow-lg transform transition duration-150 ease-in-out hover:scale-110"
+              style={{ width: "3rem", height: "3rem" }} // Adjust the size as needed
+            >
+              <svg
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                className="w-6 h-6"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+            </button>
+          </div>
+        ) : null}
     </section>
   );
 }

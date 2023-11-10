@@ -1,10 +1,14 @@
 export type OrderItem = {
+     _id: string
     itemRef: string
-    quantity: number,
+    name: string
+    image: string
+    quantity: number
+    price: number
     additionalItems: [
       {
-        name: string,
-        price: number,
+        name: string
+        price: number
         packinfo: string
       }
     ]
@@ -27,6 +31,7 @@ export type OrderItem = {
       percentage: number | undefined
       code: string | undefined
     }
+    freightCost: number
     items: [OrderItem]
   }
   
@@ -57,7 +62,7 @@ export type AdditionalItem = {
     productInfos?: string[]
     additionalItems?: AdditionalItem[]
     instagram?: string
-    longDescription?: string
+    longDescription?: string,
   }
 
 
@@ -66,3 +71,20 @@ export type AdditionalItem = {
     lastname: string
     email: string
   }
+
+  export type AdditionalItemProps = {
+    item: AdditionalItem;
+    handleSwitch: (
+      item: AdditionalItem,
+      on: boolean,
+      additionalIndex: number
+    ) => void;
+    additionalIndex: number;
+  };
+  
+  export type AdditionCartItemType = {
+    item: AdditionalItem;
+    index: number;
+    additionalIndex: number;
+  };
+  

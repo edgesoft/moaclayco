@@ -7,15 +7,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { s3Client } from "~/services/s3.server";
 
 
-const awsItemPath = process.env.AWS_ITEM_PATH
+const awsCollectionPath = process.env.AWS_COLLECTION_PATH
 
-if (!awsItemPath) {
+if (!awsCollectionPath) {
   throw new Error("AWS configuration is not complete. Please check your environment variables.");
 }
 
-
-
-export async function uploadToS3(file: File | Blob, collectionRef: string) {
+export async function uploadToS3(file: File | Blob) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const thumbnailBuffer = await sharp(buffer)
   .resize(700) // Resize the image to have the given width
@@ -28,7 +26,7 @@ export async function uploadToS3(file: File | Blob, collectionRef: string) {
 
   const uploadParams = {
     Bucket: process.env.AWS_S3_BUCKET_NAME,
-    Key: `${awsItemPath}/${collectionRef}/${uniqueFileName}`,
+    Key: `${awsCollectionPath}/${uniqueFileName}`,
     Body: fileStream,
     ContentType: "webp",
   };
@@ -68,14 +66,12 @@ function bufferToStream(buffer: Buffer) {
 export const action: ActionFunction = async ({ request }) => {
   const formData = await request.formData();
   const file  = formData.get("file");
-  const collectionRef  = formData.get("collectionRef");
 
-  if (!collectionRef) return json({error: "collectionRef needs to be present"}, {status: 400})
   if (!file) return json({ error: "No file uploaded" }, { status: 400 });
 
   if (file instanceof File) {
     try {
-        const result = await uploadToS3(file, collectionRef.toString()); // The utility function to upload the file to S3
+        const result = await uploadToS3(file); // The utility function to upload the file to S3
         return json(result);
       } catch (error) {
         console.error(error);
