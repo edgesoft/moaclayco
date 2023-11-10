@@ -1,14 +1,5 @@
 # Moa clay collection
 
-## Images
-To create images the following steps are nessesary. S3 images are cached thru the `twic.pics` service.
-
- - 1 Create a thumbnail image from the original image
- `convert -thumbnail 700x -quality 90 IMG_3720.HEIC 3720_thumb.jpg`
-
- - 2 Upload the image to an S3 bucket
- - 3 Update the MongoDB database with the twic.pics url.
-
 
 ## Development
 The Dockerfile-development uses the same node version as in stage and production. Create and run the docker container with the image and run `npm install` to install the dependencies. Run `npm run dev` for development. Two ports needs to be opened to run in dev.
