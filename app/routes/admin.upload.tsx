@@ -4,23 +4,16 @@ import { ActionFunction, LoaderFunction, json } from "@remix-run/node";
 import { Readable } from "stream";
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid'; 
+import { s3Client } from "~/services/s3.server";
 
-const awsRegion = process.env.AWS_REGION;
-const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
-const awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+
 const awsItemPath = process.env.AWS_ITEM_PATH
 
-if (!awsRegion || !awsAccessKeyId || !awsSecretAccessKey || !awsItemPath) {
+if (!awsItemPath) {
   throw new Error("AWS configuration is not complete. Please check your environment variables.");
 }
 
-const s3Client = new S3Client({
-  region: awsRegion,
-  credentials: {
-    accessKeyId: awsAccessKeyId,
-    secretAccessKey: awsSecretAccessKey,
-  },
-});
+
 
 export async function uploadToS3(file: File | Blob, collectionRef: string) {
   const buffer = Buffer.from(await file.arrayBuffer());
