@@ -18,6 +18,15 @@ import { Collections } from "./schemas/collections";
 import { auth } from "./services/auth.server";
 import s from "react-toastify/dist/ReactToastify.css";
 import { ToastContainer, toast } from "react-toastify";
+import { CollectionProps, User } from "./types";
+
+export type IndexProps = {
+  user?: User;
+  ENV: {
+    STRIPE_PUBLIC_KEY: string;
+  };
+  collections: CollectionProps[];
+};
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: appStyles },
@@ -63,7 +72,8 @@ function Document({
   children: React.ReactNode;
   title?: string;
 }) {
-  let data: { ENV: { STRIPE_PUBLIC_KEY: string } } = useLoaderData();
+  let data: { ENV: { STRIPE_PUBLIC_KEY: string } } =
+    useLoaderData<IndexProps>();
   return (
     <html lang="en">
       <head>
@@ -72,13 +82,20 @@ function Document({
           name="viewport"
           content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes"
         />
+        <meta
+          property="twitter:image"
+          content="https://moaclayco-prod.s3.eu-north-1.amazonaws.com/background3.jpg"
+        />
+        <meta
+          property="og:image"
+          content="https://moaclayco-prod.s3.eu-north-1.amazonaws.com/background3.jpg"
+        />
         <link rel="icon" href="/favicon.png" type="image/png" />
         {title ? <title>{title}</title> : null}
         <Meta />
         <Links />
       </head>
       <body>
-     
         <Header />
         {children}
         <ToastContainer />
@@ -93,7 +110,7 @@ function Document({
           />
         ) : null}
         {process.env.NODE_ENV === "development" && <LiveReload />}
-        <div id="portal"/>
+        <div id="portal" />
       </body>
     </html>
   );
@@ -104,7 +121,7 @@ export default function App() {
   return (
     <CartProvider>
       <Document>
-       <Outlet context={data} />
+        <Outlet context={data} />
         <Cookies />
         <Footer />
       </Document>
