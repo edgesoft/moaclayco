@@ -1,4 +1,4 @@
-import { MetaFunction, LoaderFunction } from "@remix-run/node";
+import { MetaFunction, LoaderFunction, redirect, json } from "@remix-run/node";
 import {
   useNavigation,
   useLoaderData,
@@ -12,25 +12,56 @@ import { useSwipeable } from "react-swipeable";
 import { Items } from "../schemas/items";
 import { useCart } from "react-use-cart";
 import { classNames } from "../utils/classnames";
-import { AdditionCartItemType, ItemProps } from "~/types";
+import { AdditionCartItemType, CollectionProps, ItemProps } from "~/types";
 import Loader from "../components/loader";
 import AdditionalCartItem from "~/components/item/additionalItem";
 import Magnifier from "~/components/item/magnifier";
 import { IndexProps } from "~/root";
+import { Collections } from "~/schemas/collections";
+
+type ItemLoaderProps = {
+  collection: CollectionProps;
+  items: ItemProps[];
+};
 
 export let loader: LoaderFunction = async ({ params }) => {
-  return Items.find({ collectionRef: params.collection }).sort({ _id: -1 });
+  const collection = await Collections.findOne({ shortUrl: params.collection });
+  if (!collection) {
+    return redirect("/");
+  }
+
+  return json(
+    {
+      collection,
+      items: await Items.find({ collectionRef: params.collection }).sort({
+        _id: -1,
+      }),
+    },
+    {
+      headers: {
+        "Cache-Control": "public, max-age=300", // Cache for 5 min
+      },
+    }
+  );
 };
 
 export let meta: MetaFunction = (d) => {
-  const data = d.data as ItemProps[];
+  const { collection } = d.data as ItemLoaderProps;
   return [
     {
-      title: "Moa Clay Collection - artiklar",
+      title: `Moa Clay Collection - ${collection.headline}`,
     },
     {
       name: "description",
-      content: data.map((d: ItemProps) => d.headline).join(", "),
+      content: `${collection.shortDescription}`,
+    },
+    {
+      property: "twitter:image",
+      content: `${collection.image}?width=700`,
+    },
+    {
+      property: "og:image",
+      content: `${collection.image}?width=700`,
     },
   ];
 };
@@ -68,7 +99,6 @@ const Item: React.FC<ItemProps> = ({
 
   return (
     <>
-     
       <Magnifier imageUrl={showImage} close={setShowImage} />
       <div
         id={_id}
@@ -89,25 +119,25 @@ const Item: React.FC<ItemProps> = ({
             src={images[index]}
             loading="lazy"
           />
-          {user ? 
-          <div className="absolute bottom-1 right-6 text-white">
+          {user ? (
+            <div className="absolute bottom-1 right-6 text-white">
               <Link to={`/items/${collectionRef}/${_id}/edit`}>
-              <svg
-                className="mt-0 h-5 w-5 cursor-pointer hover:text-violet-400"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <title>{`Ändra ${headline}`}</title>
-                <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z"></path>
-                <path
-                  fillRule="evenodd"
-                  d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-                  clipRule="evenodd"
-                ></path>
-              </svg>
+                <svg
+                  className="mt-0 h-5 w-5 cursor-pointer hover:text-violet-400"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <title>{`Ändra ${headline}`}</title>
+                  <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z"></path>
+                  <path
+                    fillRule="evenodd"
+                    d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                    clipRule="evenodd"
+                  ></path>
+                </svg>
               </Link>
-              </div>
-              : null }
+            </div>
+          ) : null}
           <div
             className="absolute bottom-1 right-1 text-white"
             onClick={() => {
@@ -287,7 +317,7 @@ function useScroll(hash: string) {
 export default function Collection() {
   const hash = typeof window === "undefined" ? "" : window.location.hash;
   useScroll(hash);
-  let data: ItemProps[] = useLoaderData();
+  let { items } = useLoaderData<ItemLoaderProps>();
   const { user } = useOutletContext<IndexProps>();
   let transition = useNavigation();
   let navigation = useNavigate();
@@ -297,7 +327,7 @@ export default function Collection() {
       <Loader transition={transition} />
       <section className="mx-auto px-4 py-5 max-w-6xl sm:px-6 lg:px-4">
         <div className="grid gap-6 grid-cols-1 my-20 lg:grid-cols-2">
-          {data.map((item: ItemProps) => (
+          {items.map((item: ItemProps) => (
             <Item key={item._id} {...item} />
           ))}
         </div>
