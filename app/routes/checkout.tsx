@@ -47,7 +47,7 @@ export let loader: LoaderFunction = async ({ request }) => {
       {
         amount: order.totalSum * 100,
         currency: "sek",
-        payment_method_types: ["klarna", "card"],
+        payment_method_types: ["swish", "klarna", "card"],
       }
     );
     return { clientSecret: paymentIntent.client_secret };
@@ -56,7 +56,7 @@ export let loader: LoaderFunction = async ({ request }) => {
   const paymentIntent = await stripeClient.paymentIntents.create({
     amount: order.totalSum * 100,
     currency: "sek",
-    payment_method_types: ["klarna", "card"],
+    payment_method_types: ["swish", "klarna", "card"],
   });
 
   await Orders.updateOne(

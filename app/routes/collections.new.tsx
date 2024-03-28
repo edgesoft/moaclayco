@@ -41,7 +41,7 @@ export const action: ActionFunction = async ({ request, params }) => {
       shortDescription: result.shortDescription
     }
 
-    const collection = await Collections.find({shortUrl: result.shortUrl})
+    const collection = await Collections.findOne({shortUrl: result.shortUrl})
     if (collection) {
       return json({
         errors: {

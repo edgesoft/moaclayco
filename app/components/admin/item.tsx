@@ -352,7 +352,7 @@ function FileUpload() {
       {
         imageName: imageName,
         collection: collection ? collection : "",
-        id: item._id,
+        id: item ? item._id : "",
       },
       { method: "delete", action: "/admin/upload/delete" }
     );
@@ -430,7 +430,7 @@ function FileUpload() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".jpg, .jpeg, .heic"
+                accept=".jpg, .jpeg, .heic, .png"
                 onChange={handleFileChange}
                 className="hidden"
               />

@@ -7,11 +7,13 @@ import { ItemProps } from "~/types";
 const AWS_ITEM_PATH = process.env.AWS_ITEM_PATH;
 
 export async function deleteFileFromS3(
-  id: string,
+  id: string | null,
   collection: string,
   fileKey: string
 ) {
-  const item: ItemProps | null = await Items.findOne({ _id: id }).lean();
+  const item: ItemProps | null = id 
+    ? await Items.findOne({ _id: id }).lean()
+    : null
 
   if (item) {
     const image = item.images.find((i) => i.endsWith(fileKey));
@@ -26,7 +28,7 @@ export async function deleteFileFromS3(
       };
 
       try {
-         await s3Client.send(new DeleteObjectCommand(deleteParams));
+        await s3Client.send(new DeleteObjectCommand(deleteParams));
         console.log(`File deleted: ${fileKey}`);
         await Items.updateOne(
           { _id: id },
@@ -50,13 +52,13 @@ export async function deleteFileFromS3(
       try {
         await s3Client.send(new DeleteObjectCommand(deleteParams));
         console.log(`File deleted: ${fileKey}`);
-        return true
-      } catch(e) {
-        return false
+        return true;
+      } catch (e) {
+        return false;
       }
     }
   }
-  return false
+  return false;
 }
 
 export const action: ActionFunction = async ({ request }) => {
@@ -65,9 +67,9 @@ export const action: ActionFunction = async ({ request }) => {
   const id = formData.get("id");
   const collection = formData.get("collection");
 
-  if (imageName && id && collection) {
+  if (imageName && collection) {
     await deleteFileFromS3(
-      id.toString(),
+      id ? id.toString() : null,
       collection.toString(),
       imageName.toString()
     );
