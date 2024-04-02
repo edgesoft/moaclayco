@@ -5,6 +5,7 @@ export let action: ActionFunction = async ({ request }) => {
   let body = new URLSearchParams(await request.text());
 
   let discount = await Discounts.findOne({ code: body.get("code") });
+
   if (!discount) {
     return json({ percentage: null, amount: 0 });
   }
@@ -12,7 +13,6 @@ export let action: ActionFunction = async ({ request }) => {
   const now = new Date();
   const expireAtInLocalTimezone = new Date(now.toLocaleString('sv-SE', {timeZone: 'Europe/Stockholm'}));
   if (discount.expireAt && discount.expireAt < expireAtInLocalTimezone) {
-    
     return json({ percentage: null, amount: 0, error: "Discount has expired" }, { status: 400 });
   }
 
