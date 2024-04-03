@@ -1,34 +1,18 @@
 import {
-  ActionFunction,
-  LoaderFunction,
-  json,
-  redirect,
+  ActionFunction, json,
+  redirect
 } from "@remix-run/node";
 import { Discounts as DiscountEntity } from "../schemas/discounts";
-import {
-  Outlet,
-  useFetcher,
-  useLoaderData,
-  useLocation,
-  useNavigate,
-  useOutletContext,
-  useParams,
-} from "@remix-run/react";
-import React, { useEffect } from "react";
-import { auth } from "~/services/auth.server";
-import { classNames } from "~/utils/classnames";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { toast } from "react-toastify";
-import { formatDateToUTC } from "~/utils/formatDateToUTC";
-import { DiscountType } from "~/types";
-import { IndexProps } from "~/root";
 
-const objectFromFormData = (formData) => {
-  const obj = {};
+const objectFromFormData = (formData: FormData) => {
+  const obj: { [key: string]: string | File } = {};
   for (let [key, value] of formData.entries()) {
-    obj[key] = value;
+    if (typeof value === 'string') {
+      obj[key] = value;
+    } else {
+      obj[key] = value as File;
+    }
   }
   return obj;
 };
@@ -67,7 +51,7 @@ let action: ActionFunction = async ({ request, params }) => {
     case "save":
       const formObject = objectFromFormData(formData);
       const result = formSchema.parse(formObject); // Validerar och omvandlar datatyp där det behövs
-      const obj = await DiscountEntity.findOne({ code: result.code }).lean();
+      const obj: any = await DiscountEntity.findOne({ code: result.code }).lean();
 
       if (params.id) {
         if (obj) {
@@ -91,6 +75,7 @@ let action: ActionFunction = async ({ request, params }) => {
             { error: `Koden ${result.code} finns redan` },
             { status: 400 }
           );
+          
         }
 
         await DiscountEntity.create(result);
