@@ -33,7 +33,7 @@ export const action: ActionFunction = async ({ request, params }) => {
     Collectionchema.parse(result);
     const data =  {
       headline: result.headline,
-      shortUrl: result.shortUrl,
+      shortUrl: result.shortUrl.trim(),
       instagram: result.instagram,
       twitter: result.twitter,
       image: result.image,
@@ -41,7 +41,7 @@ export const action: ActionFunction = async ({ request, params }) => {
       shortDescription: result.shortDescription
     }
 
-    const collection = await Collections.findOne({shortUrl: result.shortUrl})
+    const collection = await Collections.findOne({shortUrl: result.shortUrl.trim()})
     if (collection) {
       return json({
         errors: {
