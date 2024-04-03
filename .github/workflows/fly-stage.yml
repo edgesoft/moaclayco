@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - next
+      - 'next-**'
 jobs:
   deploy:
     name: Deploy app Stage

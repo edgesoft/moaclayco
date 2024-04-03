@@ -38,7 +38,7 @@ const fromPaymentIntent = async (id: string, status: string) => {
     if (order.discount && order.discount.amount > 0) {
       await Discounts.updateOne(
         { code: order.discount.code },
-        { used: true, usedAt: new Date() }
+        { $inc: { balance: -1 } }
       );
     }
     if (status === "SUCCESS") {

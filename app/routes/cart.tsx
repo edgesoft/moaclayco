@@ -47,7 +47,8 @@ type ErrorItemVal = {
   };
 };
 
-const getDiscount = (percentage: number, cartTotal: number): number => {
+const getDiscount = (balance:number, percentage: number, cartTotal: number): number => {
+  if (balance === 0) return 0
   return Math.round(cartTotal * (percentage / 100));
 };
 
@@ -64,6 +65,7 @@ export let action: ActionFunction = async ({ request }) => {
     ),
     Discounts.findOne({ code: body.get("discount") }),
   ]);
+
 
   if (items.length !== data.filter((d: any) => !d.parentId).length) {
     return json({
@@ -121,10 +123,10 @@ export let action: ActionFunction = async ({ request }) => {
 
   let discountData = { amount: 0 };
 
-  if (discount && discount.percentage && !discount.used) {
+  if (discount && discount.percentage && discount.balance) {
     discountData = {
       ...discount.toObject(),
-      amount: getDiscount(totalSum, discount.percentage),
+      amount: getDiscount(discount.balance, totalSum, discount.percentage),
     };
   }
 
@@ -246,7 +248,7 @@ const userDiscount = (code: string) => {
     };
   }, [code]);
 
-  return { code, percentage: null, used: false, ...fetcher.data };
+  return { code, balance: 0, percentage: null, ...fetcher.data };
 };
 
 const getLastError = (data: any): string | undefined => {
@@ -261,7 +263,7 @@ function Cart() {
   let ref = useRef(null);
   let navigation = useNavigate();
   const [value, setValue] = useState<string>("");
-  const { code, percentage } = userDiscount(value);
+  const { code, percentage,  balance } = userDiscount(value);
 
   const hasItemsError = () =>
     cartFetcher.data &&
@@ -529,11 +531,11 @@ function Cart() {
                           placeholder="Rabattkod"
                           className={classNames(
                             "focus:shadow-outline px-3 py-2 w-full text-gray-700 leading-tight border rounded focus:outline-none appearance-none",
-                            code && !percentage ? "border-red-400" : ""
+                            code && balance === 0 ? "border-red-400" : ""
                           )}
                         />
                         <AnimatePresence>
-                          {code && percentage ? (
+                          {code && balance > 0 ? (
                             <motion.div
                               exit={{ opacity: 0 }}
                               initial={{ opacity: 0 }}
@@ -542,7 +544,7 @@ function Cart() {
                               className="mt-1 p-0.5 text-green-800 text-sm bg-green-100 rounded"
                             >
                               {percentage}% (
-                              {getDiscount(percentage, cartTotal)} SEK)
+                              {getDiscount(balance, percentage, cartTotal)} SEK)
                             </motion.div>
                           ) : null}
                         </AnimatePresence>
@@ -551,7 +553,7 @@ function Cart() {
                         Totalt:{" "}
                         {cartTotal +
                           freightCost -
-                          getDiscount(percentage, cartTotal)}{" "}
+                          getDiscount(balance, percentage, cartTotal)}{" "}
                         SEK
                       </div>
                     </div>
