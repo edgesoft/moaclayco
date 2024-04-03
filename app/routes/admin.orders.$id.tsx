@@ -71,6 +71,7 @@ export default function OrderDetail() {
       webhookAt,
       freightCost,
       status,
+      discount
     },
     intent,
   } = useLoaderData();
@@ -94,6 +95,9 @@ export default function OrderDetail() {
             </p>
             <p className="text-gray-600">
               Fraktkostnad: <strong>{freightCost} SEK</strong>
+            </p>
+            <p className="text-gray-600">
+              Rabatt: <strong>{discount && discount.amount ? discount.amount : 0} SEK</strong>
             </p>
             {intent ? (
               <p className="text-gray-600">

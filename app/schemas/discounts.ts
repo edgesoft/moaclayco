@@ -3,9 +3,9 @@ const { Schema } = mongoose;
 
 const discountSchema = new Schema({
   code: String,
-  used: Boolean,
-  usedAt: Date,
-  percentage: Number
+  expireAt: Date,
+  percentage: Number,
+  balance: Number,
 },
 { collection: 'discounts' });
 

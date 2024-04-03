@@ -10,25 +10,22 @@ import { disableBodyScroll, enableBodyScroll } from "~/utils/scroll";
 import { classNames } from "~/utils/classnames";
 
 type IndexLoadingType = {
-  user: User,
+  user: User;
   ENV: string;
   collections: CollectionProps[];
 };
-
 
 function Hamburger() {
   const [menu, setMenu] = React.useState(false);
   const ref = useRef(null);
   let data: IndexLoadingType = useLoaderData();
   useOnClickOutside(ref, () => {
-    enableBodyScroll()
-    setMenu(false)
+    enableBodyScroll();
+    setMenu(false);
   });
 
   const history = useNavigate();
   const x = typeof window !== "undefined" ? window.innerWidth : 0;
-
-  
 
   return menu ? (
     <>
@@ -94,7 +91,7 @@ function Hamburger() {
                   onClick={() => {
                     setMenu(false);
                     enableBodyScroll();
-                    history(data.user ? `/logout` : `/login`)
+                    history(data.user ? `/logout` : `/login`);
                   }}
                 >
                   <div className="flex-shrink-0 w-12 h-12 md:w-18 md:h-18 text-green-800">
@@ -106,23 +103,92 @@ function Hamburger() {
                       <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path>
                     </svg>
                   </div>
-                  <span className="m-3 md:my-3">{data.user ? "Logga ut" : "Logga in"}</span>
+                  <span className="m-3 md:my-3">
+                    {data.user ? "Logga ut" : "Logga in"}
+                  </span>
                 </div>
-                {data.user ? 
-                <div
-                className="flex m-2 w-full cursor-pointer"
-                onClick={() => {
-                  setMenu(false);
-                  enableBodyScroll();
-                  history('/admin/orders')
-                }}
-              >
-                <div className="flex-shrink-0 w-12 h-12 md:w-18 md:h-18 text-violet-500">
-                <svg className="h-10 w-10" viewBox="0 0 20 20" fill="currentColor"><path d="M11 17a1 1 0 001.447.894l4-2A1 1 0 0017 15V9.236a1 1 0 00-1.447-.894l-4 2a1 1 0 00-.553.894V17zM15.211 6.276a1 1 0 000-1.788l-4.764-2.382a1 1 0 00-.894 0L4.789 4.488a1 1 0 000 1.788l4.764 2.382a1 1 0 00.894 0l4.764-2.382zM4.447 8.342A1 1 0 003 9.236V15a1 1 0 00.553.894l4 2A1 1 0 009 17v-5.764a1 1 0 00-.553-.894l-4-2z"></path></svg>
-                </div>
-                <span className="m-3 md:my-3">Ordrar</span>
-              </div>
-                : null }
+                {data.user ? (
+                  <>
+                    <div
+                      className="flex m-2 w-full cursor-pointer"
+                      onClick={() => {
+                        setMenu(false);
+                        enableBodyScroll();
+                        history("/admin/orders");
+                      }}
+                    >
+                      <div className="flex-shrink-0 w-12 h-12 md:w-18 md:h-18 text-violet-500">
+                        <svg
+                          className="h-10 w-10"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path d="M11 17a1 1 0 001.447.894l4-2A1 1 0 0017 15V9.236a1 1 0 00-1.447-.894l-4 2a1 1 0 00-.553.894V17zM15.211 6.276a1 1 0 000-1.788l-4.764-2.382a1 1 0 00-.894 0L4.789 4.488a1 1 0 000 1.788l4.764 2.382a1 1 0 00.894 0l4.764-2.382zM4.447 8.342A1 1 0 003 9.236V15a1 1 0 00.553.894l4 2A1 1 0 009 17v-5.764a1 1 0 00-.553-.894l-4-2z"></path>
+                        </svg>
+                      </div>
+                      <span className="m-3 md:my-3">Ordrar</span>
+                    </div>
+                    <div
+                      className="flex m-2 w-full cursor-pointer"
+                      onClick={() => {
+                        setMenu(false);
+                        sessionStorage.setItem("scrollPosition", "0");
+                        enableBodyScroll();
+                        history("/admin/discounts");
+                      }}
+                    >
+                      <div className="flex-shrink-0 w-12 h-12 md:w-18 md:h-18 text-violet-500">
+                        <svg
+                          className="h-10 w-10"
+                          viewBox="0 0 512 512"
+                          fill="currentColor"
+                        >
+                          <path
+                            style={{ fill: "#CFF09E" }}
+                            d="M324.116,58.401h-136.23l-81.34,113.107v82.433h298.909v-82.433L324.116,58.401z M256,205.182
+	c-26.704,0-48.353-21.649-48.353-48.353s21.649-48.353,48.353-48.353s48.353,21.649,48.353,48.353S282.706,205.182,256,205.182z"
+                          />
+                          <g>
+                            <path
+                              style={{ fill: "#507C5C" }}
+                              d="M405.454,269.271c8.466,0,15.329-6.863,15.329-15.329v-82.433c0-3.211-1.009-6.341-2.883-8.949
+		L336.561,49.452c-2.88-4.005-7.511-6.38-12.445-6.38h-52.787V15.329C271.329,6.863,264.466,0,256,0
+		c-8.466,0-15.329,6.863-15.329,15.329v27.743h-52.787c-4.933,0-9.565,2.374-12.445,6.38L94.1,162.56
+		c-1.875,2.607-2.883,5.738-2.883,8.949v325.162c0,8.466,6.863,15.329,15.329,15.329h298.909c8.466,0,15.329-6.863,15.329-15.329
+		V341.299c0-8.466-6.863-15.329-15.329-15.329s-15.329,6.863-15.329,15.329v140.044H121.874V269.271L405.454,269.271
+		L405.454,269.271z M121.874,176.448l73.867-102.719h44.93v21.295c-27.733,6.881-48.353,31.974-48.353,61.805
+		c0,35.113,28.568,63.681,63.681,63.681s63.681-28.568,63.681-63.681c0-29.83-20.62-54.924-48.353-61.805V73.729h44.93
+		l73.867,102.719v62.165H121.874L121.874,176.448L121.874,176.448z M256,123.805c18.209,0,33.024,14.815,33.024,33.024
+		S274.209,189.853,256,189.853s-33.024-14.815-33.024-33.024C222.976,138.619,237.791,123.805,256,123.805z"
+                            />
+                            <path
+                              style={{ fill: "#507C5C" }}
+                              d="M301.48,356.141c-18.537,0-28.746,9.301-28.746,26.189v24.202c0,16.889,10.209,26.189,28.746,26.189
+		c18.269,0,28.746-9.545,28.746-26.189V382.33C330.226,365.686,319.749,356.141,301.48,356.141z M296.307,382.329
+		c0-3.647,1.403-5.002,5.172-5.002c4.435,0,5.344,1.999,5.344,5.002v24.202c0,3.003-0.909,5.002-5.344,5.002
+		c-3.771,0-5.172-1.355-5.172-5.002V382.329z"
+                            />
+                            <path
+                              style={{ fill: "#507C5C" }}
+                              d="M284.891,294.269c-4.491,0-8.242,2.275-10.017,6.049l-59.812,122.861
+		c-0.766,1.533-1.188,3.188-1.188,4.66c0,5.898,5.112,12.212,12.724,12.212c4.609,0,8.851-2.45,10.528-6.046l59.984-122.864
+		c0.84-1.683,1.018-3.463,1.018-4.66C298.126,299.175,291.284,294.269,284.891,294.269z"
+                            />
+                            <path
+                              style={{ fill: "#507C5C" }}
+                              d="M210.521,301.257c-18.537,0-28.746,9.301-28.746,26.189v24.202
+		c0,16.888,10.209,26.189,28.746,26.189c18.269,0,28.746-9.545,28.746-26.189v-24.202
+		C239.267,310.802,228.789,301.257,210.521,301.257z M205.348,327.446c0-3.647,1.403-5.002,5.173-5.002
+		c4.435,0,5.344,1.999,5.344,5.002v24.202c0,3.003-0.909,5.002-5.344,5.002c-3.771,0-5.173-1.355-5.173-5.002L205.348,327.446
+		L205.348,327.446z"
+                            />
+                          </g>
+                        </svg>
+                      </div>
+                      <span className="m-3 md:my-3">Rabatter</span>
+                    </div>
+                  </>
+                ) : null}
 
                 <div className="flex m-2 w-full">
                   <div
@@ -142,9 +208,12 @@ function Hamburger() {
                           setMenu(false);
                         }}
                       >
-                        <div className={classNames("flex-shrink-0 w-12 h-12 md:w-18 md:h-18",
-                          i === data.collections.length - 1? "mb-20" : ""
-                        )}>
+                        <div
+                          className={classNames(
+                            "flex-shrink-0 w-12 h-12 md:w-18 md:h-18",
+                            i === data.collections.length - 1 ? "mb-20" : ""
+                          )}
+                        >
                           <img
                             className="w-full h-full rounded-full  object-cover object-center"
                             src={d.image}
@@ -162,23 +231,23 @@ function Hamburger() {
       </AnimatePresence>
     </>
   ) : (
-      <div
-        className="absolute right-1 md:right-1 w-10 h-10 flex md:py-3"
-        onClick={(e) => {
-          disableBodyScroll();
-          setMenu(true);
-        }}
-      >
-        <div className="flex justify-center text-gray-600 w-10 h-10 items-center">
-          <svg className="h-8 w-10" viewBox="0 0 20 20" fill="currentColor">
-            <path
-              fillRule="evenodd"
-              d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </div>
+    <div
+      className="absolute right-1 md:right-1 w-10 h-10 flex md:py-3"
+      onClick={(e) => {
+        disableBodyScroll();
+        setMenu(true);
+      }}
+    >
+      <div className="flex justify-center text-gray-600 w-10 h-10 items-center">
+        <svg className="h-8 w-10" viewBox="0 0 20 20" fill="currentColor">
+          <path
+            fillRule="evenodd"
+            d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
+            clipRule="evenodd"
+          />
+        </svg>
       </div>
+    </div>
   );
 }
 
@@ -186,7 +255,8 @@ const CartComponent = (): JSX.Element => {
   const { items } = useCart();
   const totalItems = useMemo(() => {
     return items.reduce(
-      (count, item) => (item.parentId == null ? count + (item.quantity || 0) : count),
+      (count, item) =>
+        item.parentId == null ? count + (item.quantity || 0) : count,
       0
     );
   }, [items]);
