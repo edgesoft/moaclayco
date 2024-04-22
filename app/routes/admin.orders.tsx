@@ -43,7 +43,7 @@ const getLabel = (status: Status) => {
     case Status.SHIPPED:
       return { headline: "Levererad", color: "bg-green-600" };
     case Status.MANUAL_PROCESSING:
-        return { headline: "Manuell order", color: "bg-green-600" };
+        return { headline: "Manuell order", color: "bg-blue-600" };
     default:
       return {
         headline: "Betald",
