@@ -15,7 +15,7 @@ export let loader: LoaderFunction = async ({ request, params }) => {
 
   return OrderEntity.find(
     {
-      status: { $in: ["SUCCESS", "FAILED", "SHIPPED", "CANCELLED"] },
+      status: { $in: ["SUCCESS", "FAILED", "SHIPPED", "CANCELLED", "MANUAL_PROCESSING"] },
     },
     { status: 1, createdAt: 1, customer: 1, _id: 1, totalSum: 1 }
   )
@@ -28,6 +28,7 @@ enum Status {
   FAILED = "FAILED",
   SHIPPED = "SHIPPED",
   CANCELLED = "CANCELLED",
+  MANUAL_PROCESSING = "MANUAL_PROCESSING"
 }
 
 const getLabel = (status: Status) => {
@@ -41,6 +42,8 @@ const getLabel = (status: Status) => {
       return { headline: "Fel", color: "bg-red-600" };
     case Status.SHIPPED:
       return { headline: "Levererad", color: "bg-green-600" };
+    case Status.MANUAL_PROCESSING:
+        return { headline: "Manuell order", color: "bg-green-600" };
     default:
       return {
         headline: "Betald",
