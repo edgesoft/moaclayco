@@ -170,6 +170,8 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({ order, template }) => {
               </tr>
               {items.map((item) => (
                 <React.Fragment key={item._id}>
+
+                  {item.image ? 
                   <tr style={{ borderTop: "1px solid #dddddd" }}>
                     <td
                       colSpan={3}
@@ -186,6 +188,7 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({ order, template }) => {
                           height: "100px",
                         }}
                       >
+                        
                         <img
                           src={item.image}
                           alt={item.name}
@@ -200,7 +203,7 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({ order, template }) => {
                       </div>
                     </td>
                   </tr>
-
+                  : null }
                   <tr>
                     <td style={{ textAlign: "left", padding: "8px" }}>
                       <span style={itemNameStyle}>{item.name}</span>
@@ -371,7 +374,7 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({ order, template }) => {
             borderTop: "1px solid #e5e7eb",
           }}
         >
-          <div style={{ marginBottom: "4px" }}>© Moa Clay Co 2023</div>
+          <div style={{ marginBottom: "4px" }}>© Moa Clay Co {new Date().getFullYear()}</div>
         </div>
       </body>
     </html>
