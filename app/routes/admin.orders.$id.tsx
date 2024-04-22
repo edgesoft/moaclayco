@@ -50,7 +50,7 @@ export let action: ActionFunction = async ({ request, params }) => {
       {
         _id: params.id,
       },
-      { status: Boolean(data) ? "SHIPPED" : "SUCCESS" }
+      { status: Boolean(data) ? "SHIPPED" : order.manualOrderAt ? "MANUAL_PROCESSING" : "SUCCESS" }
     );
   
     if (Boolean(data)) {
@@ -71,7 +71,8 @@ export default function OrderDetail() {
       webhookAt,
       freightCost,
       status,
-      discount
+      discount,
+      manualOrderAt
     },
     intent,
   } = useLoaderData();
@@ -88,7 +89,7 @@ export default function OrderDetail() {
           <div className="mt-3">
             <p className="text-gray-600">
               Datum:{" "}
-              <strong>{webhookAt.substring(0, 16).replace("T", " ")}</strong>
+              {webhookAt ? <strong>{webhookAt.substring(0, 16).replace("T", " ")}</strong> : <strong>{manualOrderAt.substring(0, 16).replace("T", " ")}</strong>}
             </p>
             <p className="text-gray-600">
               Totalt: <strong>{totalSum} SEK</strong>
@@ -112,7 +113,7 @@ export default function OrderDetail() {
               </p>
             ) : null}
 
-            {status === "SUCCESS" || status === "SHIPPED" ? (
+            {status === "SUCCESS" || status === "SHIPPED" || status === "MANUAL_PROCESSING" ? (
               <orderFetcher.Form ref={ref} method="post">
                 <span
                   onClick={() => {
