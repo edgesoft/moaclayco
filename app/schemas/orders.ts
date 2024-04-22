@@ -13,9 +13,10 @@ const OrderSchema = new Schema({
     createdAt: Date,
     updatedAt: Date,
     webhookAt: Date,
+    manualOrderAt: Date,
     status: {
         type: String,
-        enum: ['OPENED', 'PENDING', 'FAILED', 'CANCELED', 'SUCCESS', 'SHIPPED']
+        enum: ['OPENED', 'PENDING', 'FAILED', 'CANCELED', 'SUCCESS', 'MANUAL_PROCESSING',  'SHIPPED']
     },
     items: [{
         itemRef: String,
