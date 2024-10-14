@@ -101,10 +101,10 @@ const makeAccountTransaction = async(paymentIntent: Stripe.PaymentIntent) => {
   }
  
 }
-
 const handlePayoutPaid = async (payout: Stripe.Payout) => {
   const payoutId = payout.id;
   const amountInSek = payout.amount / 100;
+  let descriptionParts: string[] = [`Payout id: ${payoutId}\r\n\r\n`]; // Samla delarna av beskrivningen i en lista
 
   console.log(`Payout ID: ${payoutId}`);
   console.log(`Payout amount: ${amountInSek} SEK`);
@@ -116,43 +116,54 @@ const handlePayoutPaid = async (payout: Stripe.Payout) => {
 
   for (const balanceTransaction of balanceTransactions.data) {
     if (balanceTransaction.source) {
-      // Hämta PaymentIntent kopplad till denna balance transaction
-      const charge = await stripeClient.charges.retrieve(balanceTransaction.source as string);
+      try {
+        // Hämta PaymentIntent kopplad till denna balance transaction
+        const charge = await stripeClient.charges.retrieve(balanceTransaction.source as string);
 
-      if (charge.payment_intent) {
-        const paymentIntentId = charge.payment_intent;
+        if (charge.payment_intent) {
+          const paymentIntentId = charge.payment_intent;
 
-        // Här har du nu paymentIntentId kopplat till denna transaktion
-        console.log(`PaymentIntent ID kopplad till utbetalning: ${paymentIntentId}`);
+          // Hämta order kopplad till PaymentIntent
+          const order: Order | null = await Orders.findOne({
+            "paymentIntent.id": paymentIntentId,
+          }).lean();
 
-        const order: Order | null = await Orders.findOne({
-          "paymentIntent.id": paymentIntentId,
-        }).lean();
-
-        if (order) {
-          // Skapa bokföringspost kopplad till denna PaymentIntent och utbetalning
-          await Verifications.create({
-            verificationDate: new Date(),
-            description: `Order id: ${order}\r\nPayout id: ${payoutId}\r\nPaymentIntent id: ${paymentIntentId}`,
-            verificationNumber: await generateNextEntryNumber(),
-            journalEntries: [
-              {
-                account: 1930, // Bankkonto
-                debit: amountInSek.toFixed(2),
-              },
-              {
-                account: 1580, // Fordran på Stripe
-                credit: amountInSek.toFixed(2),
-              }
-            ]
-          });
+          if (order) {
+            // Lägg till i beskrivningen
+            descriptionParts.push(`Order id: ${order._id}\r\nPayment intent id: ${paymentIntentId}`);
+          } else {
+            console.warn(`Order not found for PaymentIntent: ${paymentIntentId}`);
+          }
         }
+      } catch (error) {
+        console.error(`Error retrieving PaymentIntent or order for balance transaction: ${error.message}`);
       }
     }
   }
 
+  // Sätt ihop beskrivningen från alla delar
+  const description = descriptionParts.join('\r\n');
+
+  // Skapa bokföringspost
+  await Verifications.create({
+    verificationDate: new Date(),
+    description: description.trim(), // Rensa onödiga tomma rader
+    verificationNumber: await generateNextEntryNumber(),
+    journalEntries: [
+      {
+        account: 1930, // Bankkonto
+        debit: amountInSek.toFixed(2),
+      },
+      {
+        account: 1580, // Fordran på Stripe
+        credit: amountInSek.toFixed(2),
+      }
+    ]
+  });
+
   console.log(`Bokföringspost skapad för utbetalning: ${payoutId}`);
 };
+
 
 const fromPaymentIntent = async (id: string, status: string) => {
   const order: Order | null = await Orders.findOne({
