@@ -9,6 +9,8 @@ import stripeClient from "../stripeClient";
 import { sendMail } from "./webhook";
 import { Template } from "~/components/mail/order";
 import { Order } from "~/types";
+import { Verifications } from "~/schemas/verifications";
+import { generateNextEntryNumber } from "~/utils/verificationUtil";
 
 export let loader: LoaderFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
@@ -17,15 +19,24 @@ export let loader: LoaderFunction = async ({ request, params }) => {
     _id: params.id,
   });
 
+  const verification = await Verifications.findOne({
+    "metadata.key": "orderId",
+    "metadata.value": params.id,
+  });
+
+  let intent = null;
+
   if (order.status === "FAILED") {
     try {
-      const intent = await stripeClient.paymentIntents.retrieve(
-        order.paymentIntent.id
-      );
-      return { order, intent };
+      if (order.paymentIntent && order.paymentIntent.id) {
+        intent = await stripeClient.paymentIntents.retrieve(
+          order.paymentIntent.id
+        );
+      }
+      return { order, intent, verification };
     } catch (e) {}
   }
-  return { order, intent: null };
+  return { order, intent: null, verification };
 };
 
 export let meta: MetaFunction = ({ data }) => {
@@ -42,22 +53,161 @@ export let meta: MetaFunction = ({ data }) => {
 
 export let action: ActionFunction = async ({ request, params }) => {
   let body = new URLSearchParams(await request.text());
+  const type = body.get("_action") || "";
+
+  if (type === "verification") {
+    const order: Order | null = await Orders.findOne({ _id: params.id }).lean();
+
+    if (!order) return {}
+
+    let intent = null;
+    if (order.paymentIntent && order.paymentIntent.id) {
+      intent = await stripeClient.paymentIntents.retrieve(
+        order.paymentIntent.id,
+        {
+          expand: ["charges"], // Expanderar charges
+        }
+      );
+
+      const chargeId = intent.latest_charge;
+      const charge = await stripeClient.charges.retrieve(chargeId);
+
+      if (typeof charge.balance_transaction === "string") {
+        const balanceTransaction =
+          await stripeClient.balanceTransactions.retrieve(
+            charge.balance_transaction
+          );
+
+        // Totalbelopp i SEK
+        const totalAmount = balanceTransaction.amount / 100; // Bruttobelopp (inklusive moms) i SEK
+        const stripeFee = balanceTransaction.fee / 100; // Stripe-avgiften i SEK
+        const netAmount = balanceTransaction.net / 100; // Nettobelopp att betalas ut i SEK
+
+        // Beräkna momsbelopp baserat på bruttobeloppet
+        const vatRate = 0.25; // 25% moms
+        const vatAmount = (totalAmount * vatRate) / (1 + vatRate); // Momsbelopp
+        const amountExVat = totalAmount - vatAmount; // Belopp exklusive moms
+
+        await Verifications.create({
+          verificationDate: order.webhookAt,
+          description: `Order id: ${order._id}\r\nPayment intent id: ${intent.id}`,
+          verificationNumber: await generateNextEntryNumber(),
+          metadata: [
+            {
+              key: "orderId",
+              value: `${order._id}`
+            },
+            {
+              key: "paymentIntentId",
+              value: `${intent.id}`
+            },
+          ],
+          journalEntries: [
+            {
+              account: 3001, // Försäljning exkl. moms
+              credit: amountExVat.toFixed(2), // Belopp exklusive moms
+            },
+            {
+              account: 2611, // Moms
+              credit: vatAmount.toFixed(2), // Momsbelopp
+            },
+            {
+              account: 6570, // Stripe-avgifter
+              debit: stripeFee.toFixed(2), // Stripe-avgift
+            },
+            {
+              account: 1580, // Fordran på Stripe
+              debit: netAmount.toFixed(2), // Nettobelopp efter avgift
+            }
+          ]
+        });
+
+        return {}
+
+        /**
+        const payouts = await stripeClient.payouts.list({
+          limit: 10,  // Justera denna efter behov
+        });
+
+      const matchingPayout = payouts.data.find(payout => {
+
+        return payout.arrival_date >= balanceTransaction.created;
+      });
+
+      console.log(matchingPayout.id)
+      const balanceTransactions = await stripeClient.balanceTransactions.list({
+        payout: matchingPayout.id,
+      });
+
+
+     const b =  balanceTransactions.data.find((f) => f.source === balanceTransaction.source)
+
+      console.log(b)
+       */
+      }
+    } else {
+      if (order.manualOrderAt) {
+
+        const vat = (order.totalSum * 0.2).toFixed(2)
+        const exclVat = order.totalSum - Number(vat)
+
+        await Verifications.create({
+          verificationDate: order.manualOrderAt,
+          description: `Order id: ${order._id}`,
+          verificationNumber: await generateNextEntryNumber(),
+          metadata: [
+            {
+              key: "orderId",
+              value: `${order._id}`
+            }
+          ],
+          journalEntries: [
+            {
+              account: 3001, // Försäljning exkl. moms
+              credit: exclVat.toFixed(2), // Belopp exklusive moms
+            },
+            {
+              account: 2611, // Moms
+              credit: vat, // Momsbelopp
+            },
+            {
+              account: 1930, 
+              debit: order.totalSum.toFixed(2), // Momsbelopp
+            }
+          ]
+        });
+
+
+
+        console.log("MANUTEL")
+      }
+    }
+
+    return {};
+  }
+
   const data = JSON.parse(body.get("on") || "");
-  const order: Order | null = await Orders.findOne({ _id: params.id,}).lean()
+  const order: Order | null = await Orders.findOne({ _id: params.id }).lean();
 
   if (order) {
     await Orders.updateOne(
       {
         _id: params.id,
       },
-      { status: Boolean(data) ? "SHIPPED" : order.manualOrderAt ? "MANUAL_PROCESSING" : "SUCCESS" }
+      {
+        status: Boolean(data)
+          ? "SHIPPED"
+          : order.manualOrderAt
+          ? "MANUAL_PROCESSING"
+          : "SUCCESS",
+      }
     );
-  
+
     if (Boolean(data)) {
-      sendMail(order, Template.SHIPPING)
+      sendMail(order, Template.SHIPPING);
     }
   }
- 
+
   return {};
 };
 
@@ -72,12 +222,15 @@ export default function OrderDetail() {
       freightCost,
       status,
       discount,
-      manualOrderAt
+      manualOrderAt,
     },
     intent,
+    verification,
   } = useLoaderData();
   const [on, setOn] = useState(status === "SHIPPED");
   let orderFetcher = useFetcher();
+  const isSubmitting = orderFetcher.state === "submitting"; // Kolla fetcher state
+
   let ref = useRef(null);
 
 
@@ -86,10 +239,17 @@ export default function OrderDetail() {
       <div className="flex flex-col lg:flex-row justify-between mb-8">
         <div className="mb-6 lg:mb-0">
           <h2 className="text-2xl font-bold text-gray-700">{_id}</h2>
+
           <div className="mt-3">
             <p className="text-gray-600">
               Datum:{" "}
-              {webhookAt ? <strong>{webhookAt.substring(0, 16).replace("T", " ")}</strong> : <strong>{manualOrderAt.substring(0, 16).replace("T", " ")}</strong>}
+              {webhookAt ? (
+                <strong>{webhookAt.substring(0, 16).replace("T", " ")}</strong>
+              ) : (
+                <strong>
+                  {manualOrderAt.substring(0, 16).replace("T", " ")}
+                </strong>
+              )}
             </p>
             <p className="text-gray-600">
               Totalt: <strong>{totalSum} SEK</strong>
@@ -98,7 +258,10 @@ export default function OrderDetail() {
               Fraktkostnad: <strong>{freightCost} SEK</strong>
             </p>
             <p className="text-gray-600">
-              Rabatt: <strong>{discount && discount.amount ? discount.amount : 0} SEK</strong>
+              Rabatt:{" "}
+              <strong>
+                {discount && discount.amount ? discount.amount : 0} SEK
+              </strong>
             </p>
             {intent ? (
               <p className="text-gray-600">
@@ -108,12 +271,16 @@ export default function OrderDetail() {
                     "bg-red-100 text-red-800"
                   )}
                 >
-                  {intent.last_payment_error.message.length > 55 ? `${intent.last_payment_error.message.substring(0,54)}...`:intent.last_payment_error.message }
+                  {intent.last_payment_error.message.length > 55
+                    ? `${intent.last_payment_error.message.substring(0, 54)}...`
+                    : intent.last_payment_error.message}
                 </span>
               </p>
             ) : null}
 
-            {status === "SUCCESS" || status === "SHIPPED" || status === "MANUAL_PROCESSING" ? (
+            {status === "SUCCESS" ||
+            status === "SHIPPED" ||
+            status === "MANUAL_PROCESSING" ? (
               <orderFetcher.Form ref={ref} method="post">
                 <span
                   onClick={() => {
@@ -172,6 +339,34 @@ export default function OrderDetail() {
                   </div>
                   Markerad som levererad
                 </span>
+                {verification  ? (
+                  <div>
+                  <span
+                    className={`block bg-green-600 text-white inline-flex px-2 text-xs font-semibold leading-5 rounded-full`}
+                  >
+                    Verifikation: {verification.verificationNumber}
+                  </span>
+                  </div>
+                ) :(
+                  <div>
+                  <button
+                    onClick={(e) => {
+                      orderFetcher.submit(
+                        { _action: "verification" },
+                        { method: "post" }
+                      );
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    className={classNames(`bg-green-600 text-white inline-flex px-2 text-xs font-semibold leading-5 rounded-full`, 
+                      isSubmitting ? 'bg-slate-400': ""
+
+                    )}
+                  >
+                     {isSubmitting ? "Skapar..." : "Skapa verifikation"} {/* Ändra text under submission */}
+                  </button>
+                  </div>
+                )}
               </orderFetcher.Form>
             ) : null}
           </div>

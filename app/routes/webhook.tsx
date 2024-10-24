@@ -71,6 +71,16 @@ const makeAccountTransaction = async(paymentIntent: Stripe.PaymentIntent) => {
           verificationDate: new Date(),
           description: `Order id: ${order._id}\r\nPayment intent id: ${paymentIntent.id}`,
           verificationNumber: await generateNextEntryNumber(),
+          metadata: [
+            {
+              key: "orderId",
+              value: `${order._id}`
+            },
+            {
+              key: "paymentIntentId",
+              value: `${paymentIntent.id}`
+            },
+          ],
           journalEntries: [
             {
               account: 3001, // Försäljning exkl. moms

@@ -16,6 +16,16 @@ const VerificationsSchema = new Schema({
       required: true,
       default: Date.now,
     },
+    metadata: [
+      {
+        key: String, // payment intent id, order id, payout id
+        value: String
+      }
+    ],
+    files: [{
+      name: String,
+      path: String
+    }],
     journalEntries: [
       {
         account: {
