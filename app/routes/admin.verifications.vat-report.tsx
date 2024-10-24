@@ -14,19 +14,18 @@ export const loader: LoaderFunction = async ({ request }) => {
   }
 
   const [year, monthNumber] = month.split("-"); // Dela upp månad och år
-const startOfMonth = new Date(Number(year), parseInt(monthNumber) - 1, 1); // Skapa datum med korrekt månad
-const endOfMonth = new Date(startOfMonth);
+// Skapa start- och slutdatum för månaden
+const startOfMonth = new Date(Number(year), Number(monthNumber) - 1, 1); // Första dagen i månaden
+const endOfMonth = new Date(Number(year), Number(monthNumber), 0); // Sista dagen i månaden
+endOfMonth.setHours(23, 59, 59, 999); // Sätt tiden till slutet av dagen
 
-// Gå till nästa månad, och sätt dagen till 1
-endOfMonth.setMonth(endOfMonth.getMonth() + 1);
-endOfMonth.setDate(1);
-  // Hämta alla verifikationer för den angivna månaden
-  const verifications = await Verifications.find({
-    verificationDate: {
-      $gte: startOfMonth,
-      $lt: endOfMonth,
-    },
-  });
+// Hämta alla verifikationer för den angivna månaden
+const verifications = await Verifications.find({
+  verificationDate: {
+    $gte: startOfMonth,
+    $lte: endOfMonth, // Ändrat från $lt till $lte för att inkludera sista dagen
+  },
+});
 
   // Filtrera fram relevanta journal entries
   const vatSales = verifications.filter(
@@ -75,10 +74,12 @@ const formatMonthName = (year, monthNumber) => {
   }
 
   const [year, monthNumber] = month.split("-"); // Dela upp månad och år
-  const startOfMonth = new Date(`${year}-${monthNumber}-01`);
-  const endOfMonth = new Date(startOfMonth);
-
-  endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+  const startOfMonth = new Date(Number(year), Number(monthNumber) - 1, 1); // Första dagen i månaden
+  const endOfMonth = new Date(Number(year), Number(monthNumber), 0); // Sista dagen i månaden (t.ex. 28 eller 29)
+  
+  // Sätt sista datumet till 23:59:59 för att inkludera hela dagen
+  endOfMonth.setHours(23, 59, 59, 999); // Sätt tiden till slutet av dagen
+  
     // Format submissionDate som en Date i MongoDB
     const formattedDate = new Date(submissionDate);
   
