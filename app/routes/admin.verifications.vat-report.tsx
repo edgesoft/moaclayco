@@ -74,10 +74,12 @@ const formatMonthName = (year, monthNumber) => {
   }
 
   const [year, monthNumber] = month.split("-"); // Dela upp månad och år
-  const startOfMonth = new Date(`${year}-${monthNumber}-01`);
-  const endOfMonth = new Date(startOfMonth);
-
-  endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+  const startOfMonth = new Date(Number(year), Number(monthNumber) - 1, 1); // Första dagen i månaden
+  const endOfMonth = new Date(Number(year), Number(monthNumber), 0); // Sista dagen i månaden (t.ex. 28 eller 29)
+  
+  // Sätt sista datumet till 23:59:59 för att inkludera hela dagen
+  endOfMonth.setHours(23, 59, 59, 999); // Sätt tiden till slutet av dagen
+  
     // Format submissionDate som en Date i MongoDB
     const formattedDate = new Date(submissionDate);
   
