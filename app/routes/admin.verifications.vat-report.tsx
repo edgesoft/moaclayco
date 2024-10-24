@@ -92,7 +92,7 @@ const formatMonthName = (year, monthNumber) => {
   
     // Hämta alla verifikationer för den valda månaden
     const [yearSubmission, monthSubmissionNumber] = submissionDate.split("-");
-    endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+ 
   
     
   const verifications = await Verifications.find({
