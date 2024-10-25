@@ -199,7 +199,8 @@ const selectorData = [
     4. **Konto-information (accounts)**: Följ dessa regler noggrant för att avgöra debit och kredit:
     
    - Från kontot är **5709 00 121 15** och det är inget tillkonto. Bokför som **2018** credit,  konto **4000** debit och konto **2640** med 25% moms.
-    
+   - Om det är ett negativt belopp ska 2018 crediteras men det är alltid ett positivt belopp. Debit och kredit tar hand om det.
+
     Förväntat resultat:
     \`\`\`json
     {
@@ -209,7 +210,7 @@ const selectorData = [
       "accounts": {
         "4000": { "debit": 183,44, "credit": 0},
         "2640": { "debit": 45,86, "credit": 0},
-        "2018": { "debit": 0, "credit": -229,30 }
+        "2018": { "debit": 0, "credit": 229,30 }
       }
     }
     \`\`\`
