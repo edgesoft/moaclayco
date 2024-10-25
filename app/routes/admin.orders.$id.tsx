@@ -171,7 +171,7 @@ export let action: ActionFunction = async ({ request, params }) => {
               credit: vat, // Momsbelopp
             },
             {
-              account: 1930, 
+              account: 1930, // Detta kanske måste ändras
               debit: order.totalSum.toFixed(2), // Momsbelopp
             }
           ]

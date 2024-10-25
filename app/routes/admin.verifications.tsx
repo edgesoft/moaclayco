@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { z, ZodError } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,6 +12,7 @@ import {
 import {
   Outlet,
   useActionData,
+  useFetcher,
   useLoaderData,
   useNavigate,
   useSubmit,
@@ -22,6 +23,7 @@ import { toast } from "react-toastify";
 import React from "react";
 import { classNames } from "~/utils/classnames";
 import stripeClient from "~/stripeClient";
+import ClientOnly from "~/components/ClientOnly";
 
 const formSchema = z.object({
   description: z.string().min(1, "Beskrivning är obligatorisk"),
@@ -47,12 +49,19 @@ const formSchema = z.object({
         message: "Varje rad måste ha ett debet eller kreditvärde",
       }
     ),
+    file: z
+    .object({
+      filePath: z.string().url(),
+      label: z.string(),
+    })
+    .optional(), // Markera filen som valfri
 });
 
 type FormData = z.infer<typeof formSchema>;
 
 const accounts = [
   { value: 1580, label: "1580 - Fordran på Stripe" },
+  {value: 1510, label: "1510 - Kundfordringar"},
   { value: 1930, label: "1930 - Bank" },
   { value: 2013, label: "2013 - Eget uttag" },
   { value: 2018, label: "2018 - Egen insättning" },
@@ -87,11 +96,24 @@ export const action: ActionFunction = async ({ request, params }) => {
   const verificationDate = formData.get("verificationDate");
   const journalEntries = JSON.parse(formData.get("journalEntries") as string);
 
+  // Deserialisera filinformationen om den finns
+  let file = null;
+  const fileData = formData.get("file");
+  if (fileData) {
+    try {
+      file = JSON.parse(fileData as string); // Filinmatningen är JSON, deserialisera den
+    } catch (error) {
+      file = undefined
+      console.error("Error parsing file data:", error);
+    }
+  }
+
   const dateForDatabase = new Date(verificationDate);
 
   // Validera med Zod och kolla om resultatet är success
   const result = formSchema.safeParse({
     description,
+    file,
     verificationDate,
     journalEntries,
   });
@@ -117,6 +139,7 @@ export const action: ActionFunction = async ({ request, params }) => {
       verificationNumber: await generateNextEntryNumber(),
       verificationDate: dateForDatabase, // Spara som Date om det behövs
       journalEntries,
+      files: file ? [{name: file.label, path: file.filePath}] : []
     });
 
     await newVerification.save();
@@ -184,10 +207,89 @@ const formatMonthName = (yearMonthKey) => {
   return `${monthNames[parseInt(month) - 1]} ${year}`;
 };
 
+
+type SuggestionProps = {
+  status: string,
+  verificationData: {},
+  uuid: string
+}
+
+
+const FileUpload = ({
+  onSuggestionsReceived,
+  onFileSelected
+}: {
+  onSuggestionsReceived: (suggestions: SuggestionProps) => void;
+  onFileSelected: (file: File) => void // Definiera en typ för callback-funktionen
+}) => {
+  const fileInputRef = useRef(null);
+  const fetcher = useFetcher<SuggestionProps>();
+  const [uuid, setUuid] = useState<String|null>()
+
+  useEffect(() => {
+    if(fetcher && fetcher.data ) {
+
+      if (!uuid || uuid !== fetcher.data.uuid) {
+        setUuid(fetcher.data.uuid)
+        onSuggestionsReceived(fetcher.data); 
+      }
+
+     
+    }
+
+  }, [fetcher, fetcher.data])
+
+  const handleFileInputClick = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    fileInputRef.current.click();
+  };
+
+  const handleFileChange = (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const file = event.target.files[0];
+    if (file) {
+      const formData = new FormData();
+      formData.append("file", file);
+      onFileSelected(file)
+      fetcher.submit(formData, {
+        action: "/admin/verifications/files/parse",
+        method: "post",
+        encType: "multipart/form-data",
+      });
+
+      event.target.value = "";
+    }
+  };
+
+
+
+  return (
+    <div>
+        <button
+          onClick={handleFileInputClick}
+          className="inline-flex justify-center mb-2 mt-2 px-4 py-2 w-full text-white text-base font-medium bg-blue-600 hover:bg-blue-700 border border-transparent rounded-md focus:outline-none shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:text-sm"
+        >
+          Välj fil
+        </button>
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+          accept="application/pdf,image/*"
+        />
+    </div>
+  );
+}
+
 export default function VerificationsPage() {
   const { verifications, year } = useLoaderData();
   const actionData = useActionData();
   const submit = useSubmit();
+  const [uploadedFile, setUploadedFile] = useState(null); // Nytt state för att hålla filinfo
+
 
   const groupedVerifications = groupByMonth(verifications);
 
@@ -197,6 +299,7 @@ export default function VerificationsPage() {
     control,
     getValues,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -408,6 +511,31 @@ export default function VerificationsPage() {
     navigate(`/admin/verifications/vat-report?month=${monthKey}`);
   };
 
+  function handleSuggestions(data: SuggestionProps): void {
+
+    console.log("data", data)
+      if (data.status === "success" && data.verificationData ) {
+        if (data && data.verificationData && data.verificationData.accounts) {
+          remove(fields.map((_, index) => index));
+          setValue("description", data.verificationData.description || "");
+          setValue("verificationDate", data.verificationData.date || "");
+          setUploadedFile(data.file); 
+
+          Object.entries(data.verificationData.accounts).forEach(([accountNumber, values]) => {
+            append({ account: Number(accountNumber) , debit: values.debit || undefined, credit: values.credit || undefined });
+          });
+        } else {
+          console.error("Account data saknas");
+        }
+   
+    
+      } else {
+        console.log("FAILED")
+      }
+
+
+  }
+
   return (
     <div className="mt-20 p-2">
       <div className="w-64 mb-4">
@@ -433,7 +561,7 @@ export default function VerificationsPage() {
             { debit: 0, credit: 0 }
           );
 
-          if (sums.debit !== sums.credit) {
+          if (sums.debit.toFixed(2) !== sums.credit.toFixed(2)) {
             toast.warn(
               `Debit: ${sums.debit} och kredit: ${sums.credit} stämmer inte överens`,
               {
@@ -450,15 +578,17 @@ export default function VerificationsPage() {
           } else {
             const formData = {
               ...data,
+              file: uploadedFile ? JSON.stringify(uploadedFile): {},
               journalEntries: JSON.stringify(data.journalEntries),
             };
             submit(formData, { method: "post" });
-
+            setUploadedFile(null)
             reset();
           }
         })}
       >
         <div className="flex space-x-4">
+         
           {/* Kolumn 1: Beskrivning */}
           <div className="w-2/3">
             <label
@@ -504,17 +634,25 @@ export default function VerificationsPage() {
               <div className="w-1/3">
                 <Controller
                   control={control}
+                  key={`account-select-${index}.controller`}
                   name={`journalEntries.${index}.account`}
                   render={({ field }) => (
-                    <Select
-                      {...field}
-                      options={accounts}
-                      onChange={(option) =>
-                        field.onChange(option ? option.value : null)
-                      }
-                      value={accounts.find((acc) => acc.value === field.value)}
-                      placeholder="Välj konto"
-                    />
+                    <ClientOnly fallback={null}>
+                      {() => (
+                        <Select
+                          instanceId={`account-select-${index}`}
+                          {...field}
+                          options={accounts}
+                          onChange={(option) =>
+                            field.onChange(option ? option.value : null)
+                          }
+                          value={accounts.find(
+                            (acc) => acc.value === field.value
+                          )}
+                          placeholder="Välj konto"
+                        />
+                      )}
+                    </ClientOnly>
                   )}
                 />
               </div>
@@ -541,6 +679,7 @@ export default function VerificationsPage() {
               </button>
             </div>
           ))}
+          <div className="w-full flex space-x-4">
           <button
             type="button"
             onClick={() => {
@@ -556,6 +695,15 @@ export default function VerificationsPage() {
           >
             Spara
           </button>
+          <FileUpload onSuggestionsReceived={handleSuggestions} onFileSelected={(file) => {
+            setTimeout(() => {
+              remove(fields.map((_, index) => index));
+              setValue("description", "")
+              setValue("verificationDate",  new Date().toISOString().split("T")[0])
+             
+            }, 100)
+          }}/>
+          </div>
         </div>
       </form>
 
@@ -658,9 +806,8 @@ export default function VerificationsPage() {
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             <button
                               onClick={() => {
-                                // Lägg till din logik för att skapa momsrapport
-                                console.log(
-                                  `Koppla fil ${verification.verificationNumber}`
+                                navigate(
+                                  `/admin/verifications/${verification.verificationNumber}/files`
                                 );
                               }}
                               className="bg-slate-800 text-white px-2 py-1 rounded-lg font-semibold text-xs"
@@ -690,31 +837,51 @@ export default function VerificationsPage() {
                                   ),
                                 }}
                               />
+                              <ul className="">
+                                {verification.files.map((file, index) => (
+                                  <li
+                                    key={index}
+                                    className="py-2 flex justify-between"
+                                  >
+                                    <a
+                                      href={file.path}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-500"
+                                    >
+                                      <span>{file.name}</span>
+                                    </a>
+                                  </li>
+                                ))}
+                              </ul>
                             </div>
                           </td>
                         </tr>
 
                         {/* Lista alla journalEntries för denna verifikation */}
                         {verification.journalEntries.map((entry, index) => {
-                          
-                          if (entry.credit === 0 && entry.debit === 0 ) return null
+                          if (entry.credit === 0 && entry.debit === 0)
+                            return null;
                           return (
-                          <tr
-                            key={index}
-                            className="bg-gray-50 border-b border-gray-200"
-                          >
-                            <td colSpan={2}></td>
-                            <td className="px-6 py-2 text-sm text-gray-500">
-                              {entry.account}
-                            </td>
-                            <td className="px-6 py-2 text-right text-sm text-gray-500">
-                              {entry.debit > 0 ? entry.debit.toFixed(2) : "-"}
-                            </td>
-                            <td className="px-6 py-2 text-right text-sm text-gray-500">
-                              {entry.credit > 0 ? entry.credit.toFixed(2) : "-"}
-                            </td>
-                          </tr>
-                        )})}
+                            <tr
+                              key={index}
+                              className="bg-gray-50 border-b border-gray-200"
+                            >
+                              <td colSpan={2}></td>
+                              <td className="px-6 py-2 text-sm text-gray-500">
+                                {entry.account}
+                              </td>
+                              <td className="px-6 py-2 text-right text-sm text-gray-500">
+                                {entry.debit > 0 ? entry.debit.toFixed(2) : "-"}
+                              </td>
+                              <td className="px-6 py-2 text-right text-sm text-gray-500">
+                                {entry.credit > 0
+                                  ? entry.credit.toFixed(2)
+                                  : "-"}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </React.Fragment>
                     );
                   })}
