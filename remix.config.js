@@ -2,6 +2,12 @@
 export default {
   ignoredRouteFiles: ["**/.*"],
   tailwind: true,
+  browserNodeBuiltinsPolyfill: {
+    modules: {
+      buffer: true, // Aktivera polyfill för Buffer
+      events: true 
+    },
+  },
   // appDirectory: "app",
   // assetsBuildDirectory: "public/build",
   // publicPath: "/build/",
