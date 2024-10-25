@@ -185,68 +185,37 @@ const selectorData = [
     `
   },
   {
-    maxTokens: 3000,
-    type: SelectorType.TAX_ACCOUNT,
-    keywords: ["Skatteverket", "Skattekonto"], 
-    content: `Jag har en ostrukturerad text med bokföringsdata från ett skattekonto där raderna är uppdelade i kolumnerna **Datum**, **Specifikation**, **Belopp**, och **Saldo**. Vissa rader saknar mellanslag mellan **Belopp** och **Saldo**, vilket gör det svårt att avgöra var **Belopp** slutar och **Saldo** börjar. Returnera resultatet i JSON-format enligt instruktionerna nedan.
-
-### Instruktioner:
-1. **Kolumnstruktur**: Varje rad följer strukturen **Datum**, **Specifikation**, **Belopp**, och **Saldo**. Identifiera dessa kolumner för varje rad i texten.
-
-2. **Regel för Belopp och Saldo**:
-  - Belopp och Saldo är ihopskrivet. Det betyder att du får göra tester för att titta på raden innan och raden efter för att matcha logiken.
-  Exempel:
-  240404Moms febr 20243333
-  240406Slutlig skatt-29 943-29 910
-
-  som du ser är den sista raden Saldo -29 910. och Beloppet -29 943. Det betyder att raden innan måsta ha Saldo 33 och belopp 33 för att det ska stämma.
-
-3. **Returnera som JSON**:
-   - Returnera resultatet i JSON-format som en lista med objekt enligt följande struktur:
-     [
-       {
-         "Datum": "YYYY-MM-DD",
-         "Specifikation": "Exempel specifikation",
-         "Belopp": -1234,
-         "Saldo": 5678
-       },
-       ...
-     ]
-
-Här är texten att tolka:
-
-**Skattekonto
-Gustafsson, Moa 000611-6446
-Bokförda transaktioner
-DatumSpecifikationBeloppSaldo
-Ingående saldo 2024-01-010
-240404Moms febr 20243333
-240406Slutlig skatt-29 943-29 910
-240406Avdragen skatt40 14510 235
-240406Intäktsränta2210 257
-240406Korrigerad intäktsränta1210 269
-240406Utbetalning-10 20267
-240409Inbetalning bokförd 240408473540
-240504Intäktsränta1541
-240507Inbetalning bokförd 240506266807
-240513Moms mars 2024-473334
-240612Moms april 2024-26668
-240705Inbetalning bokförd 240704115183
-240706Intäktsränta1184
-240809Inbetalning bokförd 240808614798
-240819Moms juni 2024-115683
-240901Intäktsränta1684
-240906Moms aug 2024158842
-240912Moms juli 2024-614228
-240916Utbetalning-15870
-241009Inbetalning bokförd 2410082 0002 070
-Utgående saldo 2024-10-152 070
-Omfattar transaktionstyp: Alla fr.o.m. 2024-01-01 t.o.m. 2024-10-15, sorterade efter transaktionsdag.
-2024-10-15 10:19Skattekonto - Skatteverket
-https://sso.skatteverket.se/sk/ska/hamtaBokfTrans.do1/1**
-
-Returnera endast JSON-strukturen.
-`
+    maxTokens: 500,
+    type: SelectorType.RECEIPT,
+    keywords: ["5709 00 121 15"],
+    content:  `Du är en assistent som hjälper till att extrahera bokföringsinformation. Din uppgift är att analysera texten och extrahera följande i JSON-format:
+        
+    1. **Datum (date)**: Datumet då pengarna drogs eller sattes in på kontot.
+    2. **Totalpris (total)**: Det totala beloppet.
+    3. **Beskrivning (description)**: Beskriv händelsen baserat på transaktionstypen. Ta med rubrik om det finns:
+       - Om pengar sätts in på ett konto (positivt belopp utan överföring), använd beskrivningen "Insättning (Datum: YYYY-MM-DD)".
+       - Om pengar dras från ett konto (negativt belopp utan överföring) för en utgift, använd beskrivningen "Kortköp (Datum: YYYY-MM-DD)" tillsammans med detaljer om transaktionen.
+       - Om det är en överföring mellan två konton, använd beskrivningen "Överföring (Datum: YYYY-MM-DD)".
+    4. **Konto-information (accounts)**: Följ dessa regler noggrant för att avgöra debit och kredit:
+    
+   - Från kontot är **5709 00 121 15** och det är inget tillkonto. Bokför som **2018** credit,  konto **4000** debit och konto **2640** med 25% moms.
+    
+    Förväntat resultat:
+    \`\`\`json
+    {
+      "date": "2024-02-27",
+      "total": -229,30,
+      "description": "Överföring (Datum: 2024-02-27)",
+      "accounts": {
+        "4000": { "debit": 183,44, "credit": 0},
+        "2640": { "debit": 45,86, "credit": 0},
+        "2018": { "debit": 0, "credit": -229,30 }
+      }
+    }
+    \`\`\`
+    
+    Analysera detta och returnera ett JSON-objekt i ovanstående format med korrekt kontoinformation för debit och kredit.
+    `
   }
 ]
 
