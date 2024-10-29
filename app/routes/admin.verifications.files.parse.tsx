@@ -121,8 +121,9 @@ const selectorData = [
     maxTokens: 500,
     type: SelectorType.RECEIPT,
     keywords: ["5722 32 953 76", "5130 00 238 99"], // Moa clayco
-    content:  `Du är en assistent som hjälper till att extrahera bokföringsinformation. Din uppgift är att analysera texten och extrahera följande i JSON-format:
-        
+    content: `
+    Du är en assistent som hjälper till att extrahera bokföringsinformation. Din uppgift är att analysera texten och extrahera följande i JSON-format:
+            
     1. **Datum (date)**: Datumet då pengarna drogs eller sattes in på kontot.
     2. **Totalpris (total)**: Det totala beloppet.
     3. **Beskrivning (description)**: Beskriv händelsen baserat på transaktionstypen:
@@ -130,7 +131,7 @@ const selectorData = [
        - Om pengar dras från ett konto (negativt belopp utan överföring) för en utgift, använd beskrivningen "Kortköp (Datum: YYYY-MM-DD)" tillsammans med detaljer om transaktionen.
        - Om det är en överföring mellan två konton, använd beskrivningen "Överföring (Datum: YYYY-MM-DD)".
     4. **Konto-information (accounts)**: Följ dessa regler noggrant för att avgöra debit och kredit:
-    
+        
     - **Regler för specifika konton:**
         - **Om till/från konto är "5722 32 953 76":**
             - Om **till konto** är "5722 32 953 76":
@@ -141,8 +142,8 @@ const selectorData = [
                 - Om beloppet är negativt, debitera även **2013** för eget uttag.
         - **Om till/från konto är "5130 00 238 99":**
             - Om **till konto** är "5130 00 238 99":
-                - Om beloppet är positivt, kreditera **2018**.
-                - Om beloppet är negativt, debitera **2018**.
+                - Om beloppet är positivt, debitera **2018**.
+                - Om beloppet är negativt, kreditera **2018**.
             - Om **från konto** är "5130 00 238 99":
                 - Kreditera alltid **2018** om pengar flyttas från detta konto.
     
@@ -156,7 +157,7 @@ const selectorData = [
             - Debitera **1930** och kreditera **2018**.
         - Om **till konto** är "5130 00 238 99" och **från konto** är "5722 32 953 76":
             - Om beloppet är negativt, kreditera **1930** och debitera **2013**.
-            - Om beloppet är positivt, debitera **1930** och kreditera **2018**.
+            - Om beloppet är positivt, kreditera **1930** och debitera **2018**.
     
     5. **Specifika regler för negativa/positiva belopp:**
         - Vid positiva belopp och inget annat specificeras, debitera **1930** och kreditera **2018**.
@@ -169,7 +170,6 @@ const selectorData = [
     - Beskrivning: Överföring
     
     Förväntat resultat:
-    \`\`\`json
     {
       "date": "2024-02-27",
       "total": -3000,
@@ -179,7 +179,6 @@ const selectorData = [
         "2018": { "debit": 3000, "credit": 0 }
       }
     }
-    \`\`\`
     
     Analysera detta och returnera ett JSON-objekt i ovanstående format med korrekt kontoinformation för debit och kredit.
     `
@@ -289,7 +288,7 @@ async function runOcr(fileBuffer: Tesseract.ImageLike) {
   try {
     const { data } = await Tesseract.recognize(
       fileBuffer,
-      "eng", // Välj språk, t.ex. 'eng' för engelska eller 'swe' för svenska
+      "swe", // Välj språk, t.ex. 'eng' för engelska eller 'swe' för svenska
       {
         tessedit_char_whitelist:
           "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
@@ -350,6 +349,7 @@ export const action: ActionFunction = async ({ request, params }) => {
       return parseData(pdfData.text);
     });
   } else if (file.type.startsWith("image/")) {
+
     parsePromise = runOcr(fileBuffer).then((ocrResult) => {
       console.log("OCR Result:", ocrResult);
       return parseData(ocrResult);

@@ -94,3 +94,11 @@ export type DiscountType = {
   balance: number;
   expireAt: Date | null;
 };
+
+
+export enum ReportType  {
+  INCOME,
+  BALANCE,
+  EXPENSE,
+  LIABILITIES
+}
