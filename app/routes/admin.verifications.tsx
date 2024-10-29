@@ -24,6 +24,8 @@ import React from "react";
 import { classNames } from "~/utils/classnames";
 import stripeClient from "~/stripeClient";
 import ClientOnly from "~/components/ClientOnly";
+import { formatMonthName } from "~/utils/formatMonthName";
+import { accounts } from "~/utils/accounts";
 
 const formSchema = z.object({
   description: z.string().min(1, "Beskrivning är obligatorisk"),
@@ -49,7 +51,7 @@ const formSchema = z.object({
         message: "Varje rad måste ha ett debet eller kreditvärde",
       }
     ),
-    file: z
+  file: z
     .object({
       filePath: z.string().url(),
       label: z.string(),
@@ -59,23 +61,6 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>;
 
-const accounts = [
-  { value: 1580, label: "1580 - Fordran på Stripe" },
-  { value: 1510, label: "1510 - Kundfordringar"},
-  { value: 1630, label: "1630 - Skattekonto"},
-  { value: 1930, label: "1930 - Bank" },
-  { value: 2013, label: "2013 - Eget uttag" },
-  { value: 2018, label: "2018 - Egen insättning" },
-  { value: 2611, label: "2611 - Utgående moms på varor och frakt" },
-  { value: 2640, label: "2640 - Ingående moms" },
-  { value: 2650, label: "2650 - Momsskuld" },
-  { value: 3001, label: "3001 - Försäljning av varor", vatAccount: 2611 }, // Moms krävs
-  { value: 3740, label: "3740 - Öres- och kronutjämning" },
-  { value: 4000, label: "4000 - Material/Varukostnader", vatAccount: 2640 }, // Moms krävs
-  { value: 6570, label: "6570 - Kostnader för betalningsförmedling" },
-  { value: 8313, label: "8313 - Ränteintäkter bank" },
-  
-]
 
 export const loader: LoaderFunction = async ({ request }) => {
   const url = new URL(request.url);
@@ -107,7 +92,7 @@ export const action: ActionFunction = async ({ request, params }) => {
     try {
       file = JSON.parse(fileData as string); // Filinmatningen är JSON, deserialisera den
     } catch (error) {
-      file = undefined
+      file = undefined;
       console.error("Error parsing file data:", error);
     }
   }
@@ -143,7 +128,7 @@ export const action: ActionFunction = async ({ request, params }) => {
       verificationNumber: await generateNextEntryNumber(),
       verificationDate: dateForDatabase, // Spara som Date om det behövs
       journalEntries,
-      files: file ? [{name: file.label, path: file.filePath}] : []
+      files: file ? [{ name: file.label, path: file.filePath }] : [],
     });
 
     await newVerification.save();
@@ -191,72 +176,48 @@ const formatDate = (dateString) => {
   )}-${String(date.getDate()).padStart(2, "0")}`;
 };
 
-// Helper function to format month name (e.g. "January 2024")
-const formatMonthName = (yearMonthKey) => {
-  const [year, month] = yearMonthKey.split("-");
-  const monthNames = [
-    "Januari",
-    "Februari",
-    "Mars",
-    "April",
-    "Maj",
-    "Juni",
-    "Juli",
-    "Augusti",
-    "September",
-    "Oktober",
-    "November",
-    "December",
-  ];
-  return `${monthNames[parseInt(month) - 1]} ${year}`;
-};
 
 
 type SuggestionProps = {
-  status: string,
-  verificationData: {},
-  uuid: string
-}
-
+  status: string;
+  verificationData: {};
+  uuid: string;
+};
 
 const FileUpload = ({
   onSuggestionsReceived,
-  onFileSelected
+  onFileSelected,
 }: {
   onSuggestionsReceived: (suggestions: SuggestionProps) => void;
-  onFileSelected: (file: File) => void // Definiera en typ för callback-funktionen
+  onFileSelected: (file: File) => void; // Definiera en typ för callback-funktionen
 }) => {
   const fileInputRef = useRef(null);
   const fetcher = useFetcher<SuggestionProps>();
-  const [uuid, setUuid] = useState<String|null>()
+  const [uuid, setUuid] = useState<String | null>();
 
   useEffect(() => {
-    if(fetcher && fetcher.data ) {
-
+    if (fetcher && fetcher.data) {
       if (!uuid || uuid !== fetcher.data.uuid) {
-        setUuid(fetcher.data.uuid)
-        onSuggestionsReceived(fetcher.data); 
+        setUuid(fetcher.data.uuid);
+        onSuggestionsReceived(fetcher.data);
       }
-
-     
     }
-
-  }, [fetcher, fetcher.data])
+  }, [fetcher, fetcher.data]);
 
   const handleFileInputClick = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
+    e.preventDefault();
+    e.stopPropagation();
     fileInputRef.current.click();
   };
 
   const handleFileChange = (event) => {
-    event.preventDefault()
-    event.stopPropagation()
+    event.preventDefault();
+    event.stopPropagation();
     const file = event.target.files[0];
     if (file) {
       const formData = new FormData();
       formData.append("file", file);
-      onFileSelected(file)
+      onFileSelected(file);
       fetcher.submit(formData, {
         action: "/admin/verifications/files/parse",
         method: "post",
@@ -267,33 +228,30 @@ const FileUpload = ({
     }
   };
 
-
-
   return (
     <div>
-        <button
-          onClick={handleFileInputClick}
-          className="inline-flex justify-center mb-2 mt-2 px-4 py-2 w-full text-white text-base font-medium bg-blue-600 hover:bg-blue-700 border border-transparent rounded-md focus:outline-none shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:text-sm"
-        >
-          Välj fil
-        </button>
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          className="hidden"
-          accept="application/pdf,image/*"
-        />
+      <button
+        onClick={handleFileInputClick}
+        className="inline-flex justify-center mb-2 mt-2 px-4 py-2 w-full text-white text-base font-medium bg-blue-600 hover:bg-blue-700 border border-transparent rounded-md focus:outline-none shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:text-sm"
+      >
+        Välj fil
+      </button>
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        className="hidden"
+        accept="application/pdf,image/*"
+      />
     </div>
   );
-}
+};
 
 export default function VerificationsPage() {
   const { verifications, year } = useLoaderData();
   const actionData = useActionData();
   const submit = useSubmit();
   const [uploadedFile, setUploadedFile] = useState(null); // Nytt state för att hålla filinfo
-
 
   const groupedVerifications = groupByMonth(verifications);
 
@@ -486,18 +444,34 @@ export default function VerificationsPage() {
     name: "journalEntries",
   });
 
-  const truncateText = (text, maxLength) => {
-    return text.length > maxLength
-      ? `${text.substring(0, maxLength)}...`
-      : text;
-  };
-
   const hasVatReport = (verifications, monthKey) => {
-    return verifications.some((verification) =>
+    return verifications.find((verification) =>
       verification.metadata.some(
         (meta) => meta.key === "vatReport" && meta.value === monthKey
       )
     );
+  };
+
+  const shouldRegisterVat = (verification) => {
+
+    if (!verification) {
+      return false;
+    }
+    const account = verification.journalEntries.find(
+      (entry) => entry.account === 2650
+    );
+
+    if (!account) {
+      return false;
+    }
+
+
+    const regged =  verification.metadata.some(
+      (meta) =>
+        meta.key === "vatRegisteredAtAccount" && Boolean(meta.value) === true
+    );
+
+    return !regged
   };
 
   const isPastMonth = (yearMonthKey) => {
@@ -516,28 +490,29 @@ export default function VerificationsPage() {
   };
 
   function handleSuggestions(data: SuggestionProps): void {
+    console.log("data", data);
+    if (data.status === "success" && data.verificationData) {
+      if (data && data.verificationData && data.verificationData.accounts) {
+        remove(fields.map((_, index) => index));
+        setValue("description", data.verificationData.description || "");
+        setValue("verificationDate", data.verificationData.date || "");
+        setUploadedFile(data.file);
 
-    console.log("data", data)
-      if (data.status === "success" && data.verificationData ) {
-        if (data && data.verificationData && data.verificationData.accounts) {
-          remove(fields.map((_, index) => index));
-          setValue("description", data.verificationData.description || "");
-          setValue("verificationDate", data.verificationData.date || "");
-          setUploadedFile(data.file); 
-
-          Object.entries(data.verificationData.accounts).forEach(([accountNumber, values]) => {
-            append({ account: Number(accountNumber) , debit: values.debit || undefined, credit: values.credit || undefined });
-          });
-        } else {
-          console.error("Account data saknas");
-        }
-   
-    
+        Object.entries(data.verificationData.accounts).forEach(
+          ([accountNumber, values]) => {
+            append({
+              account: Number(accountNumber),
+              debit: values.debit || undefined,
+              credit: values.credit || undefined,
+            });
+          }
+        );
       } else {
-        console.log("FAILED")
+        console.error("Account data saknas");
       }
-
-
+    } else {
+      console.log("FAILED");
+    }
   }
 
   return (
@@ -582,17 +557,16 @@ export default function VerificationsPage() {
           } else {
             const formData = {
               ...data,
-              file: uploadedFile ? JSON.stringify(uploadedFile): {},
+              file: uploadedFile ? JSON.stringify(uploadedFile) : {},
               journalEntries: JSON.stringify(data.journalEntries),
             };
             submit(formData, { method: "post" });
-            setUploadedFile(null)
+            setUploadedFile(null);
             reset();
           }
         })}
       >
         <div className="flex space-x-4">
-         
           {/* Kolumn 1: Beskrivning */}
           <div className="w-2/3">
             <label
@@ -684,29 +658,34 @@ export default function VerificationsPage() {
             </div>
           ))}
           <div className="w-full flex space-x-4">
-          <button
-            type="button"
-            onClick={() => {
-              handleAddRow();
-            }}
-            className="inline-flex justify-center mb-2 mt-2 px-4 py-2 w-full text-white text-base font-medium bg-blue-600 hover:bg-blue-700 border border-transparent rounded-md focus:outline-none shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:text-sm"
-          >
-            Lägg till rad
-          </button>
-          <button
-            type="submit"
-            className="ml-4 inline-flex justify-center mb-2 mt-2 px-4 py-2 w-full text-white text-base font-medium bg-blue-600 hover:bg-blue-700 border border-transparent rounded-md focus:outline-none shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:text-sm"
-          >
-            Spara
-          </button>
-          <FileUpload onSuggestionsReceived={handleSuggestions} onFileSelected={(file) => {
-            setTimeout(() => {
-              remove(fields.map((_, index) => index));
-              setValue("description", "")
-              setValue("verificationDate",  new Date().toISOString().split("T")[0])
-             
-            }, 100)
-          }}/>
+            <button
+              type="button"
+              onClick={() => {
+                handleAddRow();
+              }}
+              className="inline-flex justify-center mb-2 mt-2 px-4 py-2 w-full text-white text-base font-medium bg-blue-600 hover:bg-blue-700 border border-transparent rounded-md focus:outline-none shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:text-sm"
+            >
+              Lägg till rad
+            </button>
+            <button
+              type="submit"
+              className="ml-4 inline-flex justify-center mb-2 mt-2 px-4 py-2 w-full text-white text-base font-medium bg-blue-600 hover:bg-blue-700 border border-transparent rounded-md focus:outline-none shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:text-sm"
+            >
+              Spara
+            </button>
+            <FileUpload
+              onSuggestionsReceived={handleSuggestions}
+              onFileSelected={(file) => {
+                setTimeout(() => {
+                  remove(fields.map((_, index) => index));
+                  setValue("description", "");
+                  setValue(
+                    "verificationDate",
+                    new Date().toISOString().split("T")[0]
+                  );
+                }, 100);
+              }}
+            />
           </div>
         </div>
       </form>
@@ -714,6 +693,8 @@ export default function VerificationsPage() {
       <div className="mb-20 mt-20 mx-auto">
         {Object.keys(groupedVerifications).map((monthKey) => {
           const monthHasVatReport = hasVatReport(verifications, monthKey);
+          const registerVat = shouldRegisterVat(monthHasVatReport);
+
           // Summera debet och kredit för varje månad
           const monthDebetSum = groupedVerifications[monthKey].reduce(
             (sum, ver) =>
@@ -741,6 +722,19 @@ export default function VerificationsPage() {
                     className="bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
                   >
                     Skapa momsrapport ({formatMonthName(monthKey)})
+                  </button>
+                )}
+
+                {monthHasVatReport && registerVat && isPastMonth(monthKey) && (
+                  <button
+                    onClick={() =>
+                      navigate(
+                        `/admin/verifications/vat-report-payed?month=${monthKey}`
+                      )
+                    }
+                    className="bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
+                  >
+                    Registrera/Skattemyndigheten ({formatMonthName(monthKey)})
                   </button>
                 )}
               </div>
@@ -876,7 +870,9 @@ export default function VerificationsPage() {
                                 {entry.account}
                               </td>
                               <td className="px-6 py-2 text-right text-sm text-gray-500">
-                                {entry.debit > 0 ? entry.debit.toFixed(2) : "-"}
+                                {entry.debit !== 0
+                                  ? entry.debit.toFixed(2)
+                                  : "-"}
                               </td>
                               <td className="px-6 py-2 text-right text-sm text-gray-500">
                                 {entry.credit > 0
