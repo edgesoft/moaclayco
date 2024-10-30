@@ -89,34 +89,26 @@ export const action: ActionFunction = async ({ request, params }) => {
     journalEntries: [
       {
         account: 2650,
-        debit: 0,
-        credit: account.debit,
-      },
-      {
-        account: 2050,
-        debit: account.debit,
+        debit: account.credit,
         credit: 0,
       },
       {
-        account: 2050,
+        account: 2012,
+        debit: 0,
+        credit: account.credit,
+      },
+      {
+        account: 2012,
         debit: amount,
         credit: 0,
       },
+      
       {
         account: accountNumber,
         debit: 0,
         credit: amount,
-      },
-      {
-        account: 2050,
-        debit: 0,
-        credit: account.debit,
-      },
-      {
-        account: 2012,
-        debit: account.debit,
-        credit: 0,
       }
+      
     ],
   });
 
@@ -128,7 +120,10 @@ export const action: ActionFunction = async ({ request, params }) => {
 };
 
 const formSchema = z.object({
-  amount: z.number().min(1, "Belopp är obligatorsikt"),
+  amount: z.preprocess(
+    (v) => (v === "" || v === null ? 0 : parseFloat(v as string)),
+    z.number().min(0, "Belopp är obligatorsikt")
+  ),
   submissionDate: z.string().min(1, "Datum är obligatoriskt"),
   account: z.number().min(1, "Konto är obligatorsikt"),
 });
@@ -156,7 +151,7 @@ export default function VATReportModal() {
   } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      amount: account.debit
+      amount: Number(account.credit)
     }
   });
 
@@ -209,8 +204,9 @@ export default function VATReportModal() {
                           <span>Summa inbetalt för moms</span>
                           <input
                             type="number"
+                             step="0.01"
                             id="amount"
-                            {...register("amount", { required: true })}
+                            {...register(`amount` as const)}
                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                           />
                         </div>
