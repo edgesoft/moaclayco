@@ -114,7 +114,7 @@ export const action: ActionFunction = async ({ request }) => {
     });
   });
 
-  const vatToPayOrRefund = totalOutgoingVat - totalIncomingVat;
+  const vatToPayOrRefund = Math.abs(totalOutgoingVat) - Math.abs(totalIncomingVat);
   const roundedVatToPayOrRefund = Math.round(vatToPayOrRefund);
   const roundingDifference = vatToPayOrRefund - roundedVatToPayOrRefund;
 
@@ -208,7 +208,7 @@ export const action: ActionFunction = async ({ request }) => {
     if (totalDebet <  totalKredit) {
       newVerification.journalEntries.push({
         account: roundingAccount,
-        debit: roundingDifference,
+        debit: Math.abs(roundingDifference),
         credit: 0
       });
     }
@@ -217,7 +217,7 @@ export const action: ActionFunction = async ({ request }) => {
       newVerification.journalEntries.push({
         account: roundingAccount,
         debit: 0,
-        credit: roundingDifference
+        credit: Math.abs(roundingDifference)
       });
     }
 
