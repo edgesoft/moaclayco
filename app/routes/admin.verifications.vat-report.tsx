@@ -67,31 +67,23 @@ export const action: ActionFunction = async ({ request, params }) => {
     return json({ error: "Inget datum valt" }, { status: 400 });
   }
 
- 
-
   const url = new URL(request.url);
-  const month = url.searchParams.get("month"); // Få månaden som query param
+  const month = url.searchParams.get("month");
   if (!month) {
     return json({ error: "Ingen månad specificerad" }, { status: 400 });
   }
 
-  const [year, monthNumber] = month.split("-"); // Dela upp månad och år
-  const startOfMonth = new Date(Number(year), Number(monthNumber) - 1, 1); // Första dagen i månaden
-  const endOfMonth = new Date(Number(year), Number(monthNumber), 0); // Sista dagen i månaden (t.ex. 28 eller 29)
+  const [year, monthNumber] = month.split("-");
+  const startOfMonth = new Date(Number(year), Number(monthNumber) - 1, 1);
+  const endOfMonth = new Date(Number(year), Number(monthNumber), 0);
+  endOfMonth.setHours(23, 59, 59, 999);
 
-  // Sätt sista datumet till 23:59:59 för att inkludera hela dagen
-  endOfMonth.setHours(23, 59, 59, 999); // Sätt tiden till slutet av dagen
-
-  // Format submissionDate som en Date i MongoDB
   const formattedDate = new Date(submissionDate);
 
-  // Definiera konton
-  const salesAccount = 3001; // Försäljning av varor
-  const outgoingVatAccount = 2611; // Utgående moms
-  const incomingVatAccount = 2640; // Ingående moms
-  const vatDebtAccount = 2650; // Momsskuld eller fordran
-  const roundingAccount = 3740; // Öres- och kronutjämning
-
+  const outgoingVatAccount = 2611;
+  const incomingVatAccount = 2640;
+  const vatDebtAccount = 2650;
+  const roundingAccount = 3740;
 
   const verifications = await Verifications.find({
     verificationDate: {
@@ -101,17 +93,14 @@ export const action: ActionFunction = async ({ request, params }) => {
     "metadata.key": { $ne: "vatReport" },
   });
 
-  
   let totalIncomingVat = 0;
   let totalOutgoingVat = 0;
   verifications.forEach((v) => {
     v.journalEntries.forEach((entry) => {
-      // Summera ingående moms (2640)
       if (entry.account === incomingVatAccount) {
         totalIncomingVat += entry.debit || 0;
         totalIncomingVat -= entry.credit || 0;
       }
-       // Summera utgående moms (2611)
       if (entry.account === outgoingVatAccount) {
         totalOutgoingVat += entry.credit || 0;
         totalOutgoingVat -= entry.debit || 0;
@@ -119,42 +108,33 @@ export const action: ActionFunction = async ({ request, params }) => {
     });
   });
 
- 
-
-  // Beräkna momsskuld eller momsfordran (skillnad mellan utgående och ingående moms)
   const vatToPayOrRefund = totalOutgoingVat - totalIncomingVat;
   const roundedVatToPayOrRefund = Math.round(vatToPayOrRefund);
-
-  // Beräkna avrundningsskillnad för öresutjämning
   const roundingDifference = vatToPayOrRefund - roundedVatToPayOrRefund;
 
-  // Journalposter för momsrapport
   const journalEntries = [
     {
-      account: incomingVatAccount, // Ingående moms
-      debit:  0,
-      credit: totalIncomingVat.toFixed(2), // Totalt ingående moms,
+      account: incomingVatAccount,
+      debit: 0,
+      credit: totalIncomingVat.toFixed(2),
     },
     {
-      account: outgoingVatAccount, // Utgående moms
+      account: outgoingVatAccount,
       debit: totalOutgoingVat.toFixed(2),
-      credit:  0 // Totalt utgående moms
+      credit: 0,
     },
     {
-      account: vatDebtAccount, // Momsskuld eller momsfordran
-      debit: vatToPayOrRefund > 0 ? roundedVatToPayOrRefund.toFixed(2) : 0, // Skuld om positivt belopp
-      credit:
-        vatToPayOrRefund < 0 ? Math.abs(roundedVatToPayOrRefund).toFixed(2) : 0, // Fordran om negativt belopp
+      account: vatDebtAccount,
+      debit: vatToPayOrRefund > 0 ? roundedVatToPayOrRefund.toFixed(2) : 0,
+      credit: vatToPayOrRefund < 0 ? Math.abs(roundedVatToPayOrRefund).toFixed(2) : 0,
     },
   ];
 
-  // Lägg till öres- och kronutjämning om det finns en skillnad efter avrundning
   if (Math.abs(roundingDifference) > 0) {
     journalEntries.push({
-      account: roundingAccount, // Öres- och kronutjämning
+      account: roundingAccount,
       debit: roundingDifference > 0 ? roundingDifference.toFixed(2) : 0,
-      credit:
-        roundingDifference < 0 ? Math.abs(roundingDifference).toFixed(2) : 0,
+      credit: roundingDifference < 0 ? Math.abs(roundingDifference).toFixed(2) : 0,
     });
   }
 
@@ -163,42 +143,50 @@ export const action: ActionFunction = async ({ request, params }) => {
       key: "vatReport",
       value: month,
     },
-  ]
+  ];
 
-  // Om 2650 är en fordran så debitera och creditera 2012
-  if (vatToPayOrRefund < 0 ) {
-    journalEntries.push({
-      account: 2650,
-      debit:  Math.abs(roundedVatToPayOrRefund).toFixed(2),
-      credit: 0
-    });
-    journalEntries.push({
-      account: 2012,
-      debit:  0,
-      credit: Math.abs(roundedVatToPayOrRefund).toFixed(2)
-    });
+  if (vatToPayOrRefund < 0) {
+    journalEntries.push(
+      {
+        account: vatDebtAccount,
+        debit: Math.abs(roundedVatToPayOrRefund).toFixed(2),
+        credit: 0,
+      },
+      {
+        account: 2012,
+        debit: 0,
+        credit: Math.abs(roundedVatToPayOrRefund).toFixed(2),
+      }
+    );
     metadata.push({
       key: "vatRegisteredAtAccount",
-      value: "true"
-    })
-  }
-  
-  if (vatToPayOrRefund === 0) {
+      value: "true",
+    });
+  } else if (vatToPayOrRefund > 0) {
+    journalEntries.push(
+      {
+        account: vatDebtAccount,
+        debit: 0,
+        credit: roundedVatToPayOrRefund.toFixed(2),
+      },
+      {
+        account: 2012,
+        debit: roundedVatToPayOrRefund.toFixed(2),
+        credit: 0,
+      }
+    );
     metadata.push({
       key: "vatRegisteredAtAccount",
-      value: "true"
-    })
+      value: "true",
+    });
   }
 
-
-
-  // Skapa och spara verifikationen
   const newVerification = new Verifications({
     description: `Momsrapport för ${formatMonthName(month)}`,
     verificationNumber: await generateNextEntryNumber(),
     verificationDate: formattedDate,
     journalEntries: journalEntries,
-    metadata
+    metadata,
   });
 
   console.log(newVerification);
