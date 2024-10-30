@@ -15,6 +15,7 @@ import { Verifications } from "~/schemas/verifications"; // Din MongoDB schema
 import { classNames } from "~/utils/classnames";
 import { generateNextEntryNumber } from "~/utils/verificationUtil";
 import { formatMonthName } from "~/utils/formatMonthName";
+import { accounts } from "~/utils/accounts";
 
 // Loader-funktion för att hämta verifikationer från MongoDB för en viss månad
 export const loader: LoaderFunction = async ({ request }) => {
@@ -59,7 +60,7 @@ export const loader: LoaderFunction = async ({ request }) => {
   });
 };
 
-export const action: ActionFunction = async ({ request, params }) => {
+export const action: ActionFunction = async ({ request }) => {
   const formData = await request.formData();
   const submissionDate = formData.get("submissionDate");
 
@@ -80,10 +81,12 @@ export const action: ActionFunction = async ({ request, params }) => {
 
   const formattedDate = new Date(submissionDate);
 
-  const outgoingVatAccount = 2611;
-  const incomingVatAccount = 2640;
-  const vatDebtAccount = 2650;
-  const roundingAccount = 3740;
+  const incomingVatAccount = 2640; // Ingående moms
+  const outgoingVatAccount = 2611; // Utgående moms
+  const vatDebtAccount = 2650; // Momsskuld eller momsfordran
+  const roundingAccount = 3740; // Öres- och kronutjämning
+  const taxAccount = 2012; // Avräkning för skatter och avgifter
+  const skattekontoAccount = 2050; // Skattekontotransaktioner
 
   const verifications = await Verifications.find({
     verificationDate: {
@@ -95,15 +98,18 @@ export const action: ActionFunction = async ({ request, params }) => {
 
   let totalIncomingVat = 0;
   let totalOutgoingVat = 0;
+
   verifications.forEach((v) => {
     v.journalEntries.forEach((entry) => {
       if (entry.account === incomingVatAccount) {
+        // 2640
         totalIncomingVat += entry.debit || 0;
         totalIncomingVat -= entry.credit || 0;
       }
       if (entry.account === outgoingVatAccount) {
-        totalOutgoingVat += entry.credit || 0;
-        totalOutgoingVat -= entry.debit || 0;
+        // 2611
+        totalOutgoingVat += entry.debit || 0;
+        totalOutgoingVat -= entry.credit || 0;
       }
     });
   });
@@ -112,31 +118,7 @@ export const action: ActionFunction = async ({ request, params }) => {
   const roundedVatToPayOrRefund = Math.round(vatToPayOrRefund);
   const roundingDifference = vatToPayOrRefund - roundedVatToPayOrRefund;
 
-  const journalEntries = [
-    {
-      account: incomingVatAccount,
-      debit: 0,
-      credit: totalIncomingVat.toFixed(2),
-    },
-    {
-      account: outgoingVatAccount,
-      debit: totalOutgoingVat.toFixed(2),
-      credit: 0,
-    },
-    {
-      account: vatDebtAccount,
-      debit: vatToPayOrRefund > 0 ? roundedVatToPayOrRefund.toFixed(2) : 0,
-      credit: vatToPayOrRefund < 0 ? Math.abs(roundedVatToPayOrRefund).toFixed(2) : 0,
-    },
-  ];
-
-  if (Math.abs(roundingDifference) > 0) {
-    journalEntries.push({
-      account: roundingAccount,
-      debit: roundingDifference > 0 ? roundingDifference.toFixed(2) : 0,
-      credit: roundingDifference < 0 ? Math.abs(roundingDifference).toFixed(2) : 0,
-    });
-  }
+  const journalEntries = [];
 
   const metadata = [
     {
@@ -145,39 +127,62 @@ export const action: ActionFunction = async ({ request, params }) => {
     },
   ];
 
-  if (vatToPayOrRefund < 0) {
-    journalEntries.push(
-      {
-        account: vatDebtAccount,
-        debit: Math.abs(roundedVatToPayOrRefund).toFixed(2),
-        credit: 0,
-      },
-      {
-        account: 2012,
-        debit: 0,
-        credit: Math.abs(roundedVatToPayOrRefund).toFixed(2),
-      }
-    );
+  console.log("2640", totalIncomingVat);
+  console.log("2611", totalOutgoingVat);
+  console.log("2650", vatToPayOrRefund);
+  console.log(
+    "RoundedVatToPayOrRefund (efter avrundning):",
+    roundedVatToPayOrRefund
+  );
+
+  journalEntries.push(
+    {
+      account: incomingVatAccount, // 2640
+      debit: totalIncomingVat < 0 ? Math.abs(totalIncomingVat) : 0,
+      credit: totalIncomingVat > 0 ? Math.abs(totalIncomingVat) : 0,
+    },
+    {
+      account: outgoingVatAccount, // 2611
+      debit: totalOutgoingVat < 0 ? Math.abs(totalOutgoingVat) : 0,
+      credit: totalOutgoingVat > 0 ? Math.abs(totalOutgoingVat) : 0,
+    }
+  );
+
+  console.log("totalIncomingVat", Math.abs(totalIncomingVat));
+  console.log("totalOutgoingVat", Math.abs(totalOutgoingVat));
+
+  //  Momsfordran (du ska få tillbaka)
+  if (Math.abs(totalIncomingVat) > Math.abs(totalOutgoingVat)) {
+    journalEntries.push({
+      account: vatDebtAccount, // 2650
+      debit: Math.abs(roundedVatToPayOrRefund),
+      credit: 0,
+    });
+
+    journalEntries.push({
+      account: vatDebtAccount, // 2650
+      debit: 0,
+      credit: Math.abs(roundedVatToPayOrRefund),
+    });
+
+    journalEntries.push({
+      account: taxAccount, // 2012
+      debit: Math.abs(roundedVatToPayOrRefund),
+      credit: 0,
+    });
+
     metadata.push({
       key: "vatRegisteredAtAccount",
       value: "true",
     });
-  } else if (vatToPayOrRefund > 0) {
-    journalEntries.push(
-      {
-        account: vatDebtAccount,
-        debit: 0,
-        credit: roundedVatToPayOrRefund.toFixed(2),
-      },
-      {
-        account: 2012,
-        debit: roundedVatToPayOrRefund.toFixed(2),
-        credit: 0,
-      }
-    );
-    metadata.push({
-      key: "vatRegisteredAtAccount",
-      value: "true",
+  }
+
+  //  Momsfordran (du ska betala)
+  if (Math.abs(totalOutgoingVat) > Math.abs(totalIncomingVat)) {
+    journalEntries.push({
+      account: vatDebtAccount, // 2650
+      debit: 0,
+      credit: Math.abs(roundedVatToPayOrRefund),
     });
   }
 
@@ -189,14 +194,39 @@ export const action: ActionFunction = async ({ request, params }) => {
     metadata,
   });
 
-  console.log(newVerification);
-
   await newVerification.save();
+
+  if (roundingDifference !== 0) {
+    let totalDebet = 0;
+    let totalKredit = 0;
+
+    newVerification.journalEntries.forEach(entry => {
+      totalDebet += entry.debit || 0;
+      totalKredit += entry.credit || 0;
+    });
+
+    if (totalDebet <  totalKredit) {
+      newVerification.journalEntries.push({
+        account: roundingAccount,
+        debit: roundingDifference,
+        credit: 0
+      });
+    }
+
+    if (totalDebet >  totalKredit) {
+      newVerification.journalEntries.push({
+        account: roundingAccount,
+        debit: 0,
+        credit: roundingDifference
+      });
+    }
+
+    await newVerification.save();
+  }
+
 
   return redirect("/admin/verifications");
 };
-
-
 
 // Funktion för att summera belopp i en lista av journalEntries
 const sumAmounts = (verifications, account) => {
@@ -211,79 +241,75 @@ const sumAmounts = (verifications, account) => {
 };
 
 type ReportProps = {
-  label: string
-  totalLabel: string
-  account: number
-  verifications: any[]
-}
+  label: string;
+  totalLabel: string;
+  account: number;
+  verifications: any[];
+};
 
 const Report = ({
   label,
   totalLabel,
   verifications,
-  account
-}: ReportProps ): JSX.Element => {
+  account,
+}: ReportProps): JSX.Element => {
   return (
     <div className="mb-8">
-    <h4 className="font-semibold text-lg text-gray-700">
-      {label}
-    </h4>
-    {verifications.length > 0 ? (
-      <table className="w-full table-auto divide-y divide-gray-300">
-        <thead className="bg-gray-50">
-          <tr>
-            <th
-              scope="col"
-              className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider"
-            >
-              Verifikationsnummer
-            </th>
-            <th
-              scope="col"
-              className="px-4 py-3 text-right text-sm font-medium text-gray-500 uppercase tracking-wider"
-            >
-              Belopp
-            </th>
-          </tr>
-        </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
-          {verifications.map((v) => (
-            <tr key={v._id}>
-              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                <span
-                  className={classNames(
-                    `bg-green-600 text-white inline-flex px-2 text-xs font-semibold leading-5 rounded-full`
-                  )}
-                >
-                  {" "}
-                  A{v.verificationNumber}
-                </span>
-              </td>
-              <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-500">
-                {v.journalEntries
-                  .filter((entry) => entry.account === account)
-                  .map((entry) => (
-                    <span key={entry._id}>
-                      {entry.credit.toFixed(2)} SEK
-                    </span>
-                  ))}
+      <h4 className="font-semibold text-lg text-gray-700">{label}</h4>
+      {verifications.length > 0 ? (
+        <table className="w-full table-auto divide-y divide-gray-300">
+          <thead className="bg-gray-50">
+            <tr>
+              <th
+                scope="col"
+                className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider"
+              >
+                Verifikationsnummer
+              </th>
+              <th
+                scope="col"
+                className="px-4 py-3 text-right text-sm font-medium text-gray-500 uppercase tracking-wider"
+              >
+                Belopp
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {verifications.map((v) => (
+              <tr key={v._id}>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                  <span
+                    className={classNames(
+                      `bg-green-600 text-white inline-flex px-2 text-xs font-semibold leading-5 rounded-full`
+                    )}
+                  >
+                    {" "}
+                    A{v.verificationNumber}
+                  </span>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-500">
+                  {v.journalEntries
+                    .filter((entry) => entry.account === account)
+                    .map((entry) => (
+                      <span key={entry._id}>{entry.credit.toFixed(2)} SEK</span>
+                    ))}
+                </td>
+              </tr>
+            ))}
+            <tr className="font-bold bg-gray-100">
+              <td className="px-4 py-3">Total {totalLabel.toLowerCase()}</td>
+              <td className="px-4 py-3 text-right">
+                {sumAmounts(verifications, account)} SEK
               </td>
             </tr>
-          ))}
-          <tr className="font-bold bg-gray-100">
-            <td className="px-4 py-3">Total {totalLabel.toLowerCase()}</td>
-            <td className="px-4 py-3 text-right">
-              {sumAmounts(verifications, account)} SEK
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    ) : (
-      <p className="text-gray-500">Ingen {totalLabel.toLowerCase()}</p>
-    )}
-  </div>
-  )
-}
+          </tbody>
+        </table>
+      ) : (
+        <p className="text-gray-500">Ingen {totalLabel.toLowerCase()}</p>
+      )}
+    </div>
+  );
+};
 
 // VATReportModal-komponenten
 export default function VATReportModal() {
@@ -356,10 +382,24 @@ export default function VATReportModal() {
 
                   {/* Resten av din komponent med Momspliktig försäljning, Utgående moms och Ingående moms */}
                   {/* Momspliktig försäljning */}
-                  <Report totalLabel={`momspliktig försäljning`} account={3001}  label={` Momspliktig försäljning (ej ruta 06, 07, 08)`} verifications={vatSales} />
-                  <Report totalLabel={`Utgående moms`} account={2611}  label={`Utgående moms`} verifications={outgoingVAT} />
-                  <Report totalLabel={`Ingående moms`} account={2640}  label={`Ingående moms`} verifications={ingoingVAT} />
-                  
+                  <Report
+                    totalLabel={`momspliktig försäljning`}
+                    account={3001}
+                    label={` Momspliktig försäljning (ej ruta 06, 07, 08)`}
+                    verifications={vatSales}
+                  />
+                  <Report
+                    totalLabel={`Utgående moms`}
+                    account={2611}
+                    label={`Utgående moms`}
+                    verifications={outgoingVAT}
+                  />
+                  <Report
+                    totalLabel={`Ingående moms`}
+                    account={2640}
+                    label={`Ingående moms`}
+                    verifications={ingoingVAT}
+                  />
                 </div>
               </div>
             </div>
