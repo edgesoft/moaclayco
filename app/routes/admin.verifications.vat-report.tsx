@@ -291,7 +291,7 @@ const Report = ({
                   {v.journalEntries
                     .filter((entry) => entry.account === account)
                     .map((entry) => (
-                      <span key={entry._id}>{entry.credit.toFixed(2)} SEK</span>
+                      <span key={entry._id}>{entry.credit ?  entry.credit.toFixed(2): entry.debit.toFixed(2)} SEK</span>
                     ))}
                 </td>
               </tr>

@@ -156,8 +156,6 @@ export default function VATReportModal() {
   });
 
 
-  console.log(errors)
-
   // Funktion som körs när användaren klickar på "Skapa verifikation"
   const onSubmit = (data) => {
     console.log("Skapar verifikation med följande data:", data);
