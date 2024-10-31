@@ -10,6 +10,7 @@ import {
   redirect,
 } from "@remix-run/node";
 import {
+  Link,
   Outlet,
   useActionData,
   useFetcher,
@@ -61,19 +62,17 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>;
 
-
 export const loader: LoaderFunction = async ({ request }) => {
   const url = new URL(request.url);
   const year = Number(url.searchParams.get("year")) || new Date().getFullYear();
 
   // Kör båda asynkrona anropen parallellt med Promise.all()
-   const verifications  = await  Verifications.find({
-      verificationDate: {
-        $gte: new Date(`${year}-01-01`),
-        $lt: new Date(`${year + 1}-01-01`),
-      },
-    }).sort({ verificationDate: -1 })
-  
+  const verifications = await Verifications.find({
+    verificationDate: {
+      $gte: new Date(`${year}-01-01`),
+      $lt: new Date(`${year + 1}-01-01`),
+    },
+  }).sort({ verificationDate: -1 });
 
   return json({ verifications, year });
 };
@@ -160,7 +159,7 @@ const groupByMonth = (verifications) => {
     if (!grouped[monthKey]) {
       grouped[monthKey] = [];
     }
-    
+
     grouped[monthKey].push(verification);
   });
 
@@ -190,8 +189,6 @@ const formatDate = (dateString) => {
     "0"
   )}-${String(date.getDate()).padStart(2, "0")}`;
 };
-
-
 
 type SuggestionProps = {
   status: string;
@@ -468,7 +465,6 @@ export default function VerificationsPage() {
   };
 
   const shouldRegisterVat = (verification) => {
-
     if (!verification) {
       return false;
     }
@@ -480,13 +476,12 @@ export default function VerificationsPage() {
       return false;
     }
 
-
-    const regged =  verification.metadata.some(
+    const regged = verification.metadata.some(
       (meta) =>
         meta.key === "vatRegisteredAtAccount" && Boolean(meta.value) === true
     );
 
-    return !regged
+    return !regged;
   };
 
   const isPastMonth = (yearMonthKey) => {
@@ -703,12 +698,17 @@ export default function VerificationsPage() {
             />
           </div>
         </div>
+        <Link
+          to="/admin/verifications/financial-overview"
+          prefetch="intent"
+          className="bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
+        >
+          Balans och resultaträkning
+        </Link>
       </form>
 
       <div className="mb-20 mt-20 mx-auto">
         {Object.keys(groupedVerifications).map((monthKey) => {
-
-
           const monthHasVatReport = hasVatReport(verifications, monthKey);
           const registerVat = shouldRegisterVat(monthHasVatReport);
 
