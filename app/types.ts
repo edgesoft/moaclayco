@@ -102,3 +102,28 @@ export enum ReportType  {
   EXPENSE,
   LIABILITIES
 }
+
+export type VerificationProps = {
+  journalEntries: [
+    {
+      debit: number;
+      credit: number;
+      account: number;
+    }
+  ];
+  verificationNumber: number;
+  verificationDate: string;
+  description: string;
+  files: [
+    {
+      name: string;
+      path: string;
+    }
+  ];
+  metadata: [
+    {
+      key: string;
+      value: string;
+    }
+  ]
+};
