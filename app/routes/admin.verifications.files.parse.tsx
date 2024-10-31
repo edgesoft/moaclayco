@@ -239,9 +239,13 @@ const parseData = async(data: string) => {
   console.log("Extraherad data:", extractedData);
 
   try {
+    const jsonStartIndex = extractedData.indexOf('{');
     const cleanedData = extractedData
-    .replace(/```json/g, "") // Ta bort ```json i början
-    .replace(/```/g, ""); // Ta bort ``` i slutet
+      .substring(jsonStartIndex) // Ta bort allt innan första { för att bara behålla JSON
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
+
 
   // Försök att parsa till JSON
   const parsedData = JSON.parse(cleanedData || "{}");
