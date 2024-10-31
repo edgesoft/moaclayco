@@ -67,14 +67,13 @@ export const loader: LoaderFunction = async ({ request }) => {
   const year = Number(url.searchParams.get("year")) || new Date().getFullYear();
 
   // Kör båda asynkrona anropen parallellt med Promise.all()
-  const [verifications, payouts] = await Promise.all([
-    Verifications.find({
+   const verifications  = await  Verifications.find({
       verificationDate: {
         $gte: new Date(`${year}-01-01`),
         $lt: new Date(`${year + 1}-01-01`),
       },
-    }).sort({ verificationDate: -1 }),
-  ]);
+    }).sort({ verificationDate: -1 })
+  
 
   return json({ verifications, year });
 };
@@ -161,7 +160,23 @@ const groupByMonth = (verifications) => {
     if (!grouped[monthKey]) {
       grouped[monthKey] = [];
     }
+    
     grouped[monthKey].push(verification);
+  });
+
+  Object.keys(grouped).forEach((monthKey) => {
+    grouped[monthKey].sort((a, b) => {
+      const dateA = new Date(a.verificationDate).setHours(0, 0, 0, 0);
+      const dateB = new Date(b.verificationDate).setHours(0, 0, 0, 0);
+
+      // Sortera på datum, senast först
+      if (dateA !== dateB) {
+        return dateB - dateA;
+      }
+
+      // Om datum är samma, sortera på verificationNumber, högsta först
+      return b.verificationNumber - a.verificationNumber;
+    });
   });
 
   return grouped;
@@ -692,6 +707,8 @@ export default function VerificationsPage() {
 
       <div className="mb-20 mt-20 mx-auto">
         {Object.keys(groupedVerifications).map((monthKey) => {
+
+
           const monthHasVatReport = hasVatReport(verifications, monthKey);
           const registerVat = shouldRegisterVat(monthHasVatReport);
 

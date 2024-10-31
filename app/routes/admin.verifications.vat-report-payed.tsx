@@ -93,7 +93,7 @@ export const action: ActionFunction = async ({ request, params }) => {
         credit: 0,
       },
       {
-        account: 2012,
+        account: 2050,
         debit: 0,
         credit: account.credit,
       },
