@@ -40,13 +40,7 @@ export const action = async ({ request, params }) => {
 
   try {
     const fileBuffer = Buffer.from(await file.arrayBuffer());
-    const fileName = `${awsVerificationsPath}/${Date.now()}-${file.name}`;
-    const uploadParams = {
-      Bucket: process.env.AWS_S3_BUCKET_NAME,
-      Key: fileName,
-      Body: fileBuffer,
-      ContentType: file.type,
-    };
+    const fileName = `${awsVerificationsPath}/${verificationNumber}/${Date.now()}-${file.name}`;
 
     const upload = new Upload({
       client: s3Client,
@@ -60,7 +54,6 @@ export const action = async ({ request, params }) => {
 
     const uploadResult = await upload.done();
 
-    console.log(uploadResult)
 
     await Verifications.updateOne(
       { verificationNumber: parseInt(verificationNumber) },
