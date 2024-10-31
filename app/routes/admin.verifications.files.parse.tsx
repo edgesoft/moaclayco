@@ -11,36 +11,8 @@ import Tesseract from "tesseract.js";
 import openai from "~/services/openapi.server";
 import parser from 'pdf-parse'
 import { v4 as uuidv4 } from 'uuid'; 
+import sharp from 'sharp';
 
-const content = `Du är en assistent som hjälper till att extrahera kvitto- och fakturainformation för bokföring. Din uppgift är att analysera texten och extrahera följande information i ett JSON-format:
-
-1. **Datum (date)**: Datumet då köpet eller försäljningen gjordes.
-2. **Moms (tax)**: Det belopp som motsvarar moms (VAT) på köpet eller försäljningen.
-3. **Totalpris (total)**: Det totala beloppet inklusive moms.
-4. **Beskrivning (description)**: En övergripande beskrivning av vad köpet eller försäljningen gäller, inklusive **fakturans eller kvittots datum**. Om fakturanummer och kundnummer finns med ska detta också tas med i beskrivningen.
-5. **Konto-information (account)**: Konto för bokföring. Detta inkluderar debit och credit för varje konto enligt följande regler:
-
-- Om texten **innehåller** **0006116446**, så är det en faktura som **du har skickat** till kund och fått betalt via Swish eller som kundfordran. Då ska kontona **2611 (Utgående moms på varor och frakt)** och **3001 (Försäljning av varor)** vara *credit*, och **1930 (Bank)** vara *debit* (om Swish används) eller **1510 (Kundfordringar)** om betalning sker senare.
-- Om texten **inte innehåller** **0006116446**, så är det ett inköp. Då ska kontona **2640 (moms)** och **4000 (material)** vara *debit*, och **1930 (Bank)** vara *credit*. Detta gäller **alltid om texten inte innehåller 0006116446**.
-
-Fördelning av summor:
-- Konto **1930/1510 (Bank)** ska alltid motsvara totalsumman.
-- Konto **2640/2611 (moms)** ska motsvara momsen.
-- Konto **4000/3001 (material)** ska vara det återstående beloppet som är totalpris minus moms.
-
-**Det är viktigt att endast fakturor som innehåller "0006116446" klassas som försäljningar. Om detta nummer saknas, är det ett inköp.**
-
-Returnera resultatet som ett JSON-objekt i följande format:
-
-{
-  "date": "YYYY-MM-DD",
-  "description": "Beskrivning av köpet eller försäljningen",
-  "account": {
-    "4000": { "debit": 100, "credit": 0 },
-    "2640": { "debit": 25, "credit": 0 },
-    "1930": { "debit": 0, "credit": 125 }
-  }
-}`
 
 enum SelectorType  {
   INVOICE,
@@ -88,7 +60,7 @@ const selectorData = [
   {
     maxTokens: 500,
     type: SelectorType.RECEIPT,
-    keywords: ["Kvittonr", "Kvitto", "BUTIKSNR", "Kassakvitto", "Kassa", "Faktura", "Fakturanummer", "Fakturadatum"],
+    keywords: ["Kvittonr", "Kvitto", "BUTIKSNR", "Kassakvitto", "Kassa", "Faktura", "Fakturanummer", "Fakturadatum", "Bauhaus"],
     content: `Du är en assistent som hjälper till att extrahera inköp för bokföring. Din uppgift är att analysera texten och extrahera följande information i ett JSON-format:
     
     1. **Datum (date)**: Datumet då köpet gjordes.
@@ -296,6 +268,7 @@ async function runOcr(fileBuffer: Tesseract.ImageLike) {
       }
     );
 
+
     return data.text; // Returnera extraherad text från OCR
   } catch (error) {
     console.error("Error during OCR processing:", error);
@@ -303,7 +276,11 @@ async function runOcr(fileBuffer: Tesseract.ImageLike) {
   }
 }
 
-
+async function preprocessImage(fileBuffer) {
+  return await sharp(fileBuffer)
+    .resize({ width: 1024 }) // Anpassa till en rimlig bredd
+    .toBuffer();
+}
 
 export const action: ActionFunction = async ({ request, params }) => {
   const formData = await request.formData();
@@ -349,8 +326,8 @@ export const action: ActionFunction = async ({ request, params }) => {
       return parseData(pdfData.text);
     });
   } else if (file.type.startsWith("image/")) {
-
-    parsePromise = runOcr(fileBuffer).then((ocrResult) => {
+    const processedBuffer = await preprocessImage(fileBuffer);
+    parsePromise = runOcr(processedBuffer).then((ocrResult) => {
       console.log("OCR Result:", ocrResult);
       return parseData(ocrResult);
     });
