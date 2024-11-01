@@ -22,6 +22,7 @@ export function ListVerification({
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(isExpanded);
 
+
   const shouldRegisterVat = (verification: VerificationProps | undefined) => {
     if (!verification) {
       return false;
@@ -52,16 +53,7 @@ export function ListVerification({
   };
 
   const registerVat = shouldRegisterVat(vatReportVerification);
-  const monthDebetSum = groupedVerifications[monthKey].reduce(
-    (sum, ver) =>
-      sum + ver.journalEntries.reduce((acc, entry) => acc + entry.debit, 0),
-    0
-  );
-  const monthCreditSum = groupedVerifications[monthKey].reduce(
-    (sum, ver) =>
-      sum + ver.journalEntries.reduce((acc, entry) => acc + entry.credit, 0),
-    0
-  );
+  
 
   const handleCreateVATReport = (monthKey: string) => {
     navigate(`/admin/verifications/vat-report?month=${monthKey}`);
@@ -145,8 +137,6 @@ export function ListVerification({
                 <ListItemVerification
                   key={index}
                   verification={verification}
-                  monthCreditSum={monthCreditSum}
-                  monthDebetSum={monthDebetSum}
                 />
               ))}
             </tbody>

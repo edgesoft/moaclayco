@@ -30,15 +30,11 @@ type VerificationProps = {
 };
 
 type ListVerificationProps = {
-  verification: VerificationProps;
-  monthCreditSum: Number;
-  monthDebetSum: Number
+  verification: VerificationProps
 };
 
 export function ListItemVerification({
   verification,
-  monthCreditSum,
-  monthDebetSum
 }: ListVerificationProps) {
   const navigate = useNavigate();
   
@@ -131,10 +127,10 @@ export function ListItemVerification({
       <tr className="bg-gray-100">
         <td colSpan={3} className="px-6 py-2 text-right font-bold"></td>
         <td className="px-6 py-2 text-right font-bold">
-          {monthDebetSum.toFixed(2)}
+          {debitSum.toFixed(2)}
         </td>
         <td className="px-6 py-2 text-right font-bold">
-          {monthCreditSum.toFixed(2)}
+          {creditSum.toFixed(2)}
         </td>
       </tr>
     </React.Fragment>
