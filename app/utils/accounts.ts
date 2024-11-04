@@ -3,6 +3,7 @@ import { ReportType } from "~/types";
 export const accounts = [
     { value: 1510, label: "1510 - Kundfordringar", reportType: ReportType.BALANCE },
     { value: 1580, label: "1580 - Fordran på Stripe", reportType: ReportType.BALANCE },
+    { value: 1910, label: "1910 - Kassa", reportType: ReportType.BALANCE },
     { value: 1930, label: "1930 - Bank", reportType: ReportType.BALANCE },
     { value: 2012, label: "2012 - Avräkning för skatter och avgifter", reportType:ReportType.LIABILITIES },
     { value: 2013, label: "2013 - Eget uttag", reportType: ReportType.LIABILITIES },
