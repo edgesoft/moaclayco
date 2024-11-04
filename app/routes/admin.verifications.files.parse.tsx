@@ -16,7 +16,7 @@ const selectorData = [
   {
     maxTokens: 500,
     type: SelectorType.INVOICE,
-    keywords: [/0006116446/, /200006\d{2}-6446/],
+    keywords: [/0006116446/, /2000\s*06\s*\d{2}\s*-\s*6446/],
     content: `Du är en assistent som hjälper till att extrahera fakturainformation för bokföring. Din uppgift är att analysera texten och extrahera följande information i ett JSON-format:
     
     1. **Datum (date)**: Datumet då försäljningen gjordes.
