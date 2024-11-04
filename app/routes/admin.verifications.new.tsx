@@ -597,6 +597,7 @@ export default function Verification() {
                         {...register(`journalEntries.${index}.credit` as const)}
                         className="input h-10 mt-1 block px-3 py-2 border rounded-md shadow-sm sm:text-sm"
                       />
+                      <div>
                       <button
                         type="button"
                         onClick={() => remove(index)}
@@ -604,6 +605,7 @@ export default function Verification() {
                       >
                         Ta bort
                       </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -645,13 +647,15 @@ export default function Verification() {
         </div>
       </div>
       <div className="bg-gray-50 px-6 py-3 flex justify-end">
+        <div>
         <button
           type="button"
-          className="w-full bg-blue-600 text-white rounded-md px-4 py-2 hover:bg-blue-700 sm:w-auto"
+          className="inline-flex justify-center mb-2 mt-2 px-4 py-2 w-full text-white text-base font-medium bg-blue-600 hover:bg-blue-700 border border-transparent rounded-md focus:outline-none shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:text-sm"
           onClick={() => navigate(-1)}
         >
           Stäng
         </button>
+        </div>
       </div>
     </div>
   </div>
