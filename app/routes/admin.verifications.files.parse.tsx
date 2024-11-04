@@ -1,42 +1,31 @@
-import { useState, useRef, useEffect } from "react";
-import { useFetcher, useParams, useNavigate } from "@remix-run/react";
-import { useLoaderData } from "@remix-run/react";
 import { ActionFunction, json } from "@remix-run/node";
-import { Verifications } from "~/schemas/verifications";
-import { Readable } from "stream";
 import { s3Client } from "~/services/s3.server";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
-import Tesseract from "tesseract.js";
 import openai from "~/services/openapi.server";
-import parser from 'pdf-parse'
-import { v4 as uuidv4 } from 'uuid'; 
-import sharp from 'sharp';
+import parser from "pdf-parse";
+import { v4 as uuidv4 } from "uuid";
+import visionClient from "~/services/google-vision.server";
 
-
-enum SelectorType  {
+enum SelectorType {
   INVOICE,
   RECEIPT,
-  TAX_ACCOUNT
+  TAX_ACCOUNT,
 }
 
-/**
- * Ta med Samules sedan också
- */
 const selectorData = [
   {
     maxTokens: 500,
     type: SelectorType.INVOICE,
-    keywords: ["0006116446"],
+    keywords: [/0006116446/, /200006\d{2}-6446/],
     content: `Du är en assistent som hjälper till att extrahera fakturainformation för bokföring. Din uppgift är att analysera texten och extrahera följande information i ett JSON-format:
     
     1. **Datum (date)**: Datumet då försäljningen gjordes.
     2. **Moms (tax)**: Det belopp som motsvarar moms (VAT) på försäljningen.
     3. **Totalpris (total)**: Det totala beloppet inklusive moms.
-    4. **Beskrivning (description)**: En övergripande beskrivning av vad försäljningen gäller, inklusive **fakturans datum**. Om fakturanummer och kundnummer finns med ska detta också tas med i beskrivningen. Kundens referens ska vara med i beskrivningen.
+    4. **Beskrivning (description)**: En övergripande beskrivning av vad försäljningen gäller, inklusive **fakturans datum**. Om fakturanummer/kvittonummer och kundnummer finns med ska detta också tas med i beskrivningen. Kundens referens ska vara med i beskrivningen. Om kundnumret är 20000611-6446 eller 000611-6446 så ignorera det. Det är en faktura från det orgnumret. Om texten innehåller nummerserie eller serie är det ett kvittonummer.
     5. **Konto-information (accounts)**: Konton för bokföring. Detta inkluderar debit och credit för varje konto enligt följande regler:
 
-    - Om texten **innehåller** **0006116446**, så är det en faktura som **du har skickat** till kund och fått betalt via Swish eller som kundfordran. Då ska kontona **2611 (Utgående moms på varor och frakt)** och **3001 (Försäljning av varor)** vara *credit*, och **1930 (Bank)** vara *debit* (om Swish används) eller **1510 (Kundfordringar)** om betalning sker senare.
+    - Om texten **innehåller** **0006116446**, så är det en faktura eller kontantkvitto som **du har skickat** till kund och fått betalt via Swish eller som kundfordran. Då ska kontona **2611 (Utgående moms på varor och frakt)** och **3001 (Försäljning av varor)** vara *credit*, och **1930 (Bank)** vara *debit* (om Swish används) eller **1510 (Kundfordringar)** om betalning sker senare.
     - Tänk på att det skulle kunna vara en kredit faktura. Om totalbeloppet är negativt ska debit och kredit bytas ut.
 
     Fördelning av summor:
@@ -55,15 +44,25 @@ const selectorData = [
           "1930": { "debit": 125, "credit": 0 }
         }
       }
-    `
+    `,
   },
   {
     maxTokens: 500,
     type: SelectorType.RECEIPT,
-    keywords: ["Kvittonr", "Kvitto", "BUTIKSNR", "Kassakvitto", "Kassa", "Faktura", "Fakturanummer", "Fakturadatum", "Bauhaus"],
+    keywords: [
+      "Kvittonr",
+      "Kvitto",
+      "BUTIKSNR",
+      "Kassakvitto",
+      "Kassa",
+      "Faktura",
+      "Fakturanummer",
+      "Fakturadatum",
+      "Bauhaus",
+    ],
     content: `Du är en assistent som hjälper till att extrahera inköp för bokföring. Din uppgift är att analysera texten och extrahera följande information i ett JSON-format:
     
-    1. **Datum (date)**: Datumet då köpet gjordes.
+    1. **Datum (date)**: Datumet då köpet gjordes. Svensk datum är YYYY-MM-DD. Om formatet är DD MM YY så omvandla till YYYY-MM-DD
     2. **Moms (tax)**: Det belopp som motsvarar moms (VAT) på köpet.
     3. **Totalpris (total)**: Det totala beloppet inklusive moms.
     4. **Beskrivning (description)**: En övergripande beskrivning av vad köpet gäller, inklusive **fakturans datum** eller ***kvittots datum***. Om fakturanummer/Kvittonummer och/eller kundnummer finns med ska detta också tas med i beskrivningen. Finns företagets namn ska det vara med.
@@ -87,7 +86,7 @@ const selectorData = [
           "1930": { "debit": 0, "credit": 125 }
         }
       }
-    `
+    `,
   },
   {
     maxTokens: 500,
@@ -153,13 +152,13 @@ const selectorData = [
     }
     
     Analysera detta och returnera ett JSON-objekt i ovanstående format med korrekt kontoinformation för debit och kredit.
-    `
+    `,
   },
   {
     maxTokens: 500,
     type: SelectorType.RECEIPT,
     keywords: ["5709 00 121 15"],
-    content:  `Du är en assistent som hjälper till att extrahera bokföringsinformation. Din uppgift är att analysera texten och extrahera följande i JSON-format:
+    content: `Du är en assistent som hjälper till att extrahera bokföringsinformation. Din uppgift är att analysera texten och extrahera följande i JSON-format:
         
     1. **Datum (date)**: Datumet då pengarna drogs eller sattes in på kontot.
     2. **Totalpris (total)**: Det totala beloppet.
@@ -187,36 +186,38 @@ const selectorData = [
     \`\`\`
     
     Analysera detta och returnera ett JSON-objekt i ovanstående format med korrekt kontoinformation för debit och kredit.
-    `
-  }
-]
-
+    `,
+  },
+];
 
 /**
- * Om parsedData innehåller vissa ord ska vi välja outcomeSelector 
+ * Om parsedData innehåller vissa ord ska vi välja outcomeSelector
  * beroende på det samt sätta vilka konton som ska medverka
  * @param parsedData
  */
 const outcomeSelector = (parsedData: String) => {
-
   const normalizedParsedData = parsedData.toLowerCase();
 
-  const selector = selectorData.find((selector) => 
-    selector.keywords.some((keyword) => normalizedParsedData.includes(keyword.toLowerCase()))
+  const selector = selectorData.find((selector) =>
+    selector.keywords.some((keyword) => {
+      if (typeof keyword === "string") {
+        return normalizedParsedData.includes(keyword.toLowerCase());
+      } else if (keyword instanceof RegExp) {
+        return keyword.test(normalizedParsedData);
+      }
+      return false;
+    })
   );
 
-  console.log("SELECTOR", selector && selector.keywords)
+  console.log("SELECTOR", selector && selector.keywords);
 
   return selector || null; // Returnera null om inget matchar
+};
 
-}
-
-
-const parseData = async(data: string) => {
-
-  const selector = outcomeSelector(data)
+const parseData = async (data: string) => {
+  const selector = outcomeSelector(data);
   if (!selector) {
-    return undefined
+    return undefined;
   }
 
   const response = await openai.chat.completions.create({
@@ -239,52 +240,24 @@ const parseData = async(data: string) => {
   console.log("Extraherad data:", extractedData);
 
   try {
-    const jsonStartIndex = extractedData.indexOf('{');
+    const jsonStartIndex = extractedData.indexOf("{");
     const cleanedData = extractedData
       .substring(jsonStartIndex) // Ta bort allt innan första { för att bara behålla JSON
       .replace(/```json/g, "")
       .replace(/```/g, "")
       .trim();
 
+    // Försök att parsa till JSON
+    const parsedData = JSON.parse(cleanedData || "{}");
 
-  // Försök att parsa till JSON
-  const parsedData = JSON.parse(cleanedData || "{}");
+    console.log("Parsed JSON:", parsedData);
 
-  console.log("Parsed JSON:", parsedData);
-
-
-    return parsedData
+    return parsedData;
   } catch (e) {
     console.error("Failed to parse JSON:", e);
-    return undefined
+    return undefined;
   }
-}
-
-async function runOcr(fileBuffer: Tesseract.ImageLike) {
-  try {
-    const { data } = await Tesseract.recognize(
-      fileBuffer,
-      "swe", // Välj språk, t.ex. 'eng' för engelska eller 'swe' för svenska
-      {
-        tessedit_char_whitelist:
-          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
-        logger: (m) => console.log(m), // Logger för att se processen
-      }
-    );
-
-
-    return data.text; // Returnera extraherad text från OCR
-  } catch (error) {
-    console.error("Error during OCR processing:", error);
-    throw new Error("OCR processing failed.");
-  }
-}
-
-async function preprocessImage(fileBuffer) {
-  return await sharp(fileBuffer)
-    .resize({ width: 1024 }) // Anpassa till en rimlig bredd
-    .toBuffer();
-}
+};
 
 export const action: ActionFunction = async ({ request, params }) => {
   const formData = await request.formData();
@@ -295,7 +268,7 @@ export const action: ActionFunction = async ({ request, params }) => {
 
   // S3-upload och parsing körs parallellt med Promise.all
   const awsVerificationsPath = process.env.AWS_VERIFICATIONS_PATH;
-  const fileName = `${Date.now()}-${file.name}`
+  const fileName = `${Date.now()}-${file.name}`;
   const filePath = `${awsVerificationsPath}/${fileName}`;
   const uploadParams = {
     Bucket: process.env.AWS_S3_BUCKET_NAME,
@@ -313,39 +286,49 @@ export const action: ActionFunction = async ({ request, params }) => {
 
   let parsePromise;
 
-
   function preprocessText(text: string) {
-    return text.replace(/(\d)(\d{2})(?=\D*$)/gm, '$1 $2');
-}
+    return text.replace(/(\d)(\d{2})(?=\D*$)/gm, "$1 $2");
+  }
 
-  // Hantering för PDF- och bildfiler
   if (file.type === "application/pdf") {
     parsePromise = parser(fileBuffer).then((pdfData) => {
-
-      console.log("pre", preprocessText(pdfData.text))
+      console.log("pre", preprocessText(pdfData.text));
       console.log("Extraherad text från PDF:", pdfData.text);
-
-
-
       return parseData(pdfData.text);
     });
   } else if (file.type.startsWith("image/")) {
-    const processedBuffer = await preprocessImage(fileBuffer);
-    parsePromise = runOcr(processedBuffer).then((ocrResult) => {
-      console.log("OCR Result:", ocrResult);
-      return parseData(ocrResult);
+    const [result] = await visionClient.textDetection({
+      image: { content: fileBuffer },
     });
+    const detections = result.textAnnotations;
+
+    if (detections && detections.length > 0) {
+      console.log("Extracted Text:");
+      console.log(detections[0].description); // Den första indexet innehåller all text
+      parsePromise = parseData(detections[0].description || "");
+    } else {
+      console.log("Ingen text hittades i bilden.");
+      return json(
+        { uuid: uuidv4(), verificationData: null, status: "failed" },
+        { status: 400 }
+      );
+    }
   } else {
-    return json({ uuid: uuidv4(), verificationData: null, status: "failed" }, { status: 400 });
+    return json(
+      { uuid: uuidv4(), verificationData: null, status: "failed" },
+      { status: 400 }
+    );
   }
 
-  // Kör både uppladdningen och parsningen parallellt
-  const [uploadResult, parsedData] = await Promise.all([uploadPromise, parsePromise]);
+  let [uploadResult, parsedData] = await Promise.all([
+    uploadPromise,
+    parsePromise,
+  ]);
 
-  console.log("HELLO", parseData)
-
-
-  // Returnera både S3-url och parsed data
-  return json({ uuid: uuidv4(),  file: {filePath: uploadResult.Location, label: fileName}, verificationData: parsedData, status: "success"  });
+  return json({
+    uuid: uuidv4(),
+    file: { filePath: uploadResult.Location, label: fileName },
+    verificationData: parsedData,
+    status: "success",
+  });
 };
-

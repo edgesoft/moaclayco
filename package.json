@@ -13,6 +13,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.441.0",
     "@aws-sdk/lib-storage": "^3.441.0",
+    "@google-cloud/vision": "^4.3.2",
     "@hookform/resolvers": "^3.3.4",
     "@remix-run/css-bundle": "^2.3.0",
     "@remix-run/node": "^2.3.0",
