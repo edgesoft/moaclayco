@@ -16,10 +16,10 @@ const selectorData = [
   {
     maxTokens: 500,
     type: SelectorType.INVOICE,
-    keywords: [/0006116446/, /2000\s*06\s*\d{2}\s*-\s*6446/],
+    keywords: [/0006116446/, /2000\s*[-]?\s*06\s*[-]?\s*\d{2}\s*[-]?\s*64\s*[-]?\s*\d{2}/],
     content: `Du är en assistent som hjälper till att extrahera fakturainformation för bokföring. Din uppgift är att analysera texten och extrahera följande information i ett JSON-format:
     
-    1. **Datum (date)**: Datumet då försäljningen gjordes.
+    1. **Datum (date)**: Datumet då försäljningen gjordes. OBS! Om datumet enbart innehåller dag och månad, exempelvis "7/9" eller "07/09", ska du använda innevarande år (t.ex. om året är ${new Date().getFullYear()}, tolka "7/9" som "${new Date().getFullYear()}-09-07"). Om formatet är "DD/MM" eller "D/M" ska det tolkas som dag och månad, och året ska alltid vara innevarande år. Returnera alltid datumet i formatet "YYYY-MM-DD".
     2. **Moms (tax)**: Det belopp som motsvarar moms (VAT) på försäljningen.
     3. **Totalpris (total)**: Det totala beloppet inklusive moms.
     4. **Beskrivning (description)**: En övergripande beskrivning av vad försäljningen gäller, inklusive **fakturans datum**. Om fakturanummer/kvittonummer och kundnummer finns med ska detta också tas med i beskrivningen. Kundens referens ska vara med i beskrivningen. Om kundnumret är 20000611-6446 eller 000611-6446 så ignorera det. Det är en faktura från det orgnumret. Om texten innehåller nummerserie eller serie är det ett kvittonummer.
