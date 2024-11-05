@@ -16,8 +16,8 @@ const selectorData = [
   {
     maxTokens: 500,
     type: SelectorType.INVOICE,
-    keywords: [/0006116446/, /2000\s*[-]?\s*06\s*[-]?\s*\d{2}\s*[-]?\s*6[4|9]\d{1}/],
-    content: `Du är en assistent som hjälper till att extrahera fakturainformation för bokföring. Din uppgift är att analysera texten och extrahera följande information i ett JSON-format:
+    keywords: [/0611s*[-]?6446/,/0006116446/, /2000\s*[-]?\s*06\s*[-]?\s*\d{2}\s*[-]?\s*6[4|9]\d{1}/],
+    content: `Du är en assistent som hjälper till att extrahera fakturainformation för bokföring. Din uppgift är att analysera texten och extrahera följande information i ett JSON-format.:
     
     1. **Datum (date)**: Datumet då försäljningen gjordes. OBS! Om datumet enbart innehåller dag och månad, exempelvis "7/9" eller "07/09", ska du använda innevarande år (t.ex. om året är ${new Date().getFullYear()}, tolka "7/9" som "${new Date().getFullYear()}-09-07"). Om formatet är "DD/MM" eller "D/M" ska det tolkas som dag och månad, och året ska alltid vara innevarande år. Returnera alltid datumet i formatet "YYYY-MM-DD".
     2. **Moms (tax)**: Det belopp som motsvarar moms (VAT) på försäljningen.
@@ -33,7 +33,7 @@ const selectorData = [
     - Konto **2611 (moms)** ska motsvara momsen.
     - Konto **3001 (Försäljning av varor)** ska vara det återstående beloppet som är totalpris minus moms.
 
-      Returnera resultatet som ett JSON-objekt i följande format:
+      Returnera resultatet som ett JSON-objekt i följande format, utan kommentarer även om placeholders används. Jag vill bara ha tillbaka json som svar:
 
       { 
         "date": "YYYY-MM-DD",
@@ -211,6 +211,8 @@ const outcomeSelector = (parsedData: String) => {
 
   console.log("SELECTOR", selector && selector.keywords);
 
+
+
   return selector || null; // Returnera null om inget matchar
 };
 
@@ -299,6 +301,9 @@ export const action: ActionFunction = async ({ request, params }) => {
   } else if (file.type.startsWith("image/")) {
     const [result] = await visionClient.textDetection({
       image: { content: fileBuffer },
+      imageContext: {
+        languageHints: ['sv', 'en'], // Begränsa till svenska (sv) och engelska (en)
+      }, 
     });
     const detections = result.textAnnotations;
 
