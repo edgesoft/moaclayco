@@ -234,7 +234,12 @@ const sumAmounts = (verifications, account) => {
     .reduce((total, v) => {
       const amount = v.journalEntries
         .filter((entry) => entry.account === account)
-        .reduce((acc, entry) => acc + (entry.debit || entry.credit), 0);
+        .reduce((acc, entry) => {
+          acc += entry.debit
+          acc -= entry.credit
+
+          return acc
+        },0)
       return total + amount;
     }, 0)
     .toFixed(2);
