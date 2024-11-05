@@ -100,7 +100,7 @@ export default function VerificationsPage() {
       <Link
         to="/admin/verifications/financial-overview"
         prefetch="intent"
-        className="ml-4 bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
+        className="ml-2 bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
       >
         Balans och resultaträkning
       </Link>
