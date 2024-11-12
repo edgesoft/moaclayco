@@ -71,7 +71,7 @@ export function ListVerification({
           {formatMonthName(monthKey)}
         </h2>
 
-        <Outlet />
+  
         {!vatReportVerification && isPastMonth(monthKey) && (
           <button
             onClick={() => handleCreateVATReport(monthKey)}
