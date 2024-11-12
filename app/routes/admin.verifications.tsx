@@ -128,6 +128,14 @@ export default function VerificationsPage() {
         </Link>
       </div>
       <div className="mb-20 mt-20 mx-auto">
+      {Object.keys(groupedVerifications).length === 0 ?
+      
+        <div className="-mt-6 text-sm border p-2 pt-4 pb-4 text-white border-sky-950 bg-sky-700 rounded-lg">
+          Inga verifikationer för bokföringsåret {verificationDomain.verificationYear}
+          </div>
+      : null }
+
+
         {Object.keys(groupedVerifications).map((monthKey, index) => {
           const monthHasVatReport = hasVatReport(verifications, monthKey);
           return (
