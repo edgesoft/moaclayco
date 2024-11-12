@@ -8,14 +8,24 @@ import {
 } from "@remix-run/react";
 import React, { useEffect, useState } from "react";
 import { auth } from "~/services/auth.server";
+import { getNextUrl } from "~/utils/getNextUrl";
+import { domains } from "~/utils/domain";
 
 export let loader: LoaderFunction = async ({ request, params }) => {
 
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
+  const { hostname } = getNextUrl(request);
+
+  let verificationDomain = domains.find((d) => hostname.includes(d.domain))
+  if (!verificationDomain) {
+    verificationDomain = domains.find((d) => d.default)
+  }
+
 
   return OrderEntity.find(
     {
       status: { $in: ["SUCCESS", "FAILED", "SHIPPED", "CANCELLED", "MANUAL_PROCESSING"] },
+      domain: verificationDomain?.domain
     },
     { status: 1, createdAt: 1, customer: 1, _id: 1, totalSum: 1 }
   )

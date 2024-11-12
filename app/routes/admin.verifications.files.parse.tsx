@@ -5,6 +5,7 @@ import openai from "~/services/openapi.server";
 import parser from "pdf-parse";
 import { v4 as uuidv4 } from "uuid";
 import visionClient from "~/services/google-vision.server";
+import { getVerificationDomain } from "~/services/cookie.server";
 
 enum SelectorType {
   INVOICE,
@@ -14,6 +15,7 @@ enum SelectorType {
 
 const selectorData = [
   {
+    domains: ["moaclayco"],
     maxTokens: 500,
     type: SelectorType.INVOICE,
     keywords: [/0611s*[-]?6446/,/0006116446/, /2000\s*[-]?\s*06\s*[-]?\s*\d{2}\s*[-]?\s*6[4|9]\d{1}/, /2000\s*06\s*[-]?\s*1[-]?\s*6446/, ],
@@ -47,6 +49,41 @@ const selectorData = [
     `,
   },
   {
+    domains: ["sgwoods"], // 0006059612
+    maxTokens: 500,
+    type: SelectorType.INVOICE,
+    keywords: [/0605s*[-]?9612/,/0006059612/, /2000\s*[-]?\s*06\s*[-]?\s*\d{2}\s*[-]?\s*9[6|1]\d{1}/, /2000\s*06\s*[-]?\s*1[-]?\s*9612/, ],
+    content: `Du är en assistent som hjälper till att extrahera fakturainformation för bokföring. Din uppgift är att analysera texten och extrahera följande information i ett JSON-format.:
+    
+    1. **Datum (date)**: Datumet då försäljningen gjordes. OBS! Om datumet enbart innehåller dag och månad, exempelvis "7/9" eller "07/09", ska du använda innevarande år (t.ex. om året är ${new Date().getFullYear()}, tolka "7/9" som "${new Date().getFullYear()}-09-07"). Om formatet är "DD/MM" eller "D/M" ska det tolkas som dag och månad, och året ska alltid vara innevarande år. Returnera alltid datumet i formatet "YYYY-MM-DD".
+    2. **Moms (tax)**: Det belopp som motsvarar moms (VAT) på försäljningen.
+    3. **Totalpris (total)**: Det totala beloppet inklusive moms.
+    4. **Beskrivning (description)**: En övergripande beskrivning av vad försäljningen gäller, inklusive **fakturans datum**. Om fakturanummer/kvittonummer och kundnummer finns med ska detta också tas med i beskrivningen. Kundens referens ska vara med i beskrivningen. Om kundnumret är 20000611-6446 eller 000611-6446 så ignorera det. Det är en faktura från det orgnumret. Om texten innehåller nummerserie eller serie är det ett kvittonummer.
+    5. **Konto-information (accounts)**: Konton för bokföring. Detta inkluderar debit och credit för varje konto enligt följande regler:
+
+    - Om texten **innehåller** **0006059612**, så är det en faktura eller kontantkvitto som **du har skickat** till kund och fått betalt via Swish eller som kundfordran. Då ska kontona **2611 (Utgående moms på varor och frakt)** och **3001 (Försäljning av varor)** vara *credit*, och **1930 (Bank)** vara *debit* (om Swish används) eller **1510 (Kundfordringar)** om betalning sker senare.
+    - Tänk på att det skulle kunna vara en kredit faktura. Om totalbeloppet är negativt ska debit och kredit bytas ut.
+
+    Fördelning av summor:
+    - Konto **1930/1510 (Bank)** ska alltid motsvara totalsumman inklusive moms.
+    - Konto **2611 (moms)** ska motsvara momsen.
+    - Konto **3001 (Försäljning av varor)** ska vara det återstående beloppet som är totalpris minus moms.
+
+      Returnera resultatet som ett JSON-objekt i följande format, utan kommentarer även om placeholders används. Jag vill bara ha tillbaka json som svar:
+
+      { 
+        "date": "YYYY-MM-DD",
+        "description": "Beskrivning av försäljningen (Datum: YYYY-MM-DD, Fakturnr: 100, Kundnr: 10)",
+        "accounts": {
+          "3001": { "debit": 0, "credit": 100 },
+          "2611": { "debit": 0, "credit": 25 },
+          "1930": { "debit": 125, "credit": 0 }
+        }
+      }
+    `,
+  },
+  {
+    domains: ["moaclayco", "sgwoods"],
     maxTokens: 500,
     type: SelectorType.RECEIPT,
     keywords: [
@@ -90,6 +127,7 @@ const selectorData = [
   },
   {
     maxTokens: 500,
+    domains: ["moaclayco"],
     type: SelectorType.RECEIPT,
     keywords: ["5722 32 953 76", "5130 00 238 99"], // Moa clayco
     content: `
@@ -155,9 +193,10 @@ const selectorData = [
     `,
   },
   {
+    domains: ["sgwoods"],
     maxTokens: 500,
     type: SelectorType.RECEIPT,
-    keywords: ["5709 00 121 15"],
+    keywords: ["5709 00 121 15"], // Samuels private
     content: `Du är en assistent som hjälper till att extrahera bokföringsinformation. Din uppgift är att analysera texten och extrahera följande i JSON-format:
         
     1. **Datum (date)**: Datumet då pengarna drogs eller sattes in på kontot.
@@ -195,11 +234,15 @@ const selectorData = [
  * beroende på det samt sätta vilka konton som ska medverka
  * @param parsedData
  */
-const outcomeSelector = (parsedData: String) => {
+const outcomeSelector = (domain: string, parsedData: String) => {
   const normalizedParsedData = parsedData.toLowerCase();
 
-  const selector = selectorData.find((selector) =>
-    selector.keywords.some((keyword) => {
+  const selector = selectorData.find((selector) => {
+
+    const d = selector.domains.find((s) => s === domain)
+    if (!d) return false
+
+    return selector.keywords.some((keyword) => {
       if (typeof keyword === "string") {
         return normalizedParsedData.includes(keyword.toLowerCase());
       } else if (keyword instanceof RegExp) {
@@ -207,6 +250,9 @@ const outcomeSelector = (parsedData: String) => {
       }
       return false;
     })
+
+  }
+    
   );
 
   console.log("SELECTOR", selector && selector.keywords);
@@ -216,8 +262,8 @@ const outcomeSelector = (parsedData: String) => {
   return selector || null; // Returnera null om inget matchar
 };
 
-const parseData = async (data: string) => {
-  const selector = outcomeSelector(data);
+const parseData = async (domain: string, data: string) => {
+  const selector = outcomeSelector(domain, data);
   if (!selector) {
     return undefined;
   }
@@ -263,6 +309,7 @@ const parseData = async (data: string) => {
 
 export const action: ActionFunction = async ({ request, params }) => {
   const formData = await request.formData();
+  const verificationDomain = await getVerificationDomain(request);
   const file = formData.get("file");
 
   // Konvertera filen till en Buffer endast en gång
@@ -271,7 +318,7 @@ export const action: ActionFunction = async ({ request, params }) => {
   // S3-upload och parsing körs parallellt med Promise.all
   const awsVerificationsPath = process.env.AWS_VERIFICATIONS_PATH;
   const fileName = `${Date.now()}-${file.name}`;
-  const filePath = `${awsVerificationsPath}/${fileName}`;
+  const filePath = `${awsVerificationsPath}/${verificationDomain.domain}/${fileName}`;
   const uploadParams = {
     Bucket: process.env.AWS_S3_BUCKET_NAME,
     Key: filePath,
@@ -296,7 +343,7 @@ export const action: ActionFunction = async ({ request, params }) => {
     parsePromise = parser(fileBuffer).then((pdfData) => {
       console.log("pre", preprocessText(pdfData.text));
       console.log("Extraherad text från PDF:", pdfData.text);
-      return parseData(pdfData.text);
+      return parseData(verificationDomain.domain, pdfData.text);
     });
   } else if (file.type.startsWith("image/")) {
     const [result] = await visionClient.textDetection({
@@ -310,7 +357,7 @@ export const action: ActionFunction = async ({ request, params }) => {
     if (detections && detections.length > 0) {
       console.log("Extracted Text:");
       console.log(detections[0].description); // Den första indexet innehåller all text
-      parsePromise = parseData(detections[0].description || "");
+      parsePromise = parseData(verificationDomain.domain, detections[0].description || "");
     } else {
       console.log("Ingen text hittades i bilden.");
       return json(

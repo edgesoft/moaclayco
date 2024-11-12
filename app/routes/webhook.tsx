@@ -10,6 +10,7 @@ import { renderToString } from "react-dom/server";
 import { transporter } from "~/services/email-provider.server";
 import stripeClient from "../stripeClient";
 import { Verifications } from "~/schemas/verifications";
+import { generateNextEntryNumber } from "~/utils/verificationUtil";
 
 export const sendMail = async (order: Order, template: Template) => {
   try {
@@ -27,21 +28,6 @@ export const sendMail = async (order: Order, template: Template) => {
   }
 };
 
-async function generateNextEntryNumber() {
-  try {
-    const lastEntry = await Verifications.findOne().sort({ verificationNumber: -1 });
-
-    if (lastEntry) {
-      const newNumber = lastEntry.verificationNumber + 1;
-      return newNumber;
-    } else {
-      return 1
-    }
-  } catch (error) {
-    console.error('Fel vid generering av löpnummer:', error);
-    throw error;
-  }
-}
 
 const makeAccountTransaction = async(paymentIntent: Stripe.PaymentIntent) => {
 
@@ -68,9 +54,10 @@ const makeAccountTransaction = async(paymentIntent: Stripe.PaymentIntent) => {
 
         // Skapa bokföringspost
         await Verifications.create({
+          domain: order.domain,
           verificationDate: new Date(),
           description: `Order id: ${order._id}\r\nPayment intent id: ${paymentIntent.id}`,
-          verificationNumber: await generateNextEntryNumber(),
+          verificationNumber: await generateNextEntryNumber(order.domain),
           metadata: [
             {
               key: "orderId",
@@ -101,7 +88,7 @@ const makeAccountTransaction = async(paymentIntent: Stripe.PaymentIntent) => {
           ]
         });
 
-        console.log(`Transaktion skapad för order ${order._id}`);
+        console.log(`Transaktion skapad för order ${order._id} på domain ${order.domain}`);
         console.log(`Stripe Fee: ${stripeFee} SEK`);
         console.log(`Netto-belopp att betalas ut: ${netAmount} SEK`);
       }
@@ -156,12 +143,13 @@ const handlePayoutPaid = async (payout: Stripe.Payout) => {
 
   // Skapa bokföringspost
   await Verifications.create({
+    domain: "moaclayco",
     verificationDate: new Date(),
     description: description.trim(), // Rensa onödiga tomma rader
-    verificationNumber: await generateNextEntryNumber(),
+    verificationNumber: await generateNextEntryNumber("moaclayco"),
     journalEntries: [
       {
-        account: 1930, // Bankkonto
+        account: 1930, // Bankkonto. Behöver inte vara 1930 om det är sgwoods
         debit: amountInSek.toFixed(2),
       },
       {

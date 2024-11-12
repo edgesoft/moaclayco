@@ -2,19 +2,24 @@ import { json, LoaderFunction } from "@remix-run/node";
 import { Link, Outlet, useLoaderData } from "@remix-run/react";
 import { Verifications } from "~/schemas/verifications";
 import { ListVerification } from "~/components/admin/listVerification";
-import { VerificationProps } from "~/types";
-
+import { VerificationDomain, VerificationProps } from "~/types";
+import {
+  cookieVerificationDomain,
+  getVerificationDomain,
+} from "~/services/cookie.server";
+import { domains } from "~/utils/domain";
 
 export const loader: LoaderFunction = async ({ request }) => {
+  const verificationDomain = await getVerificationDomain(request);
   const url = new URL(request.url);
-  const year = Number(url.searchParams.get("year")) || new Date().getFullYear();
 
   // Kör båda asynkrona anropen parallellt med Promise.all()
   const verificationsPromise = Verifications.find({
     verificationDate: {
-      $gte: new Date(`${year}-01-01`),
-      $lt: new Date(`${year + 1}-01-01`),
+      $gte: new Date(`${verificationDomain.verificationYear}-01-01`),
+      $lt: new Date(`${verificationDomain.verificationYear + 1}-01-01`),
     },
+    domain: verificationDomain.domain,
   }).sort({ verificationDate: -1 });
 
   // Hämta senaste verifikationsnumret
@@ -31,7 +36,7 @@ export const loader: LoaderFunction = async ({ request }) => {
   // Extrahera verifikationsnumret om det finns ett resultat
   const latestVerificationNumber = latestVerification?.verificationNumber || 0;
 
-  return json({ verifications, year, latestVerificationNumber });
+  return json({ verifications, verificationDomain, latestVerificationNumber });
 };
 
 const groupByMonth = (verifications: VerificationProps[]) => {
@@ -67,13 +72,18 @@ const groupByMonth = (verifications: VerificationProps[]) => {
 
 type LoaderData = {
   verifications: VerificationProps[];
-  year: number;
-  latestVerificationNumber: number
+  latestVerificationNumber: number;
+  verificationDomain: VerificationDomain;
 };
 
 export default function VerificationsPage() {
-  const { verifications, latestVerificationNumber } = useLoaderData<LoaderData>();
+  const { verifications, verificationDomain, latestVerificationNumber } =
+    useLoaderData<LoaderData>();
   const groupedVerifications = groupByMonth(verifications);
+
+  const Icon = domains.find(
+    (d) => d.domain === verificationDomain.domain
+  )?.icon;
 
   const hasVatReport = (
     verifications: VerificationProps[],
@@ -88,22 +98,34 @@ export default function VerificationsPage() {
 
   return (
     <div className="mt-20 p-2">
-      <div className="mt-4">
-      <Outlet context={{ latestVerificationNumber }} />
-      <Link
-        to="/admin/verifications/new"
-        prefetch="intent"
-        className="bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
-      >
-        Ny verifikation
-      </Link>
-      <Link
-        to="/admin/verifications/financial-overview"
-        prefetch="intent"
-        className="ml-2 bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
-      >
-        Balans och resultaträkning
-      </Link>
+      <div className="mt-4 flex items-center justify-between">
+        <div>
+          <Outlet context={{ latestVerificationNumber }} />
+          <Link
+            to="/admin/verifications/new"
+            prefetch="intent"
+            className="bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
+          >
+            Ny verifikation
+          </Link>
+          <Link
+            to="/admin/verifications/financial-overview"
+            prefetch="intent"
+            className="ml-2 bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
+          >
+            Balans och resultaträkning
+          </Link>
+        </div>
+
+        <Link to="/admin/verifications/settings" prefetch="intent">
+          <div className="absolute" style={{ top: 80, right: 0 }}>
+            {Icon ? (
+              Icon
+            ) : (
+              <span>Icon not available</span> // eller annan fallback om ingen ikon hittas
+            )}
+          </div>
+        </Link>
       </div>
       <div className="mb-20 mt-20 mx-auto">
         {Object.keys(groupedVerifications).map((monthKey, index) => {

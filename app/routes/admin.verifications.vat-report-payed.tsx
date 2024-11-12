@@ -19,6 +19,7 @@ import ClientOnly from "~/components/ClientOnly";
 import Select from "react-select";
 import { z, ZodError } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { getVerificationDomain } from "~/services/cookie.server";
 
 // Loader-funktion för att hämta verifikationer från MongoDB för en viss månad
 export const loader: LoaderFunction = async ({ request }) => {
@@ -49,6 +50,7 @@ const accounts = [
 
 export const action: ActionFunction = async ({ request, params }) => {
   const formData = await request.formData();
+  const verificationDomain = await getVerificationDomain(request);
   const submissionDate = formData.get("submissionDate");
   const amount = formData.get("amount");
   const accountNumber = formData.get("account");
@@ -66,6 +68,7 @@ export const action: ActionFunction = async ({ request, params }) => {
   const verification = await Verifications.findOne({
     "metadata.key": "vatReport",
     "metadata.value": month,
+    domain: verificationDomain.domain
   });
 
   const account = verification.journalEntries.find(
@@ -83,8 +86,9 @@ export const action: ActionFunction = async ({ request, params }) => {
   });
 
   const newVerification = new Verifications({
+    domain: verificationDomain.domain,
     description: `Inbetalning moms Skattemyndigheten`,
-    verificationNumber: await generateNextEntryNumber(),
+    verificationNumber: await generateNextEntryNumber(verificationDomain.domain),
     verificationDate: formattedDate,
     journalEntries: [
       {

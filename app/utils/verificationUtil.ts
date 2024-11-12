@@ -1,8 +1,8 @@
 import { Verifications } from "~/schemas/verifications";
 
-export async function generateNextEntryNumber() {
+export async function generateNextEntryNumber(domain: string) {
     try {
-      const lastEntry = await Verifications.findOne().sort({ verificationNumber: -1 });
+      const lastEntry = await Verifications.findOne({domain}).sort({ verificationNumber: -1 });
   
       if (lastEntry) {
         const newNumber = lastEntry.verificationNumber + 1;

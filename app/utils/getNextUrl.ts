@@ -1,6 +1,5 @@
-
 export function getNextUrl(request: Request) {
-    let url = new URL(request.url);
+  let url = new URL(request.url);
   let hostname = url.hostname;
   let proto = request.headers.get("X-Forwarded-Proto") ?? url.protocol;
 
@@ -10,5 +9,5 @@ export function getNextUrl(request: Request) {
     url.host;
   url.protocol = "https:";
 
-  return {url: url.toString(), proto, hostname, port: url.port}
+  return { url: url.toString(), proto, hostname, port: url.port };
 }

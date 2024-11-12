@@ -15,7 +15,10 @@ export type OrderItem = {
 };
 
 export type Order = {
+  domain: string,
   _id: string;
+  webhookAt?: Date,
+  manualOrderAt?: Date,
   totalSum: number;
   paymentIntent?: {
     id: string;
@@ -127,3 +130,8 @@ export type VerificationProps = {
     }
   ]
 };
+
+export type VerificationDomain = {
+  domain: string
+  verificationYear: number
+}
