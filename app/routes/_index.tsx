@@ -6,13 +6,20 @@ import {
 } from "@remix-run/react";
 import { CollectionProps } from "~/types";
 import { IndexProps } from "~/root";
+import { getDomain } from "~/utils/domain";
+import { themes } from "~/components/Theme";
 
 export let meta: MetaFunction = ({ matches }) => {
   const { data } = matches[0];
+  const domain = getDomain(data.hostname)
+  if (!domain) throw new Error("Could not find domain")
+  const theme = themes[domain?.domain]
+
+  console.log(domain)
   const { collections } = data as IndexProps;
   return [
     {
-      title: "Moa Clay Collection - kollektioner",
+      title: `${theme.longName} - kollektioner`,
     },
     {
       name: "description",
@@ -21,12 +28,12 @@ export let meta: MetaFunction = ({ matches }) => {
     {
       property: "twitter:image",
       content:
-        "https://moaclayco-prod.s3.eu-north-1.amazonaws.com/background3.jpg",
+       theme.backgroundImage,
     },
     {
       property: "og:image",
       content:
-        "https://moaclayco-prod.s3.eu-north-1.amazonaws.com/background3.jpg",
+      theme.backgroundImage,
     },
   ];
 };

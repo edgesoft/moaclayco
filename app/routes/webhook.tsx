@@ -11,14 +11,18 @@ import { transporter } from "~/services/email-provider.server";
 import stripeClient from "../stripeClient";
 import { Verifications } from "~/schemas/verifications";
 import { generateNextEntryNumber } from "~/utils/verificationUtil";
+import { themes } from "~/components/Theme";
 
 export const sendMail = async (order: Order, template: Template) => {
+
+  const theme = themes[order.domain]
+
   try {
     let info = await transporter.sendMail({
-      from: "support@moaclayco.com",
+      from: theme.email,
       to: order.customer.email,
-      bcc: "moaclayco@gmail.com,wicket.programmer@gmail.com,support@moaclayco.com",
-      subject: template === Template.ORDER ? `Order ${order._id} (moaclayco.com)` :  `Din order ${order._id} är nu påväg!`,
+      bcc: `${theme.email},wicket.programmer@gmail.com`,
+      subject: template === Template.ORDER ? `Order ${order._id} (${theme.title})` :  `Din order ${order._id} är nu påväg!`,
       html: renderToString(<EmailOrderTemplate order={order} template={template} />),
     });
 
@@ -105,6 +109,7 @@ const handlePayoutPaid = async (payout: Stripe.Payout) => {
 
   console.log(`Payout ID: ${payoutId}`);
   console.log(`Payout amount: ${amountInSek} SEK`);
+  let domain = null
 
   // Hämta alla balance transactions som är kopplade till denna utbetalning
   const balanceTransactions = await stripeClient.balanceTransactions.list({
@@ -127,6 +132,7 @@ const handlePayoutPaid = async (payout: Stripe.Payout) => {
 
           if (order) {
             // Lägg till i beskrivningen
+            domain = order.domain
             descriptionParts.push(`Order id: ${order._id}\r\nPayment intent id: ${paymentIntentId}`);
           } else {
             console.warn(`Order not found for PaymentIntent: ${paymentIntentId}`);
@@ -138,15 +144,16 @@ const handlePayoutPaid = async (payout: Stripe.Payout) => {
     }
   }
 
+  if (!domain) throw new  Error("Could not find domain")
+
   // Sätt ihop beskrivningen från alla delar
   const description = descriptionParts.join('\r\n');
-
   // Skapa bokföringspost
   await Verifications.create({
-    domain: "moaclayco",
+    domain: domain,
     verificationDate: new Date(),
     description: description.trim(), // Rensa onödiga tomma rader
-    verificationNumber: await generateNextEntryNumber("moaclayco"),
+    verificationNumber: await generateNextEntryNumber(domain),
     journalEntries: [
       {
         account: 1930, // Bankkonto. Behöver inte vara 1930 om det är sgwoods

@@ -3,6 +3,7 @@ import { auth } from "~/services/auth.server";
 import { sessionStorage } from "../services/session.server";
 import { Form, useLoaderData, useNavigation } from "@remix-run/react";
 import useLocalStorage from "~/hooks/useLocalStorage";
+import { useTheme } from "~/components/Theme";
 
 export const action: ActionFunction = async ({ request }) => {
   return await auth.authenticate("email-link", request, {
@@ -23,6 +24,7 @@ export default function Login() {
   const { magicLinkSent } = useLoaderData();
   let transition = useNavigation();
   let [email, setEmail] = useLocalStorage("mcc-email", "");
+  const theme = useTheme()
 
   return (
     <div className="flex items-center justify-center min-h-screen px-3">
@@ -33,7 +35,7 @@ export default function Login() {
           </h3>
           <div className="mt-2 text-black">
             {magicLinkSent
-              ? "Länk skickad. Kolla din epost för mail från support@moaclayco.com"
+              ? `Länk skickad. Kolla din epost för mail från ${theme?.email}`
               : transition.state !== "submitting" && (
                   <input
                     onChange={(e) => setEmail(e.target.value)}
