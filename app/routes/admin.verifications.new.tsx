@@ -16,7 +16,7 @@ import { Verifications } from "~/schemas/verifications";
 import { ActionFunction, json } from "@remix-run/node";
 import ClientOnly from "~/components/ClientOnly";
 import { classNames } from "~/utils/classnames";
-import { getVerificationDomain } from "~/services/cookie.server";
+import { getDomain } from "~/utils/domain";
 
 const formSchema = z.object({
   description: z.string().min(1, "Beskrivning är obligatorisk"),
@@ -209,9 +209,9 @@ type JournalEntry = {
 };
 
 export const action: ActionFunction = async ({ request, params }) => {
-  const url = new URL(request.url);
   const formData = await request.formData();
-  const verificationDomain = await getVerificationDomain(request)
+  const domain = getDomain(request)
+  if (!domain) throw new Error("Could not find domain")
   const description = formData.get("description");
   const verificationDate = formData.get("verificationDate");
   const journalEntries = JSON.parse(formData.get("journalEntries") as string);
@@ -229,7 +229,7 @@ export const action: ActionFunction = async ({ request, params }) => {
 
   const dateForDatabase = new Date(verificationDate);
 
-  if (verificationDomain.verificationYear !== dateForDatabase.getFullYear()) {
+  if (new Date().getFullYear() !== dateForDatabase.getFullYear()) {
     return json(
       {
         success: false,
@@ -270,9 +270,9 @@ export const action: ActionFunction = async ({ request, params }) => {
 
   try {
     const newVerification = new Verifications({
-      domain: verificationDomain.domain,
+      domain: domain?.domain,
       description,
-      verificationNumber: await generateNextEntryNumber(verificationDomain.domain),
+      verificationNumber: await generateNextEntryNumber(domain?.domain),
       verificationDate: dateForDatabase, // Spara som Date om det behövs
       journalEntries,
       files: file ? [{ name: file.label, path: file.filePath }] : [],

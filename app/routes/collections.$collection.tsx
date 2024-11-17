@@ -18,14 +18,19 @@ import AdditionalCartItem from "~/components/item/additionalItem";
 import Magnifier from "~/components/item/magnifier";
 import { IndexProps } from "~/root";
 import { Collections } from "~/schemas/collections";
+import { domains, getDomain } from "~/utils/domain";
 
 type ItemLoaderProps = {
   collection: CollectionProps;
   items: ItemProps[];
 };
 
-export let loader: LoaderFunction = async ({ params }) => {
-  const collection = await Collections.findOne({ shortUrl: params.collection });
+export let loader: LoaderFunction = async ({ params, request }) => {
+
+  let domain = getDomain(request)
+
+  const collection = await Collections.findOne({ shortUrl: params.collection, domain: domain?.domain });
+  
   if (!collection) {
     return redirect("/");
   }
@@ -33,7 +38,7 @@ export let loader: LoaderFunction = async ({ params }) => {
   return json(
     {
       collection,
-      items: await Items.find({ collectionRef: params.collection }).sort({
+      items: await Items.find({ collectionRef: params.collection, domain: domain?.domain }).sort({
         _id: -1,
       }),
     },
@@ -45,8 +50,8 @@ export let loader: LoaderFunction = async ({ params }) => {
   );
 };
 
-export let meta: MetaFunction = (d) => {
-  const { collection } = d.data as ItemLoaderProps;
+export let meta: MetaFunction = ({data}) => {
+  const { collection } = data as ItemLoaderProps;
   return [
     {
       title: `Moa Clay Collection - ${collection.headline}`,

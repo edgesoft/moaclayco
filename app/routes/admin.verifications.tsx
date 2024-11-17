@@ -2,28 +2,24 @@ import { json, LoaderFunction } from "@remix-run/node";
 import { Link, Outlet, useLoaderData } from "@remix-run/react";
 import { Verifications } from "~/schemas/verifications";
 import { ListVerification } from "~/components/admin/listVerification";
-import { VerificationDomain, VerificationProps } from "~/types";
-import {
-  cookieVerificationDomain,
-  getVerificationDomain,
-} from "~/services/cookie.server";
-import { domains } from "~/utils/domain";
+import { VerificationProps } from "~/types";
+import { getDomain } from "~/utils/domain";
 
 export const loader: LoaderFunction = async ({ request }) => {
-  const verificationDomain = await getVerificationDomain(request);
-  const url = new URL(request.url);
+  const domain =  getDomain(request);
+  const year = new Date().getFullYear()
 
   // Kör båda asynkrona anropen parallellt med Promise.all()
   const verificationsPromise = Verifications.find({
     verificationDate: {
-      $gte: new Date(`${verificationDomain.verificationYear}-01-01`),
-      $lt: new Date(`${verificationDomain.verificationYear + 1}-01-01`),
+      $gte: new Date(`${year}-01-01`),
+      $lt: new Date(`${year + 1}-01-01`),
     },
-    domain: verificationDomain.domain,
+    domain: domain?.domain,
   }).sort({ verificationDate: -1 });
 
   // Hämta senaste verifikationsnumret
-  const latestVerificationNumberPromise = Verifications.findOne()
+  const latestVerificationNumberPromise = Verifications.findOne({domain: domain?.domain})
     .sort({ verificationNumber: -1 }) // Sortera i fallande ordning
     .select("verificationNumber") // Hämta bara verifikationsnumret
     .exec();
@@ -36,7 +32,7 @@ export const loader: LoaderFunction = async ({ request }) => {
   // Extrahera verifikationsnumret om det finns ett resultat
   const latestVerificationNumber = latestVerification?.verificationNumber || 0;
 
-  return json({ verifications, verificationDomain, latestVerificationNumber });
+  return json({ verifications, year, latestVerificationNumber });
 };
 
 const groupByMonth = (verifications: VerificationProps[]) => {
@@ -73,17 +69,15 @@ const groupByMonth = (verifications: VerificationProps[]) => {
 type LoaderData = {
   verifications: VerificationProps[];
   latestVerificationNumber: number;
-  verificationDomain: VerificationDomain;
+  year: number;
 };
 
 export default function VerificationsPage() {
-  const { verifications, verificationDomain, latestVerificationNumber } =
+  const { verifications, year, latestVerificationNumber } =
     useLoaderData<LoaderData>();
   const groupedVerifications = groupByMonth(verifications);
 
-  const Icon = domains.find(
-    (d) => d.domain === verificationDomain.domain
-  )?.icon;
+
 
   const hasVatReport = (
     verifications: VerificationProps[],
@@ -116,22 +110,12 @@ export default function VerificationsPage() {
             Balans och resultaträkning
           </Link>
         </div>
-
-        <Link to="/admin/verifications/settings" prefetch="intent">
-          <div className="absolute" style={{ top: 80, right: 0 }}>
-            {Icon ? (
-              Icon
-            ) : (
-              <span>Icon not available</span> // eller annan fallback om ingen ikon hittas
-            )}
-          </div>
-        </Link>
       </div>
       <div className="mb-20 mt-20 mx-auto">
       {Object.keys(groupedVerifications).length === 0 ?
       
         <div className="-mt-6 text-sm border p-2 pt-4 pb-4 text-white border-sky-950 bg-sky-700 rounded-lg">
-          Inga verifikationer för bokföringsåret {verificationDomain.verificationYear}
+          Inga verifikationer för bokföringsåret {year}
           </div>
       : null }
 

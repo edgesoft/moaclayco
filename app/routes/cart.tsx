@@ -17,7 +17,7 @@ import { ActionFunction, createCookie, json, redirect } from "@remix-run/node";
 import React from "react";
 import ClientOnly from "~/components/ClientOnly";
 import { getNextUrl } from "~/utils/getNextUrl";
-import { domains } from "~/utils/domain";
+import { domains, getDomain } from "~/utils/domain";
 
 export let meta: MetaFunction = () => {
   return [
@@ -56,13 +56,7 @@ const getDiscount = (balance:number, percentage: number, cartTotal: number): num
 
 export let action: ActionFunction = async ({ request }) => {
   let body = new URLSearchParams(await request.text());
-  const { hostname } = getNextUrl(request);
-
-  let verificationDomain = domains.find((d) => hostname.includes(d.domain))
-  if (!verificationDomain) {
-    verificationDomain = domains.find((d) => d.default)
-  }
-
+  const domain = getDomain(request)
   
   const data = JSON.parse(body.get("items") || "");
   const [items, discount] = await Promise.all([
@@ -164,7 +158,7 @@ export let action: ActionFunction = async ({ request }) => {
 
 
   const orderData = {
-    domain: verificationDomain?.domain,
+    domain: domain?.domain,
     items: mappedItems,
     status: "OPENED",
     customer: {

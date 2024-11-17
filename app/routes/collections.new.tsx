@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { ZodError, z } from "zod";
 import { Collections } from "~/schemas/collections";
+import { getDomain } from "~/utils/domain";
 
 interface ActionDataErrors {
   [key: string]: string | undefined; // or any other type that the error messages are
@@ -28,10 +29,12 @@ export const action: ActionFunction = async ({ request, params }) => {
   for (const [key, value] of await request.formData()) {
     result[key] = value;
   }
+  let domain = getDomain(request)
 
   try {
     Collectionchema.parse(result);
     const data =  {
+      domain: domain?.domain,
       headline: result.headline,
       shortUrl: result.shortUrl.trim(),
       instagram: result.instagram,
@@ -78,7 +81,7 @@ const Collection = () => {
   const fileRef = useRef<HTMLInputElement>(null);
   const [image, setImage] = useState<string>("");
   const actionData = useActionData<ActionData>();
-  console.log(actionData)
+  
 
   useEffect(() => {
     if (actionData?.errors) {
@@ -218,7 +221,7 @@ const Collection = () => {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".jpg, .jpeg, .heic, .png"
+                accept=".jpg, .jpeg, .heic, .png, .webp"
                 onChange={handleFileChange}
                 className="hidden"
               />

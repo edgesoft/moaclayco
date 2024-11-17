@@ -12,14 +12,13 @@ import {
 } from "@remix-run/node";
 import { Controller, useForm } from "react-hook-form";
 import { Verifications } from "~/schemas/verifications"; // Din MongoDB schema
-import { classNames } from "~/utils/classnames";
 import { generateNextEntryNumber } from "~/utils/verificationUtil";
 import { formatMonthName } from "~/utils/formatMonthName";
 import ClientOnly from "~/components/ClientOnly";
 import Select from "react-select";
-import { z, ZodError } from "zod";
+import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { getVerificationDomain } from "~/services/cookie.server";
+import { getDomain } from "~/utils/domain";
 
 // Loader-funktion för att hämta verifikationer från MongoDB för en viss månad
 export const loader: LoaderFunction = async ({ request }) => {
@@ -50,7 +49,9 @@ const accounts = [
 
 export const action: ActionFunction = async ({ request, params }) => {
   const formData = await request.formData();
-  const verificationDomain = await getVerificationDomain(request);
+  const domain = getDomain(request)
+  if (!domain) throw new Error("Could not find domain")
+
   const submissionDate = formData.get("submissionDate");
   const amount = formData.get("amount");
   const accountNumber = formData.get("account");
@@ -68,7 +69,7 @@ export const action: ActionFunction = async ({ request, params }) => {
   const verification = await Verifications.findOne({
     "metadata.key": "vatReport",
     "metadata.value": month,
-    domain: verificationDomain.domain
+    domain: domain?.domain
   });
 
   const account = verification.journalEntries.find(
@@ -86,9 +87,9 @@ export const action: ActionFunction = async ({ request, params }) => {
   });
 
   const newVerification = new Verifications({
-    domain: verificationDomain.domain,
+    domain: domain?.domain,
     description: `Inbetalning moms Skattemyndigheten`,
-    verificationNumber: await generateNextEntryNumber(verificationDomain.domain),
+    verificationNumber: await generateNextEntryNumber(domain.domain),
     verificationDate: formattedDate,
     journalEntries: [
       {
@@ -148,9 +149,6 @@ export default function VATReportModal() {
     register,
     handleSubmit,
     control,
-    getValues,
-    reset,
-    setValue,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(formSchema),

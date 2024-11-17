@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
 const collectionSchema = new Schema({
+  domain: String,
   headline:  String,
   shortDescription: String,
   longDescription:   String,

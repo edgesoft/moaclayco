@@ -5,7 +5,7 @@ import openai from "~/services/openapi.server";
 import parser from "pdf-parse";
 import { v4 as uuidv4 } from "uuid";
 import visionClient from "~/services/google-vision.server";
-import { getVerificationDomain } from "~/services/cookie.server";
+import { getDomain } from "~/utils/domain";
 
 enum SelectorType {
   INVOICE,
@@ -309,7 +309,8 @@ const parseData = async (domain: string, data: string) => {
 
 export const action: ActionFunction = async ({ request, params }) => {
   const formData = await request.formData();
-  const verificationDomain = await getVerificationDomain(request);
+  const domain = getDomain(request)
+  if (!domain) throw new Error("No domain found")
   const file = formData.get("file");
 
   // Konvertera filen till en Buffer endast en gång
@@ -318,7 +319,7 @@ export const action: ActionFunction = async ({ request, params }) => {
   // S3-upload och parsing körs parallellt med Promise.all
   const awsVerificationsPath = process.env.AWS_VERIFICATIONS_PATH;
   const fileName = `${Date.now()}-${file.name}`;
-  const filePath = `${awsVerificationsPath}/${verificationDomain.domain}/${fileName}`;
+  const filePath = `${awsVerificationsPath}/${domain.domain}/${fileName}`;
   const uploadParams = {
     Bucket: process.env.AWS_S3_BUCKET_NAME,
     Key: filePath,
@@ -357,7 +358,7 @@ export const action: ActionFunction = async ({ request, params }) => {
     if (detections && detections.length > 0) {
       console.log("Extracted Text:");
       console.log(detections[0].description); // Den första indexet innehåller all text
-      parsePromise = parseData(verificationDomain.domain, detections[0].description || "");
+      parsePromise = parseData(domain?.domain, detections[0].description || "");
     } else {
       console.log("Ingen text hittades i bilden.");
       return json(

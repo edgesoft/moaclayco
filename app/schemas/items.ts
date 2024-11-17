@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
 const ItemSchema = new Schema({
+  domain: String,
   headline:  String,
   price: Number,
   productInfos: [String],

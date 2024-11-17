@@ -1,14 +1,13 @@
 import { json, LoaderFunction } from "@remix-run/node";
 import { useLoaderData, useNavigate } from "@remix-run/react";
 import { Verifications } from "~/schemas/verifications"; // Din MongoDB schema
-import { getVerificationDomain } from "~/services/cookie.server";
 import { ReportType } from "~/types";
 import { accounts } from "~/utils/accounts";
-import { formatMonthName } from "~/utils/formatMonthName";
+import { getDomain } from "~/utils/domain";
 
 export const loader: LoaderFunction = async ({ request }) => {
   const url = new URL(request.url);
-  const verificationDomain = await getVerificationDomain(request);
+  const domain = getDomain(request)
   const fromParam = url.searchParams.get("from"); // Få startdatum som query param
   const toParam = url.searchParams.get("to"); // Få slutdatum som query param
   
@@ -27,7 +26,7 @@ export const loader: LoaderFunction = async ({ request }) => {
       $gte: from,
       $lte: to,
     },
-    domain: verificationDomain.domain
+    domain: domain?.domain
   });
 
   console.log(from, to)
