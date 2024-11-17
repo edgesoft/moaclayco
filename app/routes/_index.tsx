@@ -15,7 +15,6 @@ export let meta: MetaFunction = ({ matches }) => {
   if (!domain) throw new Error("Could not find domain")
   const theme = themes[domain?.domain]
 
-  console.log(domain)
   const { collections } = data as IndexProps;
   return [
     {
