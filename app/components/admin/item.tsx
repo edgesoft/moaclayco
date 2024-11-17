@@ -430,7 +430,7 @@ function FileUpload() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".jpg, .jpeg, .heic, .png"
+                accept=".jpg, .jpeg, .heic, .png, .webp"
                 onChange={handleFileChange}
                 className="hidden"
               />
