@@ -77,8 +77,8 @@ export let loader: LoaderFunction = async ({ request }) => {
   return { domain, clientSecret: paymentIntent.client_secret };
 };
 
-export let meta: MetaFunction = (data) => {
-  const theme = themes[data.domain]
+export let meta: MetaFunction = ({data}) => {)
+  const theme = themes[data.domain.domain]
   return [
     {
       title: theme.longName
