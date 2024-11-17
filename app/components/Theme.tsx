@@ -70,7 +70,7 @@ export const themes: { [key: string]: Theme } = {
        email: "support@sgwoods.se",
        primaryDomain: "sgwoods.se",
        paymentMethods:  ["klarna", "card"],
-       favicon: "/sgwoods.svg",
+       favicon: "/sgwoods.ico",
     }
   };
 
