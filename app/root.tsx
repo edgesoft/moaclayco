@@ -97,7 +97,9 @@ function Document({
           property="og:image"
           content={theme?.backgroundImage}
         />
-        <link rel="icon" href="/favicon.png" type="image/png" />
+        {(theme?.favicon.endsWith(".svg")) ? <link rel="icon" type="image/svg+xml" href={theme?.favicon}></link> : <link rel="icon" href={String(theme?.favicon)} type="image/png" /> }
+          
+    
         {title ? <title>{title}</title> : null}
         <Meta />
         <Links />

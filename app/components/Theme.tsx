@@ -13,7 +13,8 @@ type Theme = {
   email: string,
   primaryDomain: string
   longName: string
-  paymentMethods: string[]
+  paymentMethods: string[],
+  favicon:  string
 };
 
 type ThemeProviderProps = {
@@ -34,7 +35,8 @@ export const themes: { [key: string]: Theme } = {
       footerText: `All rights reserved © Moa Clay Co ${new Date().getFullYear()}`,
       email: "support@moaclayco.com",
       primaryDomain: "moaclayco.com",
-      paymentMethods:  ["swish", "klarna", "card"]
+      paymentMethods:  ["swish", "klarna", "card"],
+      favicon: "/favicon.png"
     },
     "sgwoods": {
       title: "SG Woods",
@@ -67,7 +69,8 @@ export const themes: { [key: string]: Theme } = {
       footerText: `All rights reserved © SG Woods ${new Date().getFullYear()}`,
        email: "support@sgwoods.se",
        primaryDomain: "sgwoods.se",
-       paymentMethods:  ["klarna", "card"]
+       paymentMethods:  ["klarna", "card"],
+       favicon: "/sgwoods.svg",
     }
   };
 
