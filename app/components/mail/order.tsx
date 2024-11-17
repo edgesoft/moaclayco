@@ -1,5 +1,6 @@
 import React from "react";
 import { Order } from "~/types";
+import { themes } from "../Theme";
 
 export enum Template {
   ORDER,
@@ -12,11 +13,11 @@ export type TemplateType = {
 };
 
 const EmailOrderTemplate: React.FC<TemplateType> = ({ order, template }) => {
-  const { _id, customer, items, freightCost, discount, totalSum } = order;
-
+  const { _id, customer, items, freightCost, domain, discount, totalSum } = order;
+  const theme = themes[domain]
+  
   const headerStyle = {
-    backgroundImage:
-      "url('https://moaclayco-prod.s3.eu-north-1.amazonaws.com/background3.jpg')",
+    backgroundImage: `url(${theme.backgroundImage})`,
     backgroundPosition: "center left",
     backgroundRepeat: "no-repeat",
     height: "80px", // Fixed height for larger screens
@@ -61,7 +62,7 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({ order, template }) => {
     <html>
       <head>
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
-        <title>Moa Clay Collection</title>
+        <title>{theme.longName}</title>
         <style type="text/css">
           {`
             @media screen and (max-width: 480px) {
@@ -116,11 +117,11 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({ order, template }) => {
                     ? `Tack för din order (<strong>${_id.toString()}</strong>)! Vi kommer
          att behandla ordern så snart vi kan.
          <br />
-         Med vänliga hälsningar Moa Clay Collection`
-                    : `Ditt paket är skickat och påväg till dig, jag hoppas du kommer älska dina nya smycken!<br/><br/>
+         Med vänliga hälsningar ${theme.longName}`
+                    : `Ditt paket är skickat och påväg till dig!<br/><br/>
          Ditt ordernummer är <strong>${_id.toString()}</strong> och all information du behöver hittar du här nedan.<br/><br>
          Ha en fantastisk dag!<br/>
-         XOXO MoaClayCo`,
+         XOXO ${theme.title}`,
               }}
             />
           </div>
@@ -374,7 +375,7 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({ order, template }) => {
             borderTop: "1px solid #e5e7eb",
           }}
         >
-          <div style={{ marginBottom: "4px" }}>© Moa Clay Co {new Date().getFullYear()}</div>
+          <div style={{ marginBottom: "4px" }}>{theme.footerText}</div>
         </div>
       </body>
     </html>

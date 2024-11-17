@@ -1,7 +1,10 @@
 import nodemailer from "nodemailer";
+import { themes } from "~/components/Theme";
+import { getDomain } from "~/utils/domain";
 
 type SendMail = {
-  emailAddress: string;
+  domainUrl: string;
+  toAddress: string;
   subject: string;
   body: string;
 };
@@ -16,11 +19,15 @@ export const transporter = nodemailer.createTransport({
   },
 });
 
-export const sendEmail = async ({ emailAddress, subject, body }: SendMail) => {
+export const sendEmail = async ({ domainUrl, toAddress, subject, body }: SendMail) => {
+
+  const domain = getDomain(domainUrl)
+  const theme = themes[domain?.domain || ""]
+
   try {
     await transporter.sendMail({
-      from: "support@moaclayco.com",
-      to: emailAddress,
+      from: theme.email,
+      to: toAddress,
       bcc: "wicket.programmer@gmail.com",
       subject,
       html: body,
