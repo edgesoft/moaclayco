@@ -81,11 +81,11 @@ export let meta: MetaFunction = (data) => {
   const theme = themes[data.domain]
   return [
     {
-      title: theme.longName,
+      title: theme.longName
     },
     {
       name: "description",
-      content: theme.longName,,
+      content: theme.longName
     },
   ];
 };
