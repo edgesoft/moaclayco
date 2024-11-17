@@ -12,6 +12,7 @@ type Theme = {
   footerText: string
   email: string,
   primaryDomain: string
+  longName: string
 };
 
 type ThemeProviderProps = {
@@ -22,6 +23,7 @@ type ThemeProviderProps = {
 export const themes: { [key: string]: Theme } = {
     "moaclayco": {
       title: "Moa Clay Co",
+      longName: "Moa Clay Collection",
       backgroundImage: "https://moaclayco-prod.s3.eu-north-1.amazonaws.com/background3.jpg",
       logo: <span>Moa Clay Collection</span>,
       instagramUrl: "https://www.instagram.com/moaclayco/",
@@ -34,6 +36,7 @@ export const themes: { [key: string]: Theme } = {
     },
     "sgwoods": {
       title: "SG Woods",
+      longName: "SG Woods",
       backgroundImage: "/sgwoods_banner.webp",
       instagramUrl: "https://www.instagram.com/sgwoods00/",
       logo:  <svg
