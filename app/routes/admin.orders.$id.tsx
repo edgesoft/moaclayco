@@ -22,6 +22,7 @@ export let loader: LoaderFunction = async ({ request, params }) => {
   const verification = await Verifications.findOne({
     "metadata.key": "orderId",
     "metadata.value": params.id,
+    domain: order.domain
   });
 
   let intent = null;
@@ -89,9 +90,10 @@ export let action: ActionFunction = async ({ request, params }) => {
         const amountExVat = totalAmount - vatAmount; // Belopp exklusive moms
 
         await Verifications.create({
+          domain: order.domain,
           verificationDate: order.webhookAt,
           description: `Order id: ${order._id}\r\nPayment intent id: ${intent.id}`,
-          verificationNumber: await generateNextEntryNumber(),
+          verificationNumber: await generateNextEntryNumber(order.domain),
           metadata: [
             {
               key: "orderId",
@@ -124,26 +126,6 @@ export let action: ActionFunction = async ({ request, params }) => {
 
         return {}
 
-        /**
-        const payouts = await stripeClient.payouts.list({
-          limit: 10,  // Justera denna efter behov
-        });
-
-      const matchingPayout = payouts.data.find(payout => {
-
-        return payout.arrival_date >= balanceTransaction.created;
-      });
-
-      console.log(matchingPayout.id)
-      const balanceTransactions = await stripeClient.balanceTransactions.list({
-        payout: matchingPayout.id,
-      });
-
-
-     const b =  balanceTransactions.data.find((f) => f.source === balanceTransaction.source)
-
-      console.log(b)
-       */
       }
     } else {
       if (order.manualOrderAt) {
@@ -152,9 +134,10 @@ export let action: ActionFunction = async ({ request, params }) => {
         const exclVat = order.totalSum - Number(vat)
 
         await Verifications.create({
+          domain: order.domain,
           verificationDate: order.manualOrderAt,
           description: `Order id: ${order._id}`,
-          verificationNumber: await generateNextEntryNumber(),
+          verificationNumber: await generateNextEntryNumber(order.domain),
           metadata: [
             {
               key: "orderId",
@@ -176,10 +159,6 @@ export let action: ActionFunction = async ({ request, params }) => {
             }
           ]
         });
-
-
-
-        console.log("MANUTEL")
       }
     }
 

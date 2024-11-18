@@ -3,11 +3,11 @@ import { Link, Outlet, useLoaderData } from "@remix-run/react";
 import { Verifications } from "~/schemas/verifications";
 import { ListVerification } from "~/components/admin/listVerification";
 import { VerificationProps } from "~/types";
-
+import { getDomain } from "~/utils/domain";
 
 export const loader: LoaderFunction = async ({ request }) => {
-  const url = new URL(request.url);
-  const year = Number(url.searchParams.get("year")) || new Date().getFullYear();
+  const domain =  getDomain(request);
+  const year = new Date().getFullYear()
 
   // Kör båda asynkrona anropen parallellt med Promise.all()
   const verificationsPromise = Verifications.find({
@@ -15,10 +15,11 @@ export const loader: LoaderFunction = async ({ request }) => {
       $gte: new Date(`${year}-01-01`),
       $lt: new Date(`${year + 1}-01-01`),
     },
+    domain: domain?.domain,
   }).sort({ verificationDate: -1 });
 
   // Hämta senaste verifikationsnumret
-  const latestVerificationNumberPromise = Verifications.findOne()
+  const latestVerificationNumberPromise = Verifications.findOne({domain: domain?.domain})
     .sort({ verificationNumber: -1 }) // Sortera i fallande ordning
     .select("verificationNumber") // Hämta bara verifikationsnumret
     .exec();
@@ -67,13 +68,16 @@ const groupByMonth = (verifications: VerificationProps[]) => {
 
 type LoaderData = {
   verifications: VerificationProps[];
+  latestVerificationNumber: number;
   year: number;
-  latestVerificationNumber: number
 };
 
 export default function VerificationsPage() {
-  const { verifications, latestVerificationNumber } = useLoaderData<LoaderData>();
+  const { verifications, year, latestVerificationNumber } =
+    useLoaderData<LoaderData>();
   const groupedVerifications = groupByMonth(verifications);
+
+
 
   const hasVatReport = (
     verifications: VerificationProps[],
@@ -88,24 +92,34 @@ export default function VerificationsPage() {
 
   return (
     <div className="mt-20 p-2">
-      <div className="mt-4">
-      <Outlet context={{ latestVerificationNumber }} />
-      <Link
-        to="/admin/verifications/new"
-        prefetch="intent"
-        className="bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
-      >
-        Ny verifikation
-      </Link>
-      <Link
-        to="/admin/verifications/financial-overview"
-        prefetch="intent"
-        className="ml-2 bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
-      >
-        Balans och resultaträkning
-      </Link>
+      <div className="mt-4 flex items-center justify-between">
+        <div>
+          <Outlet context={{ latestVerificationNumber }} />
+          <Link
+            to="/admin/verifications/new"
+            prefetch="intent"
+            className="bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
+          >
+            Ny verifikation
+          </Link>
+          <Link
+            to="/admin/verifications/financial-overview"
+            prefetch="intent"
+            className="ml-2 bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
+          >
+            Balans och resultaträkning
+          </Link>
+        </div>
       </div>
       <div className="mb-20 mt-20 mx-auto">
+      {Object.keys(groupedVerifications).length === 0 ?
+      
+        <div className="-mt-6 text-sm border p-2 pt-4 pb-4 text-white border-sky-950 bg-sky-700 rounded-lg">
+          Inga verifikationer för bokföringsåret {year}
+          </div>
+      : null }
+
+
         {Object.keys(groupedVerifications).map((monthKey, index) => {
           const monthHasVatReport = hasVatReport(verifications, monthKey);
           return (

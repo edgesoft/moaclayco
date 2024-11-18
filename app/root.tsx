@@ -19,8 +19,11 @@ import { auth } from "./services/auth.server";
 import s from "react-toastify/dist/ReactToastify.css";
 import { ToastContainer, toast } from "react-toastify";
 import { CollectionProps, User } from "./types";
+import { ThemeProvider, useTheme } from "./components/Theme";
+import { getDomain } from "./utils/domain";
 
 export type IndexProps = {
+  hostname: string,
   user?: User;
   ENV: {
     STRIPE_PUBLIC_KEY: string;
@@ -35,7 +38,8 @@ export const links: LinksFunction = () => [
 ];
 
 export const loader: LoaderFunction = async ({ request }) => {
-  const collections = await Collections.find().sort({ sortOrder: 1 });
+  let domain = getDomain(request)
+  const collections = await Collections.find({domain: domain?.domain}).sort({ sortOrder: 1 });
   let url = new URL(request.url);
   let hostname = url.hostname;
   let proto = request.headers.get("X-Forwarded-Proto") ?? url.protocol;
@@ -55,8 +59,10 @@ export const loader: LoaderFunction = async ({ request }) => {
   }
 
   let user = await auth.isAuthenticated(request);
+ 
 
   return {
+    hostname,
     user,
     ENV: {
       STRIPE_PUBLIC_KEY: process.env.STRIPE_PUBLIC_KEY,
@@ -73,7 +79,8 @@ function Document({
   title?: string;
 }) {
   let data: { ENV: { STRIPE_PUBLIC_KEY: string } } =
-    useLoaderData<IndexProps>();
+  useLoaderData<IndexProps>();
+  const theme = useTheme();
   return (
     <html lang="en">
       <head>
@@ -84,13 +91,15 @@ function Document({
         />
         <meta
           property="twitter:image"
-          content="https://moaclayco-prod.s3.eu-north-1.amazonaws.com/background3.jpg"
+          content={theme?.backgroundImage}
         />
         <meta
           property="og:image"
-          content="https://moaclayco-prod.s3.eu-north-1.amazonaws.com/background3.jpg"
+          content={theme?.backgroundImage}
         />
-        <link rel="icon" href="/favicon.png" type="image/png" />
+        {(theme?.favicon.endsWith(".svg")) ? <link rel="icon" type="image/svg+xml" href={theme?.favicon}></link> : <link rel="icon" href={String(theme?.favicon)} type="image/png" /> }
+          
+    
         {title ? <title>{title}</title> : null}
         <Meta />
         <Links />
@@ -117,8 +126,9 @@ function Document({
 }
 
 export default function App() {
-  const data = useLoaderData();
+  const data = useLoaderData<IndexProps>();
   return (
+    <ThemeProvider hostname={data.hostname}>
     <CartProvider>
       <Document>
         <Outlet context={data} />
@@ -126,5 +136,6 @@ export default function App() {
         <Footer />
       </Document>
     </CartProvider>
+    </ThemeProvider>
   );
 }

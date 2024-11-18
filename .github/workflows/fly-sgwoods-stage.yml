@@ -1,0 +1,16 @@
+name: Fly SGWoods Stage
+on:
+  push:
+    branches:
+      - next
+      - 'next-**'
+jobs:
+  deploy:
+    name: Deploy SG Woods Stage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy -a sgwoods-stage --remote-only --config fly-sgwoods-stage.toml --dockerfile Dockerfile-stage
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_SGWOODS }}

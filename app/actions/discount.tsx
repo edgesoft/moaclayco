@@ -4,6 +4,7 @@ import {
 } from "@remix-run/node";
 import { Discounts as DiscountEntity } from "../schemas/discounts";
 import { z } from "zod";
+import { getDomain } from "~/utils/domain";
 
 const objectFromFormData = (formData: FormData) => {
   const obj: { [key: string]: string | File } = {};
@@ -46,12 +47,13 @@ export const formSchema = z.object({
 let action: ActionFunction = async ({ request, params }) => {
   let formData = await request.formData();
   let action = formData.get("action");
+  const domain = getDomain(request)
 
   switch (action) {
     case "save":
       const formObject = objectFromFormData(formData);
       const result = formSchema.parse(formObject); // Validerar och omvandlar datatyp där det behövs
-      const obj: any = await DiscountEntity.findOne({ code: result.code }).lean();
+      const obj: any = await DiscountEntity.findOne({ domain: domain?.domain, code: result.code }).lean();
 
       if (params.id) {
         if (obj) {
@@ -67,6 +69,7 @@ let action: ActionFunction = async ({ request, params }) => {
           { _id: params.id },
           {
             ...result,
+            domain: domain?.domain
           }
         );
       } else {
@@ -78,7 +81,7 @@ let action: ActionFunction = async ({ request, params }) => {
           
         }
 
-        await DiscountEntity.create(result);
+        await DiscountEntity.create({...result, domain: domain?.domain});
       }
 
       break;

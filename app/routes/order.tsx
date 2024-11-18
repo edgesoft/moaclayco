@@ -10,6 +10,7 @@ import {
 import { useLoaderData } from "@remix-run/react";
 import { Orders } from "~/schemas/orders";
 import { Order } from "~/types";
+import { useTheme } from "~/components/Theme";
 
 export let loader: LoaderFunction = async ({ request }) => {
   let url = new URL(await request.url);
@@ -53,6 +54,7 @@ export let meta: MetaFunction = () => {
 };
 
 export default function Index() {
+  const theme = useTheme()
   let d = useLoaderData();
   let data = null;
   let navigation = useNavigate();
@@ -84,7 +86,7 @@ export default function Index() {
               <br />
               Vi kommer att skicka ordern så fort som möjligt. Om du har frågor
               om din order så är du välkommen att skicka frågor till &nbsp;
-              <span className="text-blue-600">support@moaclayco.com</span>. Ange
+              <span className="text-blue-600">{theme?.email}</span>. Ange
               ordernummer i din ämnesrad.
             </p>
           </>

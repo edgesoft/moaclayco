@@ -2,6 +2,11 @@ import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
 const OrderSchema = new Schema({
+    domain: {
+        type: String,
+        required: true,
+        default: "moaclayco"
+    },
     customer: {
         firstname: String,
         lastname: String,

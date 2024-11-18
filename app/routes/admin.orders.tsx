@@ -8,14 +8,18 @@ import {
 } from "@remix-run/react";
 import React, { useEffect, useState } from "react";
 import { auth } from "~/services/auth.server";
+import { getDomain } from "~/utils/domain";
 
 export let loader: LoaderFunction = async ({ request, params }) => {
-
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
+  const domain = getDomain(request);
 
   return OrderEntity.find(
     {
-      status: { $in: ["SUCCESS", "FAILED", "SHIPPED", "CANCELLED", "MANUAL_PROCESSING"] },
+      status: {
+        $in: ["SUCCESS", "FAILED", "SHIPPED", "CANCELLED", "MANUAL_PROCESSING"],
+      },
+      domain: domain?.domain,
     },
     { status: 1, createdAt: 1, customer: 1, _id: 1, totalSum: 1 }
   )
@@ -28,7 +32,7 @@ enum Status {
   FAILED = "FAILED",
   SHIPPED = "SHIPPED",
   CANCELLED = "CANCELLED",
-  MANUAL_PROCESSING = "MANUAL_PROCESSING"
+  MANUAL_PROCESSING = "MANUAL_PROCESSING",
 }
 
 const getLabel = (status: Status) => {
@@ -43,7 +47,7 @@ const getLabel = (status: Status) => {
     case Status.SHIPPED:
       return { headline: "Levererad", color: "bg-green-600" };
     case Status.MANUAL_PROCESSING:
-        return { headline: "Manuell order", color: "bg-blue-600" };
+      return { headline: "Manuell order", color: "bg-blue-600" };
     default:
       return {
         headline: "Betald",
@@ -95,19 +99,18 @@ export default function Orders() {
   let data: Order[] = useLoaderData();
   let navigate = useNavigate();
   let { id } = useParams();
-  let [showDetail, setShowDetail] = useState(id)
+  let [showDetail, setShowDetail] = useState(id);
 
   // Store the scroll position before navigation
   const handleRowClick = (orderId: string) => {
     sessionStorage.setItem("scrollPosition", window.scrollY.toString());
     if (showDetail && showDetail === orderId) {
-        setShowDetail(undefined)
-        navigate(`/admin/orders`)
+      setShowDetail(undefined);
+      navigate(`/admin/orders`);
     } else {
-        setShowDetail(orderId)
-        navigate(`/admin/orders/${orderId}`);
+      setShowDetail(orderId);
+      navigate(`/admin/orders/${orderId}`);
     }
-   
   };
 
   // Restore the scroll position after navigation
@@ -126,6 +129,16 @@ export default function Orders() {
     }
   }, [id]); // Dependency on `id` ensures scroll restoration when a new row is clicked
 
+  if (data.length === 0) {
+    return (
+      <div className="w-full mt-20 p-1 pt-4 mb-20">
+        <div className=" text-sm border p-2 pt-4 pb-4 text-white border-sky-950 bg-sky-700 rounded-lg">
+          Inga ordrar lagda
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full mt-20 p-1 pt-4 mb-20">
       <div className="overflow-x-auto shadow-md sm:rounded-lg">
@@ -135,10 +148,7 @@ export default function Orders() {
               <th scope="col" className="max-w-xs pl-2 pr-2 py-3">
                 ORDER NR
               </th>
-              <th
-                scope="col"
-                className="pr-2 py-3 w-32"
-              >
+              <th scope="col" className="pr-2 py-3 w-32">
                 STATUS
               </th>
               <th scope="col" className="w-36 py-3 tracking-wider">

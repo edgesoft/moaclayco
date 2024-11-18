@@ -2,14 +2,18 @@ import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
 const VerificationsSchema = new Schema({
+    domain: {
+      type: String,
+      required: true,
+      default: "moaclayco"
+    },
     description: {
       type: String,
       required: true,
     },
     verificationNumber: {
         type: Number,
-        required: true,
-        unique: true,  
+        required: true
       },
     verificationDate: {
       type: Date,

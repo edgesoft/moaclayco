@@ -20,6 +20,8 @@ import Loader from "../components/loader";
 import Terms from "../components/terms";
 import { Order } from "../types";
 import Feedback from "../components/feedback";
+import { getDomain } from "~/utils/domain";
+import { themes } from "~/components/Theme";
 
 declare global {
   interface Window {
@@ -36,6 +38,9 @@ export let loader: LoaderFunction = async ({ request }) => {
   let url = new URL(await request.url);
   let body = new URLSearchParams(url.search);
   const order: Order | null = await Orders.findOne({ _id: body.get("order") });
+  const domain = getDomain(request)
+  if (!domain) throw new Error("Could not find domain")
+  const theme = themes[domain?.domain]
 
   if (!order) {
     throw new Error("Order not found");
@@ -47,16 +52,16 @@ export let loader: LoaderFunction = async ({ request }) => {
       {
         amount: order.totalSum * 100,
         currency: "sek",
-        payment_method_types: ["swish", "klarna", "card"],
+        payment_method_types: theme.paymentMethods,
       }
     );
-    return { clientSecret: paymentIntent.client_secret };
+    return { clientSecret: paymentIntent.client_secret, domain };
   }
 
   const paymentIntent = await stripeClient.paymentIntents.create({
     amount: order.totalSum * 100,
     currency: "sek",
-    payment_method_types: ["swish", "klarna", "card"],
+    payment_method_types: theme.paymentMethods,
   });
 
   await Orders.updateOne(
@@ -69,17 +74,18 @@ export let loader: LoaderFunction = async ({ request }) => {
     }
   );
 
-  return { clientSecret: paymentIntent.client_secret };
+  return { domain, clientSecret: paymentIntent.client_secret };
 };
 
-export let meta: MetaFunction = () => {
+export let meta: MetaFunction = ({data}) => {
+  const theme = themes[data.domain.domain]
   return [
     {
-      title: "Moa Clay Collection",
+      title: theme.longName
     },
     {
       name: "description",
-      content: "Moa Clay Collection",
+      content: theme.longName
     },
   ];
 };

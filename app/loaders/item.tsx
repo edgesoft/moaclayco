@@ -4,9 +4,11 @@ import {
 } from "@remix-run/node";
 import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
+import { getDomain } from "~/utils/domain";
 
- const loader: LoaderFunction = async ({ params }) => {
-    const collection = await Collections.findOne({ shortUrl: params.collection }).lean();
+ const loader: LoaderFunction = async ({ params, request }) => {
+    const domain = getDomain(request)
+    const collection = await Collections.findOne({ shortUrl: params.collection, domain: domain?.domain }).lean();
   
     if (!collection) {
       return redirect("/");

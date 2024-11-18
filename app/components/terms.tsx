@@ -1,10 +1,12 @@
 import {FREE_FREIGHT, FREIGHT_COST} from '~/utils/constants'
+import { useTheme } from './Theme';
 
 type Show = {
   show: (close: boolean) => void
 }
 
 export default function Terms({show}: Show) {
+  const theme = useTheme();
   return (
     <div
       className="fixed z-10 inset-0 overflow-y-auto"
@@ -41,11 +43,11 @@ export default function Terms({show}: Show) {
                     hanteras av följande:
                     <br />
                     <br />
-                    Moaclayco <br />
-                    www.moaclayco.com
+                    {theme?.title} <br />
+                    {theme?.primaryDomain}
                     <br />
                     <br />
-                    E-postadress: supoort@moaclayco.com<br/><br/>
+                    E-postadress: {theme?.email}<br/><br/>
                   </p>
                   <h3 className="text-gray-900 text-lg">
                     Betalning och priser
@@ -112,8 +114,8 @@ export default function Terms({show}: Show) {
                     <h3 className="text-gray-900 text-lg">
                       Reklamationer
                     </h3>
-                    Vid reklamation vänligen kontakta Moaclayco kundservice:
-                    support@moaclayco.com
+                    Vid reklamation vänligen kontakta {theme?.title} kundservice:
+                    {theme?.email}
                     <br />
                     <br />
                     <h3 className="text-gray-900 text-lg">

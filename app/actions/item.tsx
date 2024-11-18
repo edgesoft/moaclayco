@@ -2,6 +2,7 @@ import { ActionFunction, json, redirect } from "@remix-run/node";
 import { z, ZodError } from "zod";
 import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
+import { getDomain } from "~/utils/domain";
 
 const ItemSchema = z.object({
   headline: z.string().min(1, { message: "Var god fyll i namn" }),
@@ -17,7 +18,10 @@ const ItemSchema = z.object({
 });
 
 const action: ActionFunction = async ({ request, params }) => {
-  const collection = await Collections.findOne({ shortUrl: params.collection });
+
+  const domain = getDomain(request)
+
+  const collection = await Collections.findOne({ shortUrl: params.collection, domain: domain?.domain });
   if (!collection) {
     return redirect("/");
   }
@@ -35,6 +39,7 @@ const action: ActionFunction = async ({ request, params }) => {
     const images = result.images.split(",");
 
     const data =  {
+      domain: domain?.domain,
       headline: result.headline,
       price: Number(result.itemPrice),
       instagram: result.instagram,

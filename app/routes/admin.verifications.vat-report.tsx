@@ -15,11 +15,14 @@ import { Verifications } from "~/schemas/verifications"; // Din MongoDB schema
 import { classNames } from "~/utils/classnames";
 import { generateNextEntryNumber } from "~/utils/verificationUtil";
 import { formatMonthName } from "~/utils/formatMonthName";
-import { accounts } from "~/utils/accounts";
+import { getDomain } from "~/utils/domain";
 
 // Loader-funktion för att hämta verifikationer från MongoDB för en viss månad
 export const loader: LoaderFunction = async ({ request }) => {
   const url = new URL(request.url);
+  const domain = getDomain(request)
+  if (!domain) throw new Error("Could not find domain")
+
   const month = url.searchParams.get("month"); // Få månaden som query param
   if (!month) {
     return json({ error: "Ingen månad specificerad" }, { status: 400 });
@@ -37,6 +40,7 @@ export const loader: LoaderFunction = async ({ request }) => {
       $gte: startOfMonth,
       $lte: endOfMonth, // Ändrat från $lt till $lte för att inkludera sista dagen
     },
+    domain: domain.domain,
     "metadata.key": { $ne: "vatReport" },
   });
 
@@ -62,6 +66,9 @@ export const loader: LoaderFunction = async ({ request }) => {
 
 export const action: ActionFunction = async ({ request }) => {
   const formData = await request.formData();
+  const domain = getDomain(request)
+  if (!domain) throw new Error("Could not find domain")
+
   const submissionDate = formData.get("submissionDate");
 
   if (!submissionDate) {
@@ -94,6 +101,7 @@ export const action: ActionFunction = async ({ request }) => {
       $lt: endOfMonth,
     },
     "metadata.key": { $ne: "vatReport" },
+    domain: domain.domain
   });
 
   let totalIncomingVat = 0;
@@ -187,8 +195,9 @@ export const action: ActionFunction = async ({ request }) => {
   }
 
   const newVerification = new Verifications({
+    domain: domain.domain,
     description: `Momsrapport för ${formatMonthName(month)}`,
-    verificationNumber: await generateNextEntryNumber(),
+    verificationNumber: await generateNextEntryNumber(domain.domain),
     verificationDate: formattedDate,
     journalEntries: journalEntries,
     metadata,
