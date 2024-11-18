@@ -66,7 +66,7 @@ export let action: ActionFunction = async ({ request }) => {
       },
       { amount: 1, price: 1 }
     ),
-    Discounts.findOne({ code: body.get("discount") }),
+    Discounts.findOne({ domain: domain?.domain, code: body.get("discount") }),
   ]);
 
 
