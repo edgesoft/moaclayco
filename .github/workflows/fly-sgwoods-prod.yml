@@ -1,0 +1,15 @@
+name: Fly SGWoods Prod
+on:
+  push:
+    branches:
+       - master
+jobs:
+  deploy:
+    name: Deploy SG Woods Prod
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy -a sgwoods --remote-only --config fly-sgwoods-prod.toml --dockerfile Dockerfile-prod
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_SGWOODS }}
