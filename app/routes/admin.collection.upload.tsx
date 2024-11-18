@@ -2,23 +2,24 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { ActionFunction, LoaderFunction, json } from "@remix-run/node";
 import { Readable } from "stream";
-import sharp from 'sharp';
-import { v4 as uuidv4 } from 'uuid'; 
+import sharp from "sharp";
+import { v4 as uuidv4 } from "uuid";
 import { s3Client } from "~/services/s3.server";
 
-
-const awsCollectionPath = process.env.AWS_COLLECTION_PATH
+const awsCollectionPath = process.env.AWS_COLLECTION_PATH;
 
 if (!awsCollectionPath) {
-  throw new Error("AWS configuration is not complete. Please check your environment variables.");
+  throw new Error(
+    "AWS configuration is not complete. Please check your environment variables."
+  );
 }
 
 export async function uploadToS3(file: File | Blob) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const thumbnailBuffer = await sharp(buffer)
-  .resize(700) // Resize the image to have the given width
-  .webp({ quality: 90 }) // Convert the image to webp format with a quality of 90
-  .toBuffer();
+    .resize(700) // Resize the image to have the given width
+    .webp({ quality: 90 }) // Convert the image to webp format with a quality of 90
+    .toBuffer();
 
   const fileSize = thumbnailBuffer.length; // This is the size of the thumbnail file in bytes
   const fileStream = bufferToStream(thumbnailBuffer);
@@ -65,21 +66,20 @@ function bufferToStream(buffer: Buffer) {
 
 export const action: ActionFunction = async ({ request }) => {
   const formData = await request.formData();
-  const file  = formData.get("file");
+  const file = formData.get("file");
 
   if (!file) return json({ error: "No file uploaded" }, { status: 400 });
 
   if (file instanceof File) {
     try {
-        const result = await uploadToS3(file); // The utility function to upload the file to S3
-        return json(result);
-      } catch (error) {
-        console.error(error);
-        return json({ error: "Failed to upload file" }, { status: 500 });
-      }
+      const result = await uploadToS3(file); // The utility function to upload the file to S3
+      return json(result);
+    } catch (error) {
+      console.error(error);
+      return json({ error: "Failed to upload file" }, { status: 500 });
+    }
   }
   return json({ error: "Failed to upload file" }, { status: 500 });
-
 };
 
 export const loader: LoaderFunction = () => {
