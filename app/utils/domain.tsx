@@ -10,7 +10,7 @@ export const domains = [
   },
   {
     domain: "moaclayco",
-    hosts: ["moaclayco.com", "moaclayco-stage.fly.dev", "moaclayco.fly.dev"],
+    hosts: ["www.moaclayco.com", "moaclayco.com", "moaclayco-stage.fly.dev", "moaclayco.fly.dev"],
   },
 ];
 
