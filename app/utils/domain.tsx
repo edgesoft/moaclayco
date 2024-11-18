@@ -2,6 +2,7 @@ export const domains = [
   {
     domain: "sgwoods",
     hosts: [
+      "www.sgwoods.se",
       "sgwoods.se",
       "localhost",
       "sgwoods-stage.fly.dev",
