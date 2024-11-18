@@ -105,7 +105,7 @@ const makeAccountTransaction = async(paymentIntent: Stripe.PaymentIntent) => {
 const handlePayoutPaid = async (payout: Stripe.Payout) => {
   const payoutId = payout.id;
   const amountInSek = payout.amount / 100;
-  let descriptionParts: string[] = [`Payout id: ${payoutId}\r\n\r\n`]; // Samla delarna av beskrivningen i en lista
+  let description = `Stripe Payout(${payoutId})`
 
   console.log(`Payout ID: ${payoutId}`);
   console.log(`Payout amount: ${amountInSek} SEK`);
@@ -116,6 +116,8 @@ const handlePayoutPaid = async (payout: Stripe.Payout) => {
     payout: payoutId,
   });
 
+  let metadata = []
+  let index = 0; // Startar index på 0
   for (const balanceTransaction of balanceTransactions.data) {
     if (balanceTransaction.source) {
       try {
@@ -133,7 +135,9 @@ const handlePayoutPaid = async (payout: Stripe.Payout) => {
           if (order) {
             // Lägg till i beskrivningen
             domain = order.domain
-            descriptionParts.push(`Order id: ${order._id}\r\nPayment intent id: ${paymentIntentId}`);
+            metadata.push({key: `orderId.${index}`, value: `${order._id}`})
+            metadata.push({key: `paymentIntentId.${index}`, value: `${paymentIntentId}`})
+            index = index + 1
           } else {
             console.warn(`Order not found for PaymentIntent: ${paymentIntentId}`);
           }
@@ -147,7 +151,6 @@ const handlePayoutPaid = async (payout: Stripe.Payout) => {
   if (!domain) throw new  Error("Could not find domain")
 
   // Sätt ihop beskrivningen från alla delar
-  const description = descriptionParts.join('\r\n');
   // Skapa bokföringspost
   await Verifications.create({
     domain: domain,
@@ -163,7 +166,8 @@ const handlePayoutPaid = async (payout: Stripe.Payout) => {
         account: 1580, // Fordran på Stripe
         credit: amountInSek.toFixed(2),
       }
-    ]
+    ],
+    metadata: metadata
   });
 
   console.log(`Bokföringspost skapad för utbetalning: ${payoutId}`);
