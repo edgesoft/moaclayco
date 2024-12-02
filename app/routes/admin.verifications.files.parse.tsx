@@ -344,7 +344,7 @@ export const action: ActionFunction = async ({ request, params }) => {
     parsePromise = parser(fileBuffer).then((pdfData) => {
       console.log("pre", preprocessText(pdfData.text));
       console.log("Extraherad text från PDF:", pdfData.text);
-      return parseData(verificationDomain.domain, pdfData.text);
+      return parseData(domain.domain, pdfData.text);
     });
   } else if (file.type.startsWith("image/")) {
     const [result] = await visionClient.textDetection({
