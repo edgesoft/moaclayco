@@ -17,6 +17,7 @@ import { ActionFunction, json } from "@remix-run/node";
 import ClientOnly from "~/components/ClientOnly";
 import { classNames } from "~/utils/classnames";
 import { getDomain } from "~/utils/domain";
+import { loader as rootLoader } from "~/root";
 
 const formSchema = z.object({
   description: z.string().min(1, "Beskrivning är obligatorisk"),
@@ -72,6 +73,8 @@ type SuggestionProps = {
   verificationData: VerificationData;
   uuid: string;
 };
+
+export const loader = rootLoader 
 
 const FileUpload = ({
   onSuggestionsReceived,
@@ -306,6 +309,7 @@ enum UploadingState {
   FAILED = 3,
   SUCCESS = 4,
 }
+
 
 export default function Verification() {
   const actionData = useActionData<ActionData>();
