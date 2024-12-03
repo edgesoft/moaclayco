@@ -289,6 +289,7 @@ export const action: ActionFunction = async ({ request, params }) => {
       verification: newVerification,
     });
   } catch (e) {
+    console.log(e)
     return json(
       {
         success: false,
