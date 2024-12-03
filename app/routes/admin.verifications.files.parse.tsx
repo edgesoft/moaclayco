@@ -319,7 +319,7 @@ export const action: ActionFunction = async ({ request, params }) => {
   // S3-upload och parsing körs parallellt med Promise.all
   const awsVerificationsPath = process.env.AWS_VERIFICATIONS_PATH;
   const fileName = `${Date.now()}-${file.name}`;
-  const filePath = `${awsVerificationsPath}/${domain.domain}/${fileName}`;
+  const filePath = `${awsVerificationsPath}/${fileName}`;
   const uploadParams = {
     Bucket: process.env.AWS_S3_BUCKET_NAME,
     Key: filePath,
