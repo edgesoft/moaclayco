@@ -1,16 +1,21 @@
 import { useState, useRef, useEffect } from "react";
 import { useFetcher, useParams, useNavigate } from "@remix-run/react";
 import { useLoaderData } from "@remix-run/react";
-import { json } from "@remix-run/node";
+import { ActionFunction, json, LoaderFunction } from "@remix-run/node";
 import { Verifications } from "~/schemas/verifications";
 import { Readable } from "stream";
 import { s3Client } from "~/services/s3.server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
+import { getDomain } from "~/utils/domain";
 
-export const loader = async ({ params }) => {
+export const loader: LoaderFunction = async ({ params, request }) => {
   const { verificationNumber } = params;
+  if (!verificationNumber)
+    throw new Error(`Could not find param verificationNumber`);
+  const domain = getDomain(request);
   const verification = await Verifications.findOne({
+    domain: domain?.domain,
     verificationNumber: parseInt(verificationNumber),
   });
 
@@ -21,8 +26,9 @@ export const loader = async ({ params }) => {
   return json({ verification });
 };
 
-export const action = async ({ request, params }) => {
+export const action: ActionFunction = async ({ request, params }) => {
   const formData = await request.formData();
+  const domain = getDomain(request);
   const file = formData.get("file");
   const label = formData.get("label") || `${Date.now()}-${file.name}`;
   const verificationNumber = params.verificationNumber;
@@ -40,7 +46,9 @@ export const action = async ({ request, params }) => {
 
   try {
     const fileBuffer = Buffer.from(await file.arrayBuffer());
-    const fileName = `${awsVerificationsPath}/${verificationNumber}/${Date.now()}-${file.name}`;
+    const fileName = `${awsVerificationsPath}/${verificationNumber}/${Date.now()}-${
+      file.name
+    }`;
 
     const upload = new Upload({
       client: s3Client,
@@ -54,9 +62,11 @@ export const action = async ({ request, params }) => {
 
     const uploadResult = await upload.done();
 
-
     await Verifications.updateOne(
-      { verificationNumber: parseInt(verificationNumber) },
+      {
+        verificationNumber: parseInt(verificationNumber),
+        domain: domain?.domain,
+      },
       {
         $push: {
           files: {
@@ -73,7 +83,6 @@ export const action = async ({ request, params }) => {
   }
 };
 
-
 export default function Files() {
   const { verification } = useLoaderData(); // Hämta verifieringen och filerna
   const fetcher = useFetcher();
@@ -85,7 +94,6 @@ export default function Files() {
   const handleFileInputClick = () => {
     fileInputRef.current.click();
   };
-
 
   useEffect(() => {
     if (fetcher.data && fetcher.data.success) {
@@ -109,9 +117,6 @@ export default function Files() {
         action: `/admin/verifications/${verification.verificationNumber}/files`,
         encType: "multipart/form-data",
       });
-
-  
-
     }
   };
 
@@ -203,7 +208,6 @@ export default function Files() {
             </button>
           </div>
         </div>
-        
       </div>
     </div>
   );
