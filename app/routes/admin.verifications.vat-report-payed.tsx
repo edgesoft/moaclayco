@@ -23,6 +23,7 @@ import { getDomain } from "~/utils/domain";
 // Loader-funktion för att hämta verifikationer från MongoDB för en viss månad
 export const loader: LoaderFunction = async ({ request }) => {
   const url = new URL(request.url);
+  const domain = getDomain(request)
   const month = url.searchParams.get("month"); // Få månaden som query param
   if (!month) {
     return json({ error: "Ingen månad specificerad" }, { status: 400 });
@@ -35,6 +36,7 @@ export const loader: LoaderFunction = async ({ request }) => {
   endOfMonth.setHours(23, 59, 59, 999); // Sätt tiden till slutet av dagen
 
   const verification = await Verifications.findOne({
+    domain: domain?.domain,
     "metadata.key": "vatReport",
     "metadata.value": month,
   });
