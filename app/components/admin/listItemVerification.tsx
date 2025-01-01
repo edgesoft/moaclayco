@@ -85,7 +85,7 @@ export function ListItemVerification({
       {/* Rad utan divider */}
       <tr className="border-b border-gray-200 ">
         <td colSpan={5} className="border-0 text-xs text-gray-500">
-          <div className="mb-2">
+          <div className="mb-2 pl-1">
             <span
               dangerouslySetInnerHTML={{
                 __html: verification.description.replace(/\r\n/g, "<br />"),
