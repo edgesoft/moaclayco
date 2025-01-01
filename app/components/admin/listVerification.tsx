@@ -3,6 +3,7 @@ import { ListItemVerification } from "./listItemVerification";
 import { formatMonthName } from "~/utils/formatMonthName";
 import { Outlet, useNavigate } from "@remix-run/react";
 import { useState } from "react";
+import { classNames } from "~/utils/classnames";
 
 type GroupVerificationProps = {
   monthKey: string;
@@ -21,7 +22,6 @@ export function ListVerification({
 }: GroupVerificationProps) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(isExpanded);
-
 
   const shouldRegisterVat = (verification: VerificationProps | undefined) => {
     if (!verification) {
@@ -53,25 +53,39 @@ export function ListVerification({
   };
 
   const registerVat = shouldRegisterVat(vatReportVerification);
-  
 
   const handleCreateVATReport = (monthKey: string) => {
     navigate(`/admin/verifications/vat-report?month=${monthKey}`);
   };
 
   return (
-    <div key={monthKey} className="mb-8">
-      <div className="flex justify-between items-center mb-4 cursor-pointer">
+    <div key={monthKey} className={classNames(!expanded ? `bg-gray-100`: `bg-white`,"mb-4 border border-gray-200 rounded-md")}>
+      <div className="flex justify-between items-center mb-4 cursor-pointer p-2">
         <h2
           onClick={() => {
             setExpanded(!expanded);
           }}
-          className="text-xl font-semibold"
+          className="text-xl font-semibold flex items-center justify-between cursor-pointer"
         >
           {formatMonthName(monthKey)}
+          <svg
+            className={`w-5 h-5 transform transition-transform duration-300 ${
+              expanded ? "rotate-180" : "rotate-90"
+            }`}
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M9 5l7 7-7 7"
+            />
+          </svg>
         </h2>
 
-  
         {!vatReportVerification && isPastMonth(monthKey) && (
           <button
             onClick={() => handleCreateVATReport(monthKey)}
@@ -134,10 +148,7 @@ export function ListVerification({
             </thead>
             <tbody className="bg-white">
               {groupedVerifications[monthKey].map((verification, index) => (
-                <ListItemVerification
-                  key={index}
-                  verification={verification}
-                />
+                <ListItemVerification key={index} verification={verification} />
               ))}
             </tbody>
           </table>
