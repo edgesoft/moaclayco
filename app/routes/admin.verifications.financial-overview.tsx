@@ -91,18 +91,37 @@ const FinancialReportSection = ({ title, accounts, verifications }) => (
             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
               {account.label}
             </td>
+
             <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-500">
-              {sumAccounts(verifications, [account.value])} SEK
+              {(
+                (account.reportType === ReportType.INCOME ||
+                account.reportType === ReportType.LIABILITIES
+                  ? -1
+                  : 1) * sumAccounts(verifications, [account.value])
+              ).toFixed(2)}{" "}
+              SEK
             </td>
           </tr>
         ))}
         <tr className="font-bold bg-gray-100">
           <td className="px-4 py-3">Total {title.toLowerCase()}</td>
           <td className="px-4 py-3 text-right">
-            {sumAccounts(
-              verifications,
-              accounts.map((a) => a.value)
-            )}{" "}
+            {accounts
+              .reduce((total, account) => {
+                const accountSum = parseFloat(
+                  sumAccounts(verifications, [account.value])
+                );
+
+                // Justera tecknet baserat på reportType
+                const adjustedSum =
+                  account.reportType === ReportType.INCOME ||
+                  account.reportType === ReportType.LIABILITIES
+                    ? -accountSum // Intäkter och skulder visas med inverterat tecken
+                    : accountSum; // Tillgångar och kostnader behåller sitt tecken
+
+                return total + adjustedSum;
+              }, 0)
+              .toFixed(2)}{" "}
             SEK
           </td>
         </tr>
@@ -111,13 +130,13 @@ const FinancialReportSection = ({ title, accounts, verifications }) => (
   </div>
 );
 
-
 function formatDateRange(startDate, endDate) {
   const start = new Date(startDate).toISOString().slice(0, 10);
 
   // Kontrollera om slutdatum är det sista datumet för det året
   const endDateObj = new Date(endDate);
-  const isEndOfYear = endDateObj.getMonth() === 11 && endDateObj.getDate() === 31;
+  const isEndOfYear =
+    endDateObj.getMonth() === 11 && endDateObj.getDate() === 31;
   const end = isEndOfYear
     ? `${endDateObj.getFullYear()}-12-31`
     : endDateObj.toISOString().slice(0, 10);
