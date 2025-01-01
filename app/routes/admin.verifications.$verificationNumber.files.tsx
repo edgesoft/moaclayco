@@ -1,11 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { useFetcher, useParams, useNavigate } from "@remix-run/react";
+import { useFetcher, useNavigate } from "@remix-run/react";
 import { useLoaderData } from "@remix-run/react";
 import { ActionFunction, json, LoaderFunction } from "@remix-run/node";
 import { Verifications } from "~/schemas/verifications";
-import { Readable } from "stream";
 import { s3Client } from "~/services/s3.server";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { getDomain } from "~/utils/domain";
 
@@ -46,9 +44,8 @@ export const action: ActionFunction = async ({ request, params }) => {
 
   try {
     const fileBuffer = Buffer.from(await file.arrayBuffer());
-    const fileName = `${awsVerificationsPath}/${verificationNumber}/${Date.now()}-${
-      file.name
-    }`;
+    const fileName = `${awsVerificationsPath}/${verificationNumber}/${Date.now()}-${file.name
+      }`;
 
     const upload = new Upload({
       client: s3Client,

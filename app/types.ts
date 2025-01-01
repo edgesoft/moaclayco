@@ -69,9 +69,11 @@ export type ItemProps = {
 };
 
 export type User = {
+  _id: string;
   firstname: string;
   lastname: string;
   email: string;
+  fiscalYear: number;
 };
 
 export type AdditionalItemProps = {

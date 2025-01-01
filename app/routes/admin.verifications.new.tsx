@@ -1,8 +1,9 @@
 import {
   useActionData,
-  useFetcher, useNavigate,
+  useFetcher,
+  useNavigate,
   useOutletContext,
-  useSubmit
+  useSubmit,
 } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
@@ -18,6 +19,7 @@ import ClientOnly from "~/components/ClientOnly";
 import { classNames } from "~/utils/classnames";
 import { getDomain } from "~/utils/domain";
 import { loader as rootLoader } from "~/root";
+import { auth } from "~/services/auth.server";
 
 const formSchema = z.object({
   description: z.string().min(1, "Beskrivning är obligatorisk"),
@@ -74,7 +76,7 @@ type SuggestionProps = {
   uuid: string;
 };
 
-export const loader = rootLoader 
+export const loader = rootLoader;
 
 const FileUpload = ({
   onSuggestionsReceived,
@@ -205,16 +207,14 @@ type ActionData =
       errors: { [key: string]: string };
     };
 
-type JournalEntry = {
-  account: number | undefined;
-  debit: number | undefined;
-  credit: number | undefined;
-};
-
 export const action: ActionFunction = async ({ request, params }) => {
   const formData = await request.formData();
-  const domain = getDomain(request)
-  if (!domain) throw new Error("Could not find domain")
+  const domain = getDomain(request);
+  const user = await auth.isAuthenticated(request, {
+    failureRedirect: "/login",
+  });
+
+  if (!domain) throw new Error("Could not find domain");
   const description = formData.get("description");
   const verificationDate = formData.get("verificationDate");
   const journalEntries = JSON.parse(formData.get("journalEntries") as string);
@@ -232,20 +232,19 @@ export const action: ActionFunction = async ({ request, params }) => {
 
   const dateForDatabase = new Date(verificationDate);
 
-  if (new Date().getFullYear() !== dateForDatabase.getFullYear()) {
+  if (user.fiscalYear !== dateForDatabase.getFullYear()) {
     return json(
       {
         success: false,
         errors: {
           yearError: {
-            message: "Året måste vara inom samma bokföringsår som nuvarande år"
-          }
+            message: "Året måste vara inom samma bokföringsår som nuvarande år",
+          },
         },
       },
       { status: 400 }
     );
   }
-
 
   // Validera med Zod och kolla om resultatet är success
   const result = formSchema.safeParse({
@@ -270,7 +269,6 @@ export const action: ActionFunction = async ({ request, params }) => {
     );
   }
 
-
   try {
     const newVerification = new Verifications({
       domain: domain?.domain,
@@ -289,7 +287,7 @@ export const action: ActionFunction = async ({ request, params }) => {
       verification: newVerification,
     });
   } catch (e) {
-    console.log(e)
+    console.log(e);
     return json(
       {
         success: false,
@@ -310,7 +308,6 @@ enum UploadingState {
   FAILED = 3,
   SUCCESS = 4,
 }
-
 
 export default function Verification() {
   const actionData = useActionData<ActionData>();
@@ -338,7 +335,6 @@ export default function Verification() {
       journalEntries: [{ account: 0, debit: undefined, credit: undefined }],
     },
   });
-
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -446,9 +442,8 @@ export default function Verification() {
   };
 
   useEffect(() => {
-
     if (actionData?.success) {
-      return
+      return;
     }
     const findFirstError = (errorObj: any): string | null => {
       for (const key in errorObj) {
@@ -597,9 +592,8 @@ export default function Verification() {
                             : {},
                           journalEntries: JSON.stringify(data.journalEntries),
                         };
-                        console.log(formData)
+                        console.log(formData);
                         submit(formData, { method: "post" });
-                    
                       }
                     })}
                     className={classNames(
