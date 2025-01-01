@@ -111,13 +111,16 @@ const FinancialReportSection = ({ title, accounts, verifications }) => (
   </div>
 );
 
+
 function formatDateRange(startDate, endDate) {
-  // Kontrollera om slutdatum är årets sista dag
   const start = new Date(startDate).toISOString().slice(0, 10);
-  const end =
-    new Date(endDate).getFullYear() > new Date(startDate).getFullYear()
-      ? "2024-12-31"
-      : new Date(endDate).toISOString().slice(0, 10);
+
+  // Kontrollera om slutdatum är det sista datumet för det året
+  const endDateObj = new Date(endDate);
+  const isEndOfYear = endDateObj.getMonth() === 11 && endDateObj.getDate() === 31;
+  const end = isEndOfYear
+    ? `${endDateObj.getFullYear()}-12-31`
+    : endDateObj.toISOString().slice(0, 10);
 
   return `${start} - ${end}`;
 }
