@@ -144,7 +144,7 @@ const hasVatReport = (
           </Link>
         </div>
       </div>
-      <div className="mb-20 mt-20 mx-auto">
+      <div className="mb-20 mt-10 mx-auto">
       {Object.keys(groupedVerifications).length === 0 ?
       
         <div className="-mt-6 text-sm border p-2 pt-4 pb-4 text-white border-sky-950 bg-sky-700 rounded-lg">
