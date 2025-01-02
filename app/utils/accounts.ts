@@ -8,7 +8,7 @@ export const accounts = [
     { value: 2012, label: "2012 - Avräkning för skatter och avgifter", reportType:ReportType.LIABILITIES },
     { value: 2013, label: "2013 - Eget uttag", reportType: ReportType.LIABILITIES },
     { value: 2018, label: "2018 - Egen insättning", reportType: ReportType.LIABILITIES },
-    { value: 2050, label: "2050 - Skattekontotransaktioner", reportType: ReportType.LIABILITIES },
+    { value: 2050, label: "2050 - Skattekontotransaktioner", reportType: ReportType.NONE },
     { value: 2440, label: "2440 - Leverantörsskulder", reportType: ReportType.LIABILITIES },
     { value: 2611, label: "2611 - Utgående moms på varor och frakt", reportType: ReportType.LIABILITIES },
     { value: 2640, label: "2640 - Ingående moms", reportType: ReportType.LIABILITIES },

@@ -51,7 +51,7 @@ export const loader: LoaderFunction = async ({ request }) => {
 };
 
 const filterAccounts = (type: ReportType) =>
-  accounts.filter((account) => account.reportType === type);
+accounts.filter((account) => account.reportType === type);
 
 const sumAccounts = (verifications, accounts) => {
   return accounts
@@ -133,7 +133,6 @@ const FinancialReportSection = ({ title, accounts, verifications }) => (
 function formatDateRange(startDate, endDate) {
   const start = new Date(startDate).toISOString().slice(0, 10);
 
-  // Kontrollera om slutdatum är det sista datumet för det året
   const endDateObj = new Date(endDate);
   const isEndOfYear =
     endDateObj.getMonth() === 11 && endDateObj.getDate() === 31;

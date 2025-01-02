@@ -105,7 +105,8 @@ export enum ReportType  {
   INCOME,
   BALANCE,
   EXPENSE,
-  LIABILITIES
+  LIABILITIES,
+  NONE
 }
 
 export type VerificationProps = {
