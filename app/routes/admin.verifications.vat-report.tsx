@@ -16,12 +16,15 @@ import { classNames } from "~/utils/classnames";
 import { generateNextEntryNumber } from "~/utils/verificationUtil";
 import { formatMonthName } from "~/utils/formatMonthName";
 import { getDomain } from "~/utils/domain";
+import { auth } from "~/services/auth.server";
+import { getIBJournalEntries } from "~/utils/accounts";
+
 
 // Loader-funktion för att hämta verifikationer från MongoDB för en viss månad
 export const loader: LoaderFunction = async ({ request }) => {
   const url = new URL(request.url);
-  const domain = getDomain(request)
-  if (!domain) throw new Error("Could not find domain")
+  const domain = getDomain(request);
+  if (!domain) throw new Error("Could not find domain");
 
   const month = url.searchParams.get("month"); // Få månaden som query param
   if (!month) {
@@ -66,8 +69,11 @@ export const loader: LoaderFunction = async ({ request }) => {
 
 export const action: ActionFunction = async ({ request }) => {
   const formData = await request.formData();
-  const domain = getDomain(request)
-  if (!domain) throw new Error("Could not find domain")
+  const domain = getDomain(request);
+  if (!domain) throw new Error("Could not find domain");
+  const user = await auth.isAuthenticated(request, {
+    failureRedirect: "/login",
+  });
 
   const submissionDate = formData.get("submissionDate");
 
@@ -88,12 +94,18 @@ export const action: ActionFunction = async ({ request }) => {
 
   const formattedDate = new Date(submissionDate);
 
+  if (formattedDate.getFullYear() > Number(year) + 1) {
+    return json(
+      { error: "Du kan inte specificera momsrapporten så långt i förväg" },
+      { status: 400 }
+    );
+  }
+
   const incomingVatAccount = 2640; // Ingående moms
   const outgoingVatAccount = 2611; // Utgående moms
   const vatDebtAccount = 2650; // Momsskuld eller momsfordran
   const roundingAccount = 3740; // Öres- och kronutjämning
   const taxAccount = 2012; // Avräkning för skatter och avgifter
-  const skattekontoAccount = 2050; // Skattekontotransaktioner
 
   const verifications = await Verifications.find({
     verificationDate: {
@@ -101,7 +113,7 @@ export const action: ActionFunction = async ({ request }) => {
       $lt: endOfMonth,
     },
     "metadata.key": { $ne: "vatReport" },
-    domain: domain.domain
+    domain: domain.domain,
   });
 
   let totalIncomingVat = 0;
@@ -122,7 +134,8 @@ export const action: ActionFunction = async ({ request }) => {
     });
   });
 
-  const vatToPayOrRefund = Math.abs(totalOutgoingVat) - Math.abs(totalIncomingVat);
+  const vatToPayOrRefund =
+    Math.abs(totalOutgoingVat) - Math.abs(totalIncomingVat);
   const roundedVatToPayOrRefund = Math.round(vatToPayOrRefund);
   const roundingDifference = vatToPayOrRefund - roundedVatToPayOrRefund;
 
@@ -194,6 +207,41 @@ export const action: ActionFunction = async ({ request }) => {
     });
   }
 
+  // check IB and UB
+  if (formattedDate.getFullYear() > Number(year)) {
+    // VAT report is registered for next year
+    // find IB verification for next year
+    let ibVerification = await Verifications.findOne({
+      domain: domain?.domain,
+      "metadata.key": "IB",
+      "metadata.value": formattedDate.getFullYear(),
+    }).exec();
+
+    if (ibVerification) {
+      // if found get current year journal entries
+      const journalEntries = await getIBJournalEntries(
+        domain.domain,
+        formattedDate.getFullYear()
+      );
+      ibVerification.journalEntries = journalEntries;
+      await ibVerification.save();
+    } else {
+      const journalEntries = await getIBJournalEntries(
+        domain.domain,
+        formattedDate.getFullYear() - 1
+      );
+      if (journalEntries.length > 0) {
+        await Verifications.create({
+          domain: domain?.domain,
+          verificationNumber: await generateNextEntryNumber(domain?.domain),
+          description: "Ingående balans",
+          verificationDate: new Date(formattedDate.getFullYear(), 0, 1),
+          metadata: [{ key: "IB", value: formattedDate.getFullYear() }],
+          journalEntries,
+        });
+      }
+    }
+  }
   const newVerification = new Verifications({
     domain: domain.domain,
     description: `Momsrapport för ${formatMonthName(month)}`,
@@ -209,30 +257,29 @@ export const action: ActionFunction = async ({ request }) => {
     let totalDebet = 0;
     let totalKredit = 0;
 
-    newVerification.journalEntries.forEach(entry => {
+    newVerification.journalEntries.forEach((entry) => {
       totalDebet += entry.debit || 0;
       totalKredit += entry.credit || 0;
     });
 
-    if (totalDebet <  totalKredit) {
+    if (totalDebet < totalKredit) {
       newVerification.journalEntries.push({
         account: roundingAccount,
         debit: Math.abs(roundingDifference),
-        credit: 0
+        credit: 0,
       });
     }
 
-    if (totalDebet >  totalKredit) {
+    if (totalDebet > totalKredit) {
       newVerification.journalEntries.push({
         account: roundingAccount,
         debit: 0,
-        credit: Math.abs(roundingDifference)
+        credit: Math.abs(roundingDifference),
       });
     }
 
     await newVerification.save();
   }
-
 
   return redirect("/admin/verifications");
 };
@@ -244,11 +291,11 @@ const sumAmounts = (verifications, account) => {
       const amount = v.journalEntries
         .filter((entry) => entry.account === account)
         .reduce((acc, entry) => {
-          acc += entry.debit
-          acc -= entry.credit
+          acc += entry.debit;
+          acc -= entry.credit;
 
-          return acc
-        },0)
+          return acc;
+        }, 0);
       return total + amount;
     }, 0)
     .toFixed(2);
@@ -305,7 +352,12 @@ const Report = ({
                   {v.journalEntries
                     .filter((entry) => entry.account === account)
                     .map((entry) => (
-                      <span key={entry._id}>{entry.credit ?  entry.credit.toFixed(2): entry.debit.toFixed(2)} SEK</span>
+                      <span key={entry._id}>
+                        {entry.credit
+                          ? entry.credit.toFixed(2)
+                          : entry.debit.toFixed(2)}{" "}
+                        SEK
+                      </span>
                     ))}
                 </td>
               </tr>
