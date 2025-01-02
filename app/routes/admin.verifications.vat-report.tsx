@@ -313,7 +313,7 @@ const Report = ({
             <tr className="font-bold bg-gray-100">
               <td className="px-4 py-3">Total {totalLabel.toLowerCase()}</td>
               <td className="px-4 py-3 text-right">
-                {sumAmounts(verifications, account)} SEK
+                {-1 * sumAmounts(verifications, account)} SEK
               </td>
             </tr>
           </tbody>
