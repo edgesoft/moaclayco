@@ -3,7 +3,7 @@ import { useLoaderData, useNavigate } from "@remix-run/react";
 import { Verifications } from "~/schemas/verifications"; // Din MongoDB schema
 import { auth } from "~/services/auth.server";
 import { ReportType } from "~/types";
-import { accounts } from "~/utils/accounts";
+import { accounts, sumAccounts } from "~/utils/accounts";
 import { getDomain } from "~/utils/domain";
 
 export const loader: LoaderFunction = async ({ request }) => {
@@ -53,23 +53,7 @@ export const loader: LoaderFunction = async ({ request }) => {
 const filterAccounts = (type: ReportType) =>
 accounts.filter((account) => account.reportType === type);
 
-const sumAccounts = (verifications, accounts) => {
-  return accounts
-    .reduce((total, account) => {
-      const accountTotal = verifications.reduce((acc, v) => {
-        const entries = v.journalEntries.filter(
-          (entry) => entry.account === account
-        );
-        const accountSum = entries.reduce(
-          (sum, entry) => sum + (entry.debit || 0) - (entry.credit || 0),
-          0
-        );
-        return acc + accountSum;
-      }, 0);
-      return total + accountTotal;
-    }, 0)
-    .toFixed(2);
-};
+
 
 const FinancialReportSection = ({ title, accounts, verifications }) => (
   <div className="mb-8">
