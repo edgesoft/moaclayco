@@ -85,9 +85,9 @@ export function ListVerification({
       }}
     >
       <div className="flex justify-between items-center mb-4 cursor-pointer p-2">
-        <h2 className="text-xl font-semibold flex items-center justify-between cursor-pointer">
-          {formatMonthName(monthKey)}
-          <svg
+        <h2 className="text-xl text-gray-400 font-semibold flex items-center justify-between cursor-pointer">
+          
+          <span className={classNames("inline-flex px-3 text-sm font-semibold leading-5 rounded-lg", expanded ? "bg-green-600 text-white" : "bg-gray-300 text-gray-500")}>{formatMonthName(monthKey)} <svg
             className={`w-5 h-5 transform transition-transform duration-300 ${
               expanded ? "rotate-180" : "rotate-90"
             }`}
@@ -102,7 +102,8 @@ export function ListVerification({
               strokeWidth="2"
               d="M9 5l7 7-7 7"
             />
-          </svg>
+          </svg></span>
+          
         </h2>
 
         <div className="flex items-center justify-between">
