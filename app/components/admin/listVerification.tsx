@@ -1,7 +1,7 @@
 import { VerificationProps } from "~/types";
 import { ListItemVerification } from "./listItemVerification";
 import { formatMonthName } from "~/utils/formatMonthName";
-import { Outlet, useNavigate } from "@remix-run/react";
+import { Link, Outlet, useNavigate } from "@remix-run/react";
 import { useState } from "react";
 import { classNames } from "~/utils/classnames";
 
@@ -67,16 +67,15 @@ export function ListVerification({
 
   const registerVat = shouldRegisterVat(vatReportVerification);
 
-  const handleCreateVATReport = (monthKey: string) => {
-    navigate(`/admin/verifications/vat-report?month=${monthKey}`);
-  };
+
 
   return (
     <div
       key={monthKey}
       className={classNames(
-        !expanded ? `bg-gray-100` : `bg-white`,
-        "mb-4 border border-gray-200 rounded-md"
+         "mb-4 rounded-md",
+        !expanded ? `bg-gray-100 border-r border-b drop-shadow-lg border-gray-300` : `border border-gray-200 bg-white drop-shadow-lg `,
+       
       )}
       onClick={(e) => {
         e.preventDefault();
@@ -87,7 +86,7 @@ export function ListVerification({
       <div className="flex justify-between items-center mb-4 cursor-pointer p-2">
         <h2 className="text-xl text-gray-400 font-semibold flex items-center justify-between cursor-pointer">
           
-          <span className={classNames("inline-flex px-3 text-sm font-semibold leading-5 rounded-lg", expanded ? "bg-green-600 text-white" : "bg-gray-300 text-gray-500")}>{formatMonthName(monthKey)} <svg
+          <span className={classNames("inline-flex px-3 text-sm font-semibold leading-5 rounded-lg", expanded ? "bg-green-600 text-white shadow-md" : "bg-gray-200 text-gray-400 shadow-md")}>{formatMonthName(monthKey)} <svg
             className={`w-5 h-5 transform transition-transform duration-300 ${
               expanded ? "rotate-180" : "rotate-90"
             }`}
@@ -135,31 +134,32 @@ export function ListVerification({
           </div>
 
           {!vatReportVerification && isPastMonth(monthKey) && (
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleCreateVATReport(monthKey);
-              }}
+              <Link
+              to={`/admin/verifications/vat-report?month=${monthKey}`}
+              prefetch="intent"
               className="bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
+              onClick={(e) => {
+                e.stopPropagation()
+              }}
             >
+         
               Skapa momsrapport ({formatMonthName(monthKey)})
-            </button>
+
+            </Link>
           )}
 
           {vatReportVerification && registerVat && isPastMonth(monthKey) && (
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                navigate(
-                  `/admin/verifications/vat-report-payed?month=${monthKey}`
-                );
-              }}
-              className="bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
-            >
+             <Link
+             to={`/admin/verifications/vat-report-payed?month=${monthKey}`}
+             prefetch="intent"
+             className="bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
+             onClick={(e) => {
+              e.stopPropagation()
+            }}
+             >       
               Registrera/Skattemyndigheten ({formatMonthName(monthKey)})
-            </button>
+         
+            </Link>
           )}
         </div>
       </div>
