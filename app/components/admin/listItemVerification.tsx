@@ -65,7 +65,8 @@ export function ListItemVerification({
         </td>
         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
           <button
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation()
               navigate(
                 `/admin/verifications/${verification.verificationNumber}/files`
               );
@@ -99,6 +100,7 @@ export function ListItemVerification({
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-500"
+                    onClick={(e) => e.stopPropagation()}
                   >
                     <span>{file.name}</span>
                   </a>

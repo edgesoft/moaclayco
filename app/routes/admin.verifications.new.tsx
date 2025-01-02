@@ -11,7 +11,7 @@ import { z, ZodError } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "react-toastify";
 import Select from "react-select";
-import { accounts } from "~/utils/accounts";
+import { accounts, getIBJournalEntries, sumAccounts } from "~/utils/accounts";
 import { generateNextEntryNumber } from "~/utils/verificationUtil";
 import { Verifications } from "~/schemas/verifications";
 import { ActionFunction, json } from "@remix-run/node";
@@ -207,6 +207,10 @@ type ActionData =
       errors: { [key: string]: string };
     };
 
+
+  
+
+
 export const action: ActionFunction = async ({ request, params }) => {
   const formData = await request.formData();
   const domain = getDomain(request);
@@ -232,13 +236,14 @@ export const action: ActionFunction = async ({ request, params }) => {
 
   const dateForDatabase = new Date(verificationDate);
 
+
   if (user.fiscalYear !== dateForDatabase.getFullYear()) {
     return json(
       {
         success: false,
         errors: {
           yearError: {
-            message: "Året måste vara inom samma bokföringsår som nuvarande år",
+            message: `Året måste vara samma bokföringsår som ${user.fiscalYear}`,
           },
         },
       },
@@ -269,17 +274,60 @@ export const action: ActionFunction = async ({ request, params }) => {
     );
   }
 
+
+  const firstVerification = await Verifications.findOne({
+    domain: domain?.domain,
+    verificationDate: {
+      $gte: new Date(dateForDatabase.getFullYear(), 0, 1), // Från årets början
+      $lte: new Date(dateForDatabase.getFullYear(), 11, 31), // Till årets slut
+    },
+  })
+    .sort({ verificationDate: 1 }) // Sortera i stigande ordning
+    .exec(); // Hämta resultatet
+
+  // This is the first verification for the year
+  if (!firstVerification) {
+      const journalEntries = await getIBJournalEntries(domain.domain, dateForDatabase.getFullYear() - 1)
+      if (journalEntries.length > 0) {
+        await Verifications.create({
+          domain: domain?.domain,
+          verificationNumber: await generateNextEntryNumber(domain?.domain),
+          description: "Ingående balans",
+          verificationDate: new Date(dateForDatabase.getFullYear(), 0, 1),
+          metadata: [{ key: "IB", value: dateForDatabase.getFullYear() }],
+          journalEntries,
+        });
+      }
+  } 
+
+
   try {
     const newVerification = new Verifications({
       domain: domain?.domain,
       description,
       verificationNumber: await generateNextEntryNumber(domain?.domain),
-      verificationDate: dateForDatabase, // Spara som Date om det behövs
+      verificationDate: dateForDatabase,
       journalEntries,
       files: file ? [{ name: file.label, path: file.filePath }] : [],
     });
 
     await newVerification.save();
+
+    // find IB verification for next year
+    let ibVerification = await Verifications.findOne({
+      domain: domain?.domain,
+      "metadata.key": "IB",
+      "metadata.value": dateForDatabase.getFullYear() + 1,
+    }).exec();
+
+
+    if(ibVerification){
+      // if found get current year journal entries
+      const journalEntries = await getIBJournalEntries(domain.domain, dateForDatabase.getFullYear())
+      ibVerification.journalEntries = journalEntries;
+      await ibVerification.save();
+    } 
+
 
     return json({
       success: true,
