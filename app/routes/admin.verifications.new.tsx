@@ -11,7 +11,7 @@ import { z, ZodError } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "react-toastify";
 import Select from "react-select";
-import { accounts, getIBJournalEntries, sumAccounts } from "~/utils/accounts";
+import { accounts, getIBJournalEntries } from "~/utils/accounts";
 import { generateNextEntryNumber } from "~/utils/verificationUtil";
 import { Verifications } from "~/schemas/verifications";
 import { ActionFunction, json } from "@remix-run/node";
@@ -207,10 +207,6 @@ type ActionData =
       errors: { [key: string]: string };
     };
 
-
-  
-
-
 export const action: ActionFunction = async ({ request, params }) => {
   const formData = await request.formData();
   const domain = getDomain(request);
@@ -235,7 +231,6 @@ export const action: ActionFunction = async ({ request, params }) => {
   }
 
   const dateForDatabase = new Date(verificationDate);
-
 
   if (user.fiscalYear !== dateForDatabase.getFullYear()) {
     return json(
@@ -274,6 +269,39 @@ export const action: ActionFunction = async ({ request, params }) => {
     );
   }
 
+  // check if VAT is already registered for the month
+
+  const vatEntries = journalEntries.filter((f) => {
+    return (
+      f.account === 2611 ||
+      f.account === 2640 ||
+      f.account === 3001 
+    )
+  });
+
+  if (vatEntries.length > 0) {
+    let isVatRegistered = await Verifications.findOne({
+      domain: domain?.domain,
+      "metadata.key": "vatReport",
+      "metadata.value": `${dateForDatabase.getFullYear()}-${
+        dateForDatabase.getMonth() + 1
+      }`,
+    }).exec();
+
+    if (isVatRegistered) {
+      return json(
+        {
+          success: false,
+          errors: {
+            yearError: {
+              message: `Momsrapporten är redan registrerad för denna månad`,
+            },
+          },
+        },
+        { status: 400 }
+      );
+    }
+  }
 
   const firstVerification = await Verifications.findOne({
     domain: domain?.domain,
@@ -287,19 +315,21 @@ export const action: ActionFunction = async ({ request, params }) => {
 
   // This is the first verification for the year
   if (!firstVerification) {
-      const journalEntries = await getIBJournalEntries(domain.domain, dateForDatabase.getFullYear() - 1)
-      if (journalEntries.length > 0) {
-        await Verifications.create({
-          domain: domain?.domain,
-          verificationNumber: await generateNextEntryNumber(domain?.domain),
-          description: "Ingående balans",
-          verificationDate: new Date(dateForDatabase.getFullYear(), 0, 1),
-          metadata: [{ key: "IB", value: dateForDatabase.getFullYear() }],
-          journalEntries,
-        });
-      }
-  } 
-
+    const journalEntries = await getIBJournalEntries(
+      domain.domain,
+      dateForDatabase.getFullYear() - 1
+    );
+    if (journalEntries.length > 0) {
+      await Verifications.create({
+        domain: domain?.domain,
+        verificationNumber: await generateNextEntryNumber(domain?.domain),
+        description: "Ingående balans",
+        verificationDate: new Date(dateForDatabase.getFullYear(), 0, 1),
+        metadata: [{ key: "IB", value: dateForDatabase.getFullYear() }],
+        journalEntries,
+      });
+    }
+  }
 
   try {
     const newVerification = new Verifications({
@@ -320,18 +350,19 @@ export const action: ActionFunction = async ({ request, params }) => {
       "metadata.value": dateForDatabase.getFullYear() + 1,
     }).exec();
 
-
-    if(ibVerification){
+    if (ibVerification) {
       // if found get current year journal entries
-      const journalEntries = await getIBJournalEntries(domain.domain, dateForDatabase.getFullYear())
+      const journalEntries = await getIBJournalEntries(
+        domain.domain,
+        dateForDatabase.getFullYear()
+      );
       ibVerification.journalEntries = journalEntries;
       await ibVerification.save();
-    } 
-
+    }
 
     return json({
       success: true,
-      message: "Verifikation sparades framgångsrikt",
+      message: "Verifikation sparades",
       verification: newVerification,
     });
   } catch (e) {
