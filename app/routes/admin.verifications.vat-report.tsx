@@ -449,7 +449,7 @@ export default function VATReportModal() {
                   {/* Resten av din komponent med Momspliktig försäljning, Utgående moms och Ingående moms */}
                   {/* Momspliktig försäljning */}
                   <Report
-                    totalLabel={`momspliktig försäljning`}
+                    totalLabel={`Momspliktig försäljning`}
                     account={3001}
                     label={` Momspliktig försäljning (ej ruta 06, 07, 08)`}
                     verifications={vatSales}
