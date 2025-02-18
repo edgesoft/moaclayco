@@ -38,13 +38,14 @@ export const loader: LoaderFunction = async ({ request }) => {
   endOfMonth.setHours(23, 59, 59, 999); // Sätt tiden till slutet av dagen
 
   // Hämta alla verifikationer för den angivna månaden
+    // This should not include IB
   const verifications = await Verifications.find({
     verificationDate: {
       $gte: startOfMonth,
       $lte: endOfMonth, // Ändrat från $lt till $lte för att inkludera sista dagen
     },
     domain: domain.domain,
-    "metadata.key": { $ne: "vatReport" },
+    "metadata.key": { $nin: ["vatReport", "IB"] },
   });
 
   // Filtrera fram relevanta journal entries
@@ -107,12 +108,13 @@ export const action: ActionFunction = async ({ request }) => {
   const roundingAccount = 3740; // Öres- och kronutjämning
   const taxAccount = 2012; // Avräkning för skatter och avgifter
 
+  // This should not include IB
   const verifications = await Verifications.find({
     verificationDate: {
       $gte: startOfMonth,
       $lt: endOfMonth,
     },
-    "metadata.key": { $ne: "vatReport" },
+    "metadata.key": { $nin: ["vatReport", "IB"] },
     domain: domain.domain,
   });
 
