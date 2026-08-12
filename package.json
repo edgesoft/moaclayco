@@ -44,6 +44,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint-react/eslint-plugin": "^5.18.4",
     "@eslint/js": "^9.39.5",
     "@react-router/dev": "^8.3.0",
     "@react-router/fs-routes": "^8.3.0",
@@ -57,7 +58,6 @@
     "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-import-x": "^4.17.1",
     "eslint-plugin-jsx-a11y": "^6.10.2",
-    "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.11.0",
     "tailwindcss": "^4.3.3",

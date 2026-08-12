@@ -1,9 +1,9 @@
 import js from "@eslint/js";
+import eslintReact from "@eslint-react/eslint-plugin";
 import typescriptEslint from "@typescript-eslint/eslint-plugin";
 import typescriptParser from "@typescript-eslint/parser";
 import importPlugin from "eslint-plugin-import-x";
 import jsxA11y from "eslint-plugin-jsx-a11y";
-import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 
@@ -27,23 +27,24 @@ export default [
       },
     },
     plugins: {
+      "@eslint-react": eslintReact,
       "@typescript-eslint": typescriptEslint,
       "import-x": importPlugin,
       "jsx-a11y": jsxA11y,
-      react,
       "react-hooks": reactHooks,
     },
     settings: {
       "import-x/resolver": {
         typescript: true,
       },
-      react: {
+      "react-x": {
         version: "detect",
+        importSource: "react",
       },
     },
     rules: {
       ...typescriptEslint.configs.recommended.rules,
-      ...react.configs.recommended.rules,
+      ...eslintReact.configs["recommended-typescript"].rules,
       ...jsxA11y.configs.recommended.rules,
       ...importPlugin.flatConfigs.recommended.rules,
       ...importPlugin.flatConfigs.typescript.rules,
@@ -55,8 +56,6 @@ export default [
       "import-x/no-unresolved": "off",
       "react-hooks/exhaustive-deps": "warn",
       "react-hooks/rules-of-hooks": "error",
-      "react/prop-types": "off",
-      "react/react-in-jsx-scope": "off",
     },
   },
   {
