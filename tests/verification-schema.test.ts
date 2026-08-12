@@ -35,6 +35,19 @@ test("collapses legacy zero rows on a VAT report", async () => {
   assert.deepEqual(report.journalEntries, []);
 });
 
+test("allows a zero incoming balance without deleting its audit record", async () => {
+  const incomingBalance = new Verifications({
+    ...baseVerification,
+    description: "Ingående balans",
+    metadata: [{ key: "IB", value: "2026" }],
+    recordType: "incomingBalance",
+    journalEntries: [],
+  });
+
+  await incomingBalance.validate();
+  assert.deepEqual(incomingBalance.journalEntries, []);
+});
+
 test("still rejects an empty ordinary journal verification", async () => {
   const verification = new Verifications({
     ...baseVerification,

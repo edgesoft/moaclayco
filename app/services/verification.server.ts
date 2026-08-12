@@ -13,7 +13,7 @@ export type CreateVerificationInput = {
   description: string;
   verificationDate: Date;
   journalEntries: unknown;
-  recordType?: "journal" | "vatReport";
+  recordType?: "journal" | "vatReport" | "incomingBalance";
   idempotencyKey?: string;
   metadata?: MetadataEntry[];
   files?: FileEntry[];
@@ -35,8 +35,10 @@ const normalizeInput = (input: CreateVerificationInput) => {
     key: String(key).trim(),
     value: String(value).trim(),
   }));
-  const isEmptyVatReport =
-    recordType === "vatReport" &&
+  const allowsEmptyJournal =
+    recordType === "vatReport" || recordType === "incomingBalance";
+  const isEmptyNonPostingRecord =
+    allowsEmptyJournal &&
     Array.isArray(input.journalEntries) &&
     input.journalEntries.every((entry) => {
       if (!entry || typeof entry !== "object") return false;
@@ -51,13 +53,23 @@ const normalizeInput = (input: CreateVerificationInput) => {
   ) {
     throw new Error("En momsrapport måste ha en giltig redovisningsperiod");
   }
+  if (
+    recordType === "incomingBalance" &&
+    !metadata.some(
+      (entry) => entry.key === "IB" && /^\d{4}$/.test(entry.value)
+    )
+  ) {
+    throw new Error("En ingående balans måste ha ett giltigt bokföringsår");
+  }
 
   return {
     domain,
     description,
     verificationDate: input.verificationDate,
     recordType,
-    journalEntries: isEmptyVatReport ? [] : normalizeJournalEntries(input.journalEntries),
+    journalEntries: isEmptyNonPostingRecord
+      ? []
+      : normalizeJournalEntries(input.journalEntries),
     idempotencyKey: input.idempotencyKey?.trim() || undefined,
     metadata,
     files: (input.files ?? []).map(({ name, path }) => ({
@@ -148,6 +160,26 @@ const incomingBalanceQuery = (domain: string, year: number) => ({
   metadata: { $elemMatch: { key: "IB", value: String(year) } },
 });
 
+type MutableIncomingBalance = {
+  journalEntries: unknown;
+  recordType?: string;
+  save: () => Promise<unknown>;
+};
+
+export async function synchronizeIncomingBalance(
+  incomingBalance: MutableIncomingBalance,
+  journalEntries: Array<{
+    account: number;
+    debit: number;
+    credit: number;
+  }>
+) {
+  incomingBalance.recordType = "incomingBalance";
+  incomingBalance.journalEntries = journalEntries;
+  await incomingBalance.save();
+  return incomingBalance;
+}
+
 export async function refreshIncomingBalanceForFollowingYear(
   domain: string,
   sourceYear: number
@@ -158,21 +190,14 @@ export async function refreshIncomingBalanceForFollowingYear(
   if (!incomingBalance) return null;
 
   const journalEntries = await getIBJournalEntries(domain, sourceYear);
-  if (journalEntries.length < 2) return incomingBalance;
-  incomingBalance.journalEntries = journalEntries;
-  await incomingBalance.save();
-  return incomingBalance;
+  return synchronizeIncomingBalance(incomingBalance, journalEntries);
 }
 
 export async function ensureIncomingBalance(domain: string, year: number) {
   const existing = await Verifications.findOne(incomingBalanceQuery(domain, year));
   if (existing) {
     const journalEntries = await getIBJournalEntries(domain, year - 1);
-    if (journalEntries.length >= 2) {
-      existing.journalEntries = journalEntries;
-      await existing.save();
-    }
-    return existing;
+    return synchronizeIncomingBalance(existing, journalEntries);
   }
 
   const journalEntries = await getIBJournalEntries(domain, year - 1);
@@ -182,6 +207,7 @@ export async function ensureIncomingBalance(domain: string, year: number) {
     idempotencyKey: `ib:${year}`,
     description: "Ingående balans",
     verificationDate: new Date(Date.UTC(year, 0, 1, 12)),
+    recordType: "incomingBalance",
     metadata: [{ key: "IB", value: year }],
     journalEntries,
   });

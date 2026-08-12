@@ -5,7 +5,7 @@ const { Schema } = mongoose;
 const VerificationsSchema = new Schema({
     recordType: {
       type: String,
-      enum: ["journal", "vatReport"],
+      enum: ["journal", "vatReport", "incomingBalance"],
       required: true,
       default: "journal",
     },
@@ -64,7 +64,8 @@ const VerificationsSchema = new Schema({
 VerificationsSchema.pre("validate", function (next) {
   try {
     if (
-      this.recordType === "vatReport" &&
+      (this.recordType === "vatReport" ||
+        this.recordType === "incomingBalance") &&
       (!Array.isArray(this.journalEntries) ||
         this.journalEntries.every(
           (entry: any) =>

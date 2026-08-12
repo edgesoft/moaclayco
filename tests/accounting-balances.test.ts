@@ -17,6 +17,7 @@ import {
   parseStockholmDateTime,
 } from "../app/utils/accountingDates";
 import { buildTaxAccountJournalEntries } from "../app/utils/taxAccount";
+import { synchronizeIncomingBalance } from "../app/services/verification.server";
 
 const totals = (entries: Array<{ debit: number; credit: number }>) => ({
   debit: entries.reduce((sum, entry) => sum + entry.debit, 0),
@@ -41,6 +42,27 @@ test("IB carries equity accounts and maps legacy 2050 to 2012", () => {
     { account: 2999, debit: 840, credit: 0 },
   ]);
   assert.deepEqual(totals(entries), { debit: 2_340, credit: 2_340 });
+});
+
+test("existing IB is cleared when the recalculated balance is zero", async () => {
+  let saveCalls = 0;
+  const incomingBalance = {
+    recordType: "journal",
+    journalEntries: [
+      { account: 1930, debit: 1_500, credit: 0 },
+      { account: 2018, debit: 0, credit: 1_500 },
+    ],
+    save: async () => {
+      saveCalls += 1;
+    },
+  };
+
+  const result = await synchronizeIncomingBalance(incomingBalance, []);
+
+  assert.equal(result, incomingBalance);
+  assert.equal(incomingBalance.recordType, "incomingBalance");
+  assert.deepEqual(incomingBalance.journalEntries, []);
+  assert.equal(saveCalls, 1);
 });
 
 test("VAT report closes a VAT liability to credit 2650", () => {

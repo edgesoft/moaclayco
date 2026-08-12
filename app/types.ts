@@ -116,7 +116,7 @@ export enum ReportType  {
 }
 
 export type VerificationProps = {
-  recordType?: "journal" | "vatReport";
+  recordType?: "journal" | "vatReport" | "incomingBalance";
   journalEntries: Array<{
     debit: number;
     credit: number;
