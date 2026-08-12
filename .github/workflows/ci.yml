@@ -51,3 +51,14 @@ jobs:
 
       - name: Enforce critical security baseline
         run: npm run audit:critical
+
+  deploy-stage:
+    name: Deploy approved commit to Stage
+    needs: validate
+    if: >-
+      ${{ github.event_name == 'push' &&
+          (github.ref == 'refs/heads/next' ||
+           startsWith(github.ref, 'refs/heads/next-')) }}
+    uses: ./.github/workflows/fly-stage.yml
+    secrets:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
