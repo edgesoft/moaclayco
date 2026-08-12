@@ -14,7 +14,6 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["@react-router/node", "vite/client"],
     "rootDirs": [".", "./.react-router/types"],
-    "baseUrl": ".",
     "paths": {
       "~/*": ["./app/*"]
     },
