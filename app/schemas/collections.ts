@@ -15,4 +15,7 @@ const collectionSchema = new Schema({
 },
 { collection: 'collections' });
 
+collectionSchema.index({ domain: 1, shortUrl: 1 }, { unique: true });
+collectionSchema.index({ domain: 1, sortOrder: 1 });
+
 export const Collections = mongoose.models.Collections || mongoose.model('Collections', collectionSchema);
