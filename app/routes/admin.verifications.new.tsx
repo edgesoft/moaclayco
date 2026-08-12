@@ -94,6 +94,10 @@ type SuggestedVerificationData = VerificationData & {
   sourceReference?: string;
 };
 
+type ReviewSuggestion = SuggestedVerificationData & {
+  uiId: string;
+};
+
 type SuggestionProps = {
   status: string;
   verificationData: SuggestedVerificationData | null;
@@ -488,7 +492,7 @@ export default function Verification() {
   const submit = useSubmit();
   const [uploadedFile, setUploadedFile] = useState<{ label: string } | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [reviewSuggestions, setReviewSuggestions] = useState<SuggestedVerificationData[]>([]);
+  const [reviewSuggestions, setReviewSuggestions] = useState<ReviewSuggestion[]>([]);
   const [interpretationWarnings, setInterpretationWarnings] = useState<string[]>([]);
   const [protectingManualInput, setProtectingManualInput] = useState(false);
   const navigate = useNavigate();
@@ -610,7 +614,9 @@ export default function Verification() {
       if (data && data.verificationData && data.verificationData.accounts) {
         setUploadedFile(data.file);
         if (protectingManualInput) {
-          setReviewSuggestions([data.verificationData]);
+          setReviewSuggestions([
+            { ...data.verificationData, uiId: `${data.uuid}:suggestion:1` },
+          ]);
           setInterpretationWarnings(data.document?.warnings ?? []);
           setUploadingState(UploadingState.REVIEW);
         } else {
@@ -627,7 +633,12 @@ export default function Verification() {
       data.suggestions.length > 0
     ) {
       setUploadedFile(data.file);
-      setReviewSuggestions(data.suggestions);
+      setReviewSuggestions(
+        data.suggestions.map((suggestion, suggestionPosition) => ({
+          ...suggestion,
+          uiId: `${data.uuid}:suggestion:${suggestionPosition + 1}`,
+        }))
+      );
       setInterpretationWarnings(data.document?.warnings ?? []);
       setUploadingState(UploadingState.REVIEW);
     } else {
@@ -1153,9 +1164,9 @@ export default function Verification() {
                         : "Underlaget innehåller flera separata transaktioner. Välj den som ska bli verifikation nu."}
                     </p>
                   </div>
-                  {reviewSuggestions.map((suggestion, index) => (
+                  {reviewSuggestions.map((suggestion) => (
                     <button
-                      key={`${suggestion.date}-${suggestion.sourceReference}-${index}`}
+                      key={suggestion.uiId}
                       type="button"
                       onClick={() => applySuggestion(suggestion)}
                       className="block w-full rounded-xl border border-[#dfc1b7] bg-white p-3 text-left transition hover:border-[#b86e59]"

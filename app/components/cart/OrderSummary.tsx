@@ -70,8 +70,13 @@ export default function OrderSummary({
                 </p>
                 {(item.additionalItems ?? []).length > 0 ? (
                   <ul>
-                    {item.additionalItems.map((addition, index) => (
-                      <li key={`${addition.name}-${index}`}>
+                    {item.additionalItems.map((addition) => (
+                      <li
+                        key={
+                          addition._id ??
+                          `${addition.name}-${addition.packinfo}-${addition.price}`
+                        }
+                      >
                         + {addition.name} · {formatSek(Number(addition.price))}
                       </li>
                     ))}

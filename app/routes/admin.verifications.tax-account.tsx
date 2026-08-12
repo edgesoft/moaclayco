@@ -45,6 +45,7 @@ import {
   ReconciledTaxAccountRow,
   TaxAccountBankChoice,
   TaxAccountJournalEntry,
+  TaxAccountPosting,
   applyLinkedLegacyCorrections,
   buildTaxAccountPosting,
   calculateTaxAccountBalance,
@@ -97,7 +98,12 @@ type ActionData =
     }
   | { success: false; intent: "parse" | "commit"; message: string };
 
-type EditableRow = ReconciledTaxAccountRow & {
+type EditablePosting = Omit<TaxAccountPosting, "journalEntries"> & {
+  journalEntries: Array<TaxAccountJournalEntry & { editorId: string }>;
+};
+
+type EditableRow = Omit<ReconciledTaxAccountRow, "posting"> & {
+  posting: EditablePosting | null;
   selected: boolean;
   editorOpen: boolean;
 };
@@ -478,6 +484,20 @@ export const action: ActionFunction = async ({ request }) => {
   }
 };
 
+const toEditablePosting = (
+  rowId: string,
+  posting: TaxAccountPosting | null
+): EditablePosting | null =>
+  posting
+    ? {
+        ...posting,
+        journalEntries: posting.journalEntries.map((entry, entryPosition) => ({
+          ...entry,
+          editorId: `${rowId}:entry:${entryPosition + 1}`,
+        })),
+      }
+    : null;
+
 const createEditableRows = (draft: TaxAccountDraft): EditableRow[] =>
   draft.rows.map((row) => {
     const fallbackPosting =
@@ -498,7 +518,7 @@ const createEditableRows = (draft: TaxAccountDraft): EditableRow[] =>
           };
     return {
       ...row,
-      posting: fallbackPosting,
+      posting: toEditablePosting(row.id, fallbackPosting),
       selected:
         row.status === "missing" &&
         Boolean(row.posting) &&
@@ -630,9 +650,12 @@ function TaxAccountRowCard({
                       type="button"
                       aria-pressed={active}
                       onClick={() => {
-                        const posting = buildTaxAccountPosting(
-                          row,
-                          choice.id as TaxAccountBankChoice
+                        const posting = toEditablePosting(
+                          row.id,
+                          buildTaxAccountPosting(
+                            row,
+                            choice.id as TaxAccountBankChoice
+                          )
                         );
                         onChange({
                           ...row,
@@ -720,7 +743,7 @@ function TaxAccountRowCard({
               <div className="mt-3 space-y-2">
                 {row.posting.journalEntries.map((entry, index) => (
                   <div
-                    key={`${row.id}-entry-${index}`}
+                    key={entry.editorId}
                     className="grid gap-2 sm:grid-cols-[minmax(220px,1fr)_130px_130px]"
                   >
                     <div className="min-w-0">
@@ -728,7 +751,7 @@ function TaxAccountRowCard({
                       <ClientOnly fallback={<div className="h-12 bg-stone-100" />}>
                         {() => (
                           <Select
-                            instanceId={`${row.id}-account-${index}`}
+                            instanceId={`${entry.editorId}-account`}
                             options={accounts}
                             value={accounts.find((account) => account.value === entry.account) || null}
                             onChange={(option) =>

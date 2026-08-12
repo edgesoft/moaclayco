@@ -456,7 +456,7 @@ export default function OrderDetail() {
 
           <ol className="order-detail-items">
             {items.map((item, index) => (
-              <li className="order-detail-item" key={item._id ?? `${item.itemRef}-${index}`}>
+              <li className="order-detail-item" key={item._id ?? item.itemRef}>
                 {item.image ? (
                   <img
                     alt=""
@@ -476,8 +476,13 @@ export default function OrderDetail() {
                   </small>
                   {item.additionalItems?.length ? (
                     <ul className="order-detail-additions">
-                      {item.additionalItems.map((addition, additionIndex) => (
-                        <li key={`${addition.name}-${additionIndex}`}>
+                      {item.additionalItems.map((addition) => (
+                        <li
+                          key={
+                            addition._id ??
+                            `${addition.name}-${addition.packinfo}-${addition.price}`
+                          }
+                        >
                           <span>
                             {addition.name}
                             {addition.packinfo ? <em>{addition.packinfo}</em> : null}

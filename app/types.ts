@@ -6,6 +6,7 @@ export type OrderItem = {
   quantity: number;
   price: number;
   additionalItems: Array<{
+    _id?: string;
     name: string;
     price: number;
     packinfo: string;
@@ -57,6 +58,7 @@ export type CollectionProps = {
 };
 
 export type AdditionalItem = {
+  _id?: string;
   price: number;
   name: string;
 };
@@ -120,6 +122,7 @@ export enum ReportType  {
 export type VerificationProps = {
   recordType?: "journal" | "vatReport" | "incomingBalance";
   journalEntries: Array<{
+    _id?: string;
     debit: number;
     credit: number;
     account: number;

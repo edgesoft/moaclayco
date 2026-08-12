@@ -37,7 +37,15 @@ const dateLabel = new Intl.DateTimeFormat("sv-SE", {
   year: "numeric",
   timeZone: "UTC",
 });
-const weekDays = ["M", "T", "O", "T", "F", "L", "S"];
+const weekDays = [
+  { key: "monday", label: "M" },
+  { key: "tuesday", label: "T" },
+  { key: "wednesday", label: "O" },
+  { key: "thursday", label: "T" },
+  { key: "friday", label: "F" },
+  { key: "saturday", label: "L" },
+  { key: "sunday", label: "S" },
+];
 
 export function AccountingDateField({
   id,
@@ -94,12 +102,18 @@ export function AccountingDateField({
     const leadingEmptyDays =
       (new Date(Date.UTC(year, month, 1)).getUTCDay() + 6) % 7;
     const numberOfDays = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-    return [
-      ...Array.from({ length: leadingEmptyDays }, () => null),
-      ...Array.from({ length: numberOfDays }, (_, index) =>
-        new Date(Date.UTC(year, month, index + 1, 12))
-      ),
-    ];
+    return Array.from(
+      { length: leadingEmptyDays + numberOfDays },
+      (_, cellIndex) => {
+        const date = new Date(
+          Date.UTC(year, month, cellIndex - leadingEmptyDays + 1, 12)
+        );
+        return {
+          date: cellIndex < leadingEmptyDays ? null : date,
+          key: isoDate(date),
+        };
+      }
+    );
   }, [visibleMonth]);
 
   const selectDate = (nextValue: string) => {
@@ -185,11 +199,14 @@ export function AccountingDateField({
           </div>
 
           <div className="mt-3 grid grid-cols-7 text-center text-[10px] font-bold uppercase text-stone-400">
-            {weekDays.map((day, index) => <span key={`${day}-${index}`}>{day}</span>)}
+            {weekDays.map((day) => (
+              <span key={day.key}>{day.label}</span>
+            ))}
           </div>
           <div className="mt-1 grid grid-cols-7 gap-0.5">
-            {days.map((day, index) => {
-              if (!day) return <span key={`empty-${index}`} className="h-9" />;
+            {days.map((cell) => {
+              const day = cell.date;
+              if (!day) return <span key={cell.key} className="h-9" />;
               const dayValue = isoDate(day);
               const selected = dayValue === selectedValue;
               const today = dayValue === stockholmToday();

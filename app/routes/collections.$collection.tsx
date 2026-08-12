@@ -403,7 +403,7 @@ function Product({
                       aria-label={`Visa bild ${imageIndex + 1} av ${
                         item.headline
                       }`}
-                      key={`${image}-${imageIndex}`}
+                      key={image}
                       onClick={() => {
                         setPreloadDirection(
                           imageIndex >= currentIndex ? 1 : -1
@@ -504,7 +504,9 @@ function Product({
             {item.additionalItems.map((addition, additionIndex) => {
               const selected = selectedAdditions.includes(additionIndex);
               return (
-                <label key={`${addition.name}-${additionIndex}`}>
+                <label
+                  key={addition._id ?? `${addition.name}-${addition.price}`}
+                >
                   <input
                     checked={selected}
                     onChange={() =>

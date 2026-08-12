@@ -391,8 +391,8 @@ export default function VerificationFiles() {
 
           {files.length ? (
             <ul className="divide-y divide-stone-100">
-              {files.map((file, index) => (
-                <li key={`${file.path}-${index}`}>
+              {files.map((file) => (
+                <li key={file.path}>
                   <a
                     href={file.path}
                     target="_blank"

@@ -454,7 +454,7 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({
                         >
                           <tbody>
                             {items.map((item, itemIndex) => (
-                              <tr key={item._id || `${item.itemRef}-${itemIndex}`}>
+                              <tr key={item._id || item.itemRef}>
                                 <td
                                   className="email-item-image-cell"
                                   style={{
@@ -541,9 +541,12 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({
                                     {item.quantity} st · {formatSek(item.price)}/st
                                   </p>
                                   {(item.additionalItems ?? []).map(
-                                    (addition, additionIndex) => (
+                                    (addition) => (
                                       <p
-                                        key={`${addition.name}-${additionIndex}`}
+                                        key={
+                                          addition._id ??
+                                          `${addition.name}-${addition.packinfo}-${addition.price}`
+                                        }
                                         style={{
                                           color: colors.accentDark,
                                           fontFamily: sans,

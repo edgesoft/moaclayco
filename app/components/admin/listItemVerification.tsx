@@ -105,13 +105,13 @@ function VerificationDetails({ verification }: { verification: VerificationProps
 
           <div className="border-y border-stone-200 sm:hidden">
             <div className="divide-y divide-stone-200">
-              {entries.map((entry, index) => {
+              {entries.map((entry) => {
                 const isDebit = Number(entry.debit || 0) !== 0;
                 const amount = isDebit ? entry.debit : entry.credit;
 
                 return (
                   <div
-                    key={`${entry.account}-${index}`}
+                    key={entry._id ?? `${entry.account}-${entry.debit}-${entry.credit}`}
                     className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-5 py-3.5"
                   >
                     <div className="min-w-0">
@@ -164,9 +164,9 @@ function VerificationDetails({ verification }: { verification: VerificationProps
               <span className="text-right">Kredit</span>
             </div>
             <div className="divide-y divide-stone-100">
-              {entries.map((entry, index) => (
+              {entries.map((entry) => (
                 <div
-                  key={`${entry.account}-${index}`}
+                  key={entry._id ?? `${entry.account}-${entry.debit}-${entry.credit}`}
                   className="grid grid-cols-[minmax(0,1fr)_7rem_7rem] items-baseline gap-5 py-3.5 text-sm text-stone-700"
                 >
                   <span className="flex min-w-0 items-baseline gap-2">
@@ -224,8 +224,8 @@ function VerificationDetails({ verification }: { verification: VerificationProps
 
         {files.length ? (
           <ul className="mt-3 divide-y divide-stone-100 border-y border-stone-200">
-            {files.map((file, index) => (
-              <li key={`${file.path}-${index}`}>
+            {files.map((file) => (
+              <li key={file.path}>
                 <a
                   href={file.path}
                   target="_blank"

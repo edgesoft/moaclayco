@@ -348,7 +348,9 @@ export default function Discount() {
           <div className="mcc-editor-error-summary" role="alert">
             <strong>Det finns något kvar att ordna.</strong>
             <ul>
-              {Object.values(errors).map((error, index) => error?.message ? <li key={`${error.message}-${index}`}>{error.message}</li> : null)}
+              {Object.entries(errors).map(([field, error]) =>
+                error?.message ? <li key={field}>{error.message}</li> : null
+              )}
               {Object.entries(serverErrors ?? {}).map(([key, message]) => message ? <li key={key}>{message}</li> : null)}
               {fetcher.data?.error ? <li>{fetcher.data.error}</li> : null}
             </ul>
