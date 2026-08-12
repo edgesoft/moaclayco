@@ -6,6 +6,11 @@ import { Users } from "~/schemas/user";
 import { auth } from "~/services/auth.server";
 import { commitSession, sessionStorage } from "~/services/session.server";
 import { User } from "~/types";
+import {
+  MAX_STANDARD_FORM_REQUEST_SIZE,
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 const formSchema = z.object({
   fiscalYear: z.coerce.number().int().min(2000).max(2200),
@@ -19,10 +24,21 @@ export const loader: LoaderFunction = async ({ request }) => {
 };
 
 export const action: ActionFunction = async ({ request }) => {
-  const formData = await request.formData();
   const user: User = await auth.isAuthenticated(request, {
     failureRedirect: "/login",
   });
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(
+      request,
+      MAX_STANDARD_FORM_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json({ error: "Formuläret är för stort" }, { status: 413 });
+    }
+    throw error;
+  }
   const parsed = formSchema.safeParse({
     fiscalYear: formData.get("fiscalYear"),
   });

@@ -26,6 +26,11 @@ import {
   parseAccountingDate,
 } from "~/utils/accountingDates";
 import { AccountingDateField } from "~/components/admin/AccountingDateField";
+import {
+  MAX_STANDARD_FORM_REQUEST_SIZE,
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 type VatJournalEntry = {
   _id?: string;
@@ -87,12 +92,24 @@ export const loader: LoaderFunction = async ({ request }) => {
 };
 
 export const action: ActionFunction = async ({ request }) => {
-  const formData = await request.formData();
-  const domain = getDomain(request);
-  if (!domain) throw new Error("Could not find domain");
   const user = await auth.isAuthenticated(request, {
     failureRedirect: "/login",
   });
+  const domain = getDomain(request);
+  if (!domain) throw new Error("Could not find domain");
+
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(
+      request,
+      MAX_STANDARD_FORM_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json({ error: "Formuläret är för stort" }, { status: 413 });
+    }
+    throw error;
+  }
 
   const submissionDate = formData.get("submissionDate");
 

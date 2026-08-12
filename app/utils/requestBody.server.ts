@@ -5,6 +5,8 @@ export class RequestBodyTooLargeError extends Error {
   }
 }
 
+export const MAX_STANDARD_FORM_REQUEST_SIZE = 256 * 1024;
+
 async function readRequestBodyWithinLimit(
   request: Request,
   maxBytes: number
