@@ -12,7 +12,7 @@
     "lint": "eslint app tests",
     "smoke": "node tools/smoke-check.mjs",
     "start": "react-router-serve ./build/server/index.js",
-    "test": "tsx --test tests/accounting-balances.test.ts tests/accounting-document.test.ts tests/checkout-payment.test.ts tests/database-connection.test.ts tests/discount-form.test.ts tests/google-auth.test.ts tests/image-processing.test.ts tests/item-image-storage.test.ts tests/loader-data.test.ts tests/openai-responses.test.ts tests/order-cookie.test.ts tests/order-email.test.tsx tests/request-body.test.ts tests/verification-file-content.test.ts tests/verification-files.test.ts tests/verification-schema.test.ts tests/verification-validation.test.ts",
+    "test": "tsx --test tests/accounting-balances.test.ts tests/accounting-document.test.ts tests/checkout-payment.test.ts tests/database-connection.test.ts tests/discount-form.test.ts tests/google-auth.test.ts tests/image-processing.test.ts tests/item-image-storage.test.ts tests/loader-data.test.ts tests/openai-responses.test.ts tests/order-cookie.test.ts tests/order-email.test.tsx tests/request-body.test.ts tests/stripe-webhook.test.ts tests/verification-file-content.test.ts tests/verification-files.test.ts tests/verification-schema.test.ts tests/verification-validation.test.ts",
     "test:e2e:accounting": "tsx --test tests/accounting-document.e2e.test.ts",
     "typecheck": "react-router typegen && tsc"
   },
@@ -39,7 +39,7 @@
     "react-toastify": "^11.1.0",
     "react-use-cart": "^1.14.0",
     "sharp": "^0.35.3",
-    "stripe": "^13.11.0",
+    "stripe": "^22.5.0",
     "uuid": "^14.0.1",
     "zod": "^4.4.3"
   },

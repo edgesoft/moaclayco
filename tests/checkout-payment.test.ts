@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type Stripe from "stripe";
+import Stripe from "stripe";
 import {
   assertPaymentIntentMatchesOrder,
   buildCheckoutPaymentIntent,
@@ -24,9 +24,7 @@ test("checkout attempt cookie is signed and rejects tampering", async () => {
   const tamperedHeader = cookieHeader.replace(
     /checkout_attempt=([^;]+)/,
     (_match, value: string) =>
-      `checkout_attempt=${value.slice(0, -1)}${
-        value.endsWith("a") ? "b" : "a"
-      }`
+      `checkout_attempt=${value.startsWith("a") ? "b" : "a"}${value.slice(1)}`
   );
   assert.equal(await checkoutAttemptCookie.parse(tamperedHeader), null);
 });
@@ -49,6 +47,78 @@ test("duplicate checkout requests use the same Stripe idempotency key", () => {
   assert.equal(
     first.options.idempotencyKey,
     `checkout:${order.domain}:${checkoutToken}`
+  );
+});
+
+test("Stripe SDK sends the checkout request with amount, metadata and idempotency", async () => {
+  let captured:
+    | {
+        headers: Record<string, string | number | string[]>;
+        method: string;
+        path: string;
+        requestData: string;
+      }
+    | undefined;
+  const httpClient = {
+    getClientName: () => "local-test-client",
+    makeRequest: async (
+      _host: string,
+      _port: string,
+      path: string,
+      method: string,
+      headers: Record<string, string | number | string[]>,
+      requestData: string
+    ) => {
+      captured = { headers, method, path, requestData };
+      return {
+        getHeaders: () => ({ "request-id": "req_test" }),
+        getRawResponse: () => ({}),
+        getStatusCode: () => 200,
+        toJSON: async () => ({
+          amount: 54_900,
+          client_secret: "pi_sdk_secret_test",
+          currency: "sek",
+          id: "pi_sdk_test",
+          metadata: { domain: order.domain, orderId: order._id },
+          object: "payment_intent",
+          status: "requires_payment_method",
+        }),
+        toStream: () => undefined,
+      };
+    },
+  };
+  const stripe = new Stripe("sk_test_local", {
+    apiVersion: "2023-08-16" as Stripe.LatestApiVersion,
+    httpClient: httpClient as never,
+    maxNetworkRetries: 0,
+  });
+  const request = buildCheckoutPaymentIntent({
+    checkoutToken: "d9428888-122b-4e80-a248-2eae9917c80f",
+    order,
+    paymentMethods: ["card", "klarna"],
+  });
+
+  const intent = await stripe.paymentIntents.create(
+    request.params,
+    request.options
+  );
+
+  assert.equal(intent.id, "pi_sdk_test");
+  assert.equal(captured?.method, "POST");
+  assert.equal(captured?.path, "/v1/payment_intents");
+  const params = new URLSearchParams(captured?.requestData);
+  assert.equal(params.get("amount"), "54900");
+  assert.equal(params.get("currency"), "sek");
+  assert.equal(params.get("metadata[domain]"), order.domain);
+  assert.equal(params.get("metadata[orderId]"), order._id);
+  assert.deepEqual(params.getAll("payment_method_types[0]"), ["card"]);
+  assert.deepEqual(params.getAll("payment_method_types[1]"), ["klarna"]);
+  const idempotencyHeader = Object.entries(captured?.headers ?? {}).find(
+    ([key]) => key.toLowerCase() === "idempotency-key"
+  )?.[1];
+  assert.equal(
+    idempotencyHeader,
+    `checkout:${order.domain}:d9428888-122b-4e80-a248-2eae9917c80f`
   );
 });
 
