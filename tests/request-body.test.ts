@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   parseFormDataWithinLimit,
+  readTextWithinLimit,
   RequestBodyTooLargeError,
 } from "../app/utils/requestBody.server";
 
@@ -42,6 +43,28 @@ test("streamed bodies are limited even without content length", async () => {
 
   await assert.rejects(
     parseFormDataWithinLimit(request, 4),
+    RequestBodyTooLargeError
+  );
+});
+
+test("text bodies preserve their exact content within the limit", async () => {
+  const payload = '{"type":"payment_intent.succeeded"}';
+  const request = new Request("http://localhost/webhook", {
+    body: payload,
+    method: "POST",
+  });
+
+  assert.equal(await readTextWithinLimit(request, 128), payload);
+});
+
+test("streamed text bodies are limited without content length", async () => {
+  const request = new Request("http://localhost/webhook", {
+    body: "oversized webhook payload",
+    method: "POST",
+  });
+
+  await assert.rejects(
+    readTextWithinLimit(request, 8),
     RequestBodyTooLargeError
   );
 });

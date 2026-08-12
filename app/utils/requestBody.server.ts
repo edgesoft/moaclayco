@@ -5,7 +5,7 @@ export class RequestBodyTooLargeError extends Error {
   }
 }
 
-export async function parseFormDataWithinLimit(
+async function readRequestBodyWithinLimit(
   request: Request,
   maxBytes: number
 ) {
@@ -18,9 +18,7 @@ export async function parseFormDataWithinLimit(
     throw new RequestBodyTooLargeError(maxBytes);
   }
 
-  const contentType = request.headers.get("content-type");
-  if (!contentType) throw new Error("Request is missing Content-Type");
-  if (!request.body) return request.formData();
+  if (!request.body) return new Uint8Array();
 
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -49,7 +47,23 @@ export async function parseFormDataWithinLimit(
     offset += chunk.byteLength;
   }
 
+  return body;
+}
+
+export async function parseFormDataWithinLimit(
+  request: Request,
+  maxBytes: number
+) {
+  const contentType = request.headers.get("content-type");
+  if (!contentType) throw new Error("Request is missing Content-Type");
+
+  const body = await readRequestBodyWithinLimit(request, maxBytes);
   return new Response(body, {
     headers: { "Content-Type": contentType },
   }).formData();
+}
+
+export async function readTextWithinLimit(request: Request, maxBytes: number) {
+  const body = await readRequestBodyWithinLimit(request, maxBytes);
+  return new TextDecoder().decode(body);
 }

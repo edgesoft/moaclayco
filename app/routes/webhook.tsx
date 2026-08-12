@@ -11,7 +11,12 @@ import { createVerification } from "~/services/verification.server";
 import { WebhookEvents } from "~/schemas/webhook-events";
 import { assertPaymentIntentMatchesOrder } from "~/services/checkout-payment.server";
 import { sendOrderEmail } from "~/services/order-email.server";
+import {
+  readTextWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
+const MAX_STRIPE_WEBHOOK_SIZE = 1024 * 1024;
 
 const cents = (value: number) => Math.round(value * 100) / 100;
 
@@ -384,11 +389,25 @@ const claimStripeEvent = async (event: Stripe.Event) => {
 
 export let action: ActionFunction = async ({ request }) => {
   const sig = request.headers.get("Stripe-Signature");
-  const body = await request.text();
   const webhookSecret = process.env.STRIPE_WEBHOOK;
 
-  if (!sig || !webhookSecret) {
+  if (!webhookSecret) {
     return new Response("Stripe webhook is not configured", { status: 500 });
+  }
+  if (!sig) {
+    return new Response("Stripe signature is missing", { status: 400 });
+  }
+
+  let body: string;
+  try {
+    body = await readTextWithinLimit(request, MAX_STRIPE_WEBHOOK_SIZE);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return new Response("Stripe webhook payload is too large", {
+        status: 413,
+      });
+    }
+    throw error;
   }
 
   let event: Stripe.Event;
