@@ -1,6 +1,7 @@
 import { useNavigation } from "@remix-run/react";
+import { useEffect, useState } from "react";
+
 type Navigation = ReturnType<typeof useNavigation>;
-import {useEffect, useState} from 'react'
 
 type Fetcher = {
   state: string
@@ -19,8 +20,8 @@ const hasLoadingState = ({transition}: LoaderProps): boolean => {
 
 export default function Loader({transition, forceSpinner}: LoaderProps) {
   const [show, setShow] = useState<boolean>(false)
-  let handle: NodeJS.Timeout | undefined = undefined
   useEffect(() => {
+    let handle: NodeJS.Timeout | undefined;
     if (forceSpinner || hasLoadingState({transition})) {
       handle = setTimeout(() => {
         if (forceSpinner || hasLoadingState({transition})) {

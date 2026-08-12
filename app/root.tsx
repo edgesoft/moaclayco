@@ -1,26 +1,39 @@
-import { LinksFunction, LoaderFunction, redirect } from "@remix-run/node";
+import {
+  HeadersFunction,
+  json,
+  LinksFunction,
+  LoaderFunction,
+  redirect,
+} from "@remix-run/node";
 import {
   Links,
   LiveReload,
   Meta,
   Outlet,
+  ShouldRevalidateFunction,
   Scripts,
   ScrollRestoration,
   useLoaderData,
+  useLocation,
 } from "@remix-run/react";
+import { motion, useReducedMotion } from "framer-motion";
+import { useEffect, useRef } from "react";
 import Header from "./components/header";
 import Footer from "./components/footer";
 import { CartProvider } from "react-use-cart";
 import Cookies from "./components/cookies";
 import tailwindStyles from "./styles/tailwind.css";
 import appStyles from "./styles/app.css";
+import itemEditorStyles from "./styles/item-editor.css";
+import toastStyles from "./styles/toast.css";
 import { Collections } from "./schemas/collections";
 import { auth } from "./services/auth.server";
 import s from "react-toastify/dist/ReactToastify.css";
-import { ToastContainer, toast } from "react-toastify";
+import { ToastContainer } from "react-toastify";
 import { CollectionProps, User } from "./types";
 import { ThemeProvider, useTheme } from "./components/Theme";
 import { getDomain } from "./utils/domain";
+import { isGoogleAuthenticationConfigured } from "./services/google-auth.server";
 
 export type IndexProps = {
   hostname: string,
@@ -29,13 +42,20 @@ export type IndexProps = {
     STRIPE_PUBLIC_KEY: string;
   };
   collections: CollectionProps[];
+  googleAuthenticationConfigured: boolean;
 };
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: appStyles },
+  { rel: "stylesheet", href: itemEditorStyles },
   { rel: "stylesheet", href: tailwindStyles },
   { rel: "stylesheet", href: s },
+  { rel: "stylesheet", href: toastStyles },
 ];
+
+export const headers: HeadersFunction = () => ({
+  "Cache-Control": "private, no-store",
+});
 
 export const loader: LoaderFunction = async ({ request }) => {
   let domain = getDomain(request)
@@ -61,14 +81,37 @@ export const loader: LoaderFunction = async ({ request }) => {
   let user = await auth.isAuthenticated(request);
  
 
-  return {
-    hostname,
-    user,
-    ENV: {
-      STRIPE_PUBLIC_KEY: process.env.STRIPE_PUBLIC_KEY,
+  return json(
+    {
+      hostname,
+      user,
+      ENV: {
+        STRIPE_PUBLIC_KEY: process.env.STRIPE_PUBLIC_KEY,
+      },
+      collections,
+      googleAuthenticationConfigured: isGoogleAuthenticationConfigured(),
     },
-    collections,
-  };
+    {
+      headers: {
+        "Cache-Control": "private, no-store",
+      },
+    }
+  );
+};
+
+export const shouldRevalidate: ShouldRevalidateFunction = ({
+  currentUrl,
+  nextUrl,
+  formMethod,
+  defaultShouldRevalidate,
+}) => {
+  if (formMethod && formMethod !== "GET") return defaultShouldRevalidate;
+
+  const staysInAccounting =
+    currentUrl.pathname.startsWith("/admin/verifications") &&
+    nextUrl.pathname.startsWith("/admin/verifications");
+
+  return staysInAccounting ? false : defaultShouldRevalidate;
 };
 
 function Document({
@@ -107,7 +150,13 @@ function Document({
       <body>
         <Header />
         {children}
-        <ToastContainer />
+        <ToastContainer
+          position="top-right"
+          theme="light"
+          hideProgressBar
+          newestOnTop
+          limit={3}
+        />
         <ScrollRestoration />
         <LiveReload />
         <Scripts />
@@ -125,13 +174,45 @@ function Document({
   );
 }
 
+function RouteTransition({ data }: { data: IndexProps }) {
+  const isFirstRender = useRef(true);
+  const location = useLocation();
+  const shouldReduceMotion = useReducedMotion();
+  const routeTransitionKey = location.pathname.startsWith("/admin/orders")
+    ? "/admin/orders"
+    : location.pathname;
+
+  useEffect(() => {
+    isFirstRender.current = false;
+  }, []);
+
+  return (
+    <motion.div
+      animate={{ opacity: 1, y: 0 }}
+      initial={
+        shouldReduceMotion || isFirstRender.current
+          ? false
+          : { opacity: 0.97, y: 4 }
+      }
+      key={routeTransitionKey}
+      transition={
+        shouldReduceMotion
+          ? { duration: 0 }
+          : { duration: 0.18, ease: [0.22, 1, 0.36, 1] }
+      }
+    >
+      <Outlet context={data} />
+    </motion.div>
+  );
+}
+
 export default function App() {
   const data = useLoaderData<IndexProps>();
   return (
     <ThemeProvider hostname={data.hostname}>
     <CartProvider>
       <Document>
-        <Outlet context={data} />
+        <RouteTransition data={data} />
         <Cookies />
         <Footer />
       </Document>

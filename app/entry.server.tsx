@@ -22,7 +22,7 @@ let heartbeat = false;
 function setupHeartBeat(request: Request) {
   if (heartbeat) return;
   heartbeat = true;
-  const { port, proto, hostname } = getNextUrl(request);
+  const { proto, hostname } = getNextUrl(request);
   const url = `${proto}://${hostname}`;
   if (hostname !== "localhost") {
     console.log(`setup heartbeat for ${url}`);
