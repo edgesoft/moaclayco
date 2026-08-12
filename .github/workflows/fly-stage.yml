@@ -38,3 +38,6 @@ jobs:
         run: flyctl deploy -a moaclayco-stage --remote-only --config fly-stage.toml --dockerfile Dockerfile-stage
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Smoke test stage
+        run: node tools/smoke-check.mjs --url=https://moaclayco-stage.fly.dev --timeout=30000
