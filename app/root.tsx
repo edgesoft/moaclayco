@@ -15,6 +15,8 @@ import {
   ScrollRestoration,
   useLoaderData,
   useLocation,
+  isRouteErrorResponse,
+  useRouteError,
 } from "@remix-run/react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useRef } from "react";
@@ -125,7 +127,7 @@ function Document({
   useLoaderData<IndexProps>();
   const theme = useTheme();
   return (
-    <html lang="en">
+    <html lang="sv">
       <head>
         <meta charSet="utf-8" />
         <meta
@@ -218,5 +220,88 @@ export default function App() {
       </Document>
     </CartProvider>
     </ThemeProvider>
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const responseError = isRouteErrorResponse(error);
+  const status = responseError ? error.status : 500;
+  const isNotFound = status === 404;
+  const isUnauthorized = status === 401 || status === 403;
+  const title = isNotFound
+    ? "Den sidan verkar ha flyttat på sig."
+    : isUnauthorized
+      ? "Här behöver du logga in."
+      : status < 500
+        ? "Det gick inte riktigt som tänkt."
+        : "Något gick snett bakom kulisserna.";
+  const responseMessage =
+    responseError && typeof error.data === "string" && status < 500
+      ? error.data
+      : null;
+  const message =
+    responseMessage ??
+    (isNotFound
+      ? "Länken leder inte längre till en aktiv sida. Du hittar alla aktuella Collections från startsidan."
+      : isUnauthorized
+        ? "Administrationen är bara öppen för godkända konton."
+        : "Försök igen om en liten stund. Om problemet återkommer får du gärna höra av dig till oss.");
+
+  return (
+    <html lang="sv">
+      <head>
+        <meta charSet="utf-8" />
+        <meta
+          content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes"
+          name="viewport"
+        />
+        <title>{`${status} — Moa Clay Co`}</title>
+        <link href="/favicon.png" rel="icon" type="image/png" />
+        <Meta />
+        <Links />
+      </head>
+      <body>
+        <main className="mcc-error-page">
+          <header className="mcc-error-header">
+            <a aria-label="Moa Clay Co, till startsidan" href="/">
+              <span>Moa Clay</span>
+              <small>Co</small>
+            </a>
+          </header>
+
+          <section className="mcc-error-content">
+            <div aria-hidden="true" className="mcc-error-number">
+              {status}
+            </div>
+            <div className="mcc-error-copy">
+              <p className="mcc-error-kicker">Ett litet avbrott</p>
+              <h1>{title}</h1>
+              <p>{message}</p>
+              <div className="mcc-error-actions">
+                <a href="/">
+                  Till startsidan <span aria-hidden="true">→</span>
+                </a>
+                {isUnauthorized ? (
+                  <a className="is-secondary" href="/login">
+                    Logga in
+                  </a>
+                ) : (
+                  <button onClick={() => window.location.reload()} type="button">
+                    Försök igen
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <p className="mcc-error-note">
+            Behöver du hjälp? Skriv till{" "}
+            <a href="mailto:support@moaclayco.com">support@moaclayco.com</a>
+          </p>
+        </main>
+        <Scripts />
+      </body>
+    </html>
   );
 }

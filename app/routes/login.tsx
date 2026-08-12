@@ -38,7 +38,7 @@ export default function Login() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="mcc-login-page">
       <LoginModal
         configured={configured}
         errorMessage={errorMessage}
