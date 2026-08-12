@@ -5,10 +5,15 @@ import { auth } from "~/services/auth.server";
 import { suggestVerificationFileLabel } from "~/services/verification-file-label.server";
 import {
   MAX_VERIFICATION_FILE_SIZE,
+  MAX_VERIFICATION_REQUEST_SIZE,
   isSupportedVerificationFile,
   readVerifiedVerificationFile,
 } from "~/services/verification-files.server";
 import { fallbackVerificationFileLabel } from "~/utils/verificationFiles";
+import {
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 const safeErrorMetadata = (error: unknown) => {
   if (!(error instanceof Error)) return { name: "UnknownError" };
@@ -23,15 +28,33 @@ const safeErrorMetadata = (error: unknown) => {
 export const action: ActionFunction = async ({ request }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
 
-  const formData = await request.formData();
+  const requestId = uuidv4();
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(
+      request,
+      MAX_VERIFICATION_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json(
+        {
+          requestId,
+          analysisKey: "",
+          status: "failed",
+          error: "Filen är större än 20 MB",
+        },
+        { status: 413 }
+      );
+    }
+    throw error;
+  }
   const file = formData.get("file");
   const requestedAnalysisKey = formData.get("analysisKey");
   const analysisKey =
     typeof requestedAnalysisKey === "string"
       ? requestedAnalysisKey.slice(0, 100)
       : "";
-  const requestId = uuidv4();
-
   if (!(file instanceof File)) {
     return json({ requestId, analysisKey, status: "failed", error: "Ingen fil vald" }, { status: 400 });
   }

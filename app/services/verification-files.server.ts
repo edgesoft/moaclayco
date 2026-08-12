@@ -6,6 +6,8 @@ import sharp from "sharp";
 import { MAX_INPUT_IMAGE_PIXELS } from "~/utils/imageProcessing.server";
 
 export const MAX_VERIFICATION_FILE_SIZE = 20 * 1024 * 1024;
+export const MAX_VERIFICATION_REQUEST_SIZE =
+  MAX_VERIFICATION_FILE_SIZE + 1024 * 1024;
 
 const supportedDeclaredTypes = new Set([
   "application/pdf",

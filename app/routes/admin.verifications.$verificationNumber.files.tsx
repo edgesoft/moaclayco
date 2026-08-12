@@ -8,6 +8,7 @@ import { getDomain } from "~/utils/domain";
 import { auth } from "~/services/auth.server";
 import {
   deleteUploadedVerificationFile,
+  MAX_VERIFICATION_REQUEST_SIZE,
   readVerifiedVerificationFile,
   uploadVerificationFile,
   validateVerificationFile,
@@ -17,6 +18,10 @@ import {
   sanitizeVerificationFileLabel,
 } from "~/utils/verificationFiles";
 import { toLoaderData } from "~/utils/loaderData";
+import {
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 type VerificationFile = { name: string; path: string };
 
@@ -136,7 +141,18 @@ export const loader: LoaderFunction = async ({ params, request }) => {
 
 export const action: ActionFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
-  const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(
+      request,
+      MAX_VERIFICATION_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json({ error: "Filen är större än 20 MB" }, { status: 413 });
+    }
+    throw error;
+  }
   const domain = getDomain(request);
   const file = formData.get("file");
   const verificationNumber = Number(params.verificationNumber);

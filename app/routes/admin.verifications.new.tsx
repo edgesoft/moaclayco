@@ -33,6 +33,7 @@ import {
 } from "~/utils/accountingDates";
 import {
   deleteUploadedVerificationFile,
+  MAX_VERIFICATION_REQUEST_SIZE,
   readVerifiedVerificationFile,
   uploadVerificationFile,
   validateVerificationFile,
@@ -43,6 +44,10 @@ import {
   sanitizeVerificationFileLabel,
 } from "~/utils/verificationFiles";
 import { VerificationValidationError } from "~/utils/verificationValidation";
+import {
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 const formSchema = z.object({
   description: z.string().min(1, "Beskrivning är obligatorisk"),
@@ -264,16 +269,30 @@ type ActionData =
     };
 
 export const action: ActionFunction = async ({ request }) => {
-  const formData = await request.formData();
-  const domain = getDomain(request);
   const user = await auth.isAuthenticated(request, {
     failureRedirect: "/login",
   });
+  const domain = getDomain(request);
+  let requestFormData: globalThis.FormData;
+  try {
+    requestFormData = await parseFormDataWithinLimit(
+      request,
+      MAX_VERIFICATION_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json(
+        { success: false, errors: { file: "Filen är större än 20 MB" } },
+        { status: 413 }
+      );
+    }
+    throw error;
+  }
 
   if (!domain) throw new Error("Could not find domain");
-  const description = formData.get("description");
-  const verificationDate = formData.get("verificationDate");
-  const rawJournalEntries = formData.get("journalEntries");
+  const description = requestFormData.get("description");
+  const verificationDate = requestFormData.get("verificationDate");
+  const rawJournalEntries = requestFormData.get("journalEntries");
   let journalEntries: FormData["journalEntries"];
   try {
     journalEntries = JSON.parse(
@@ -296,8 +315,8 @@ export const action: ActionFunction = async ({ request }) => {
     );
   }
 
-  const supportingFile = formData.get("supportingFile");
-  const supportingFileLabel = formData.get("supportingFileLabel");
+  const supportingFile = requestFormData.get("supportingFile");
+  const supportingFileLabel = requestFormData.get("supportingFileLabel");
   let verifiedSupportingFile:
     | Awaited<ReturnType<typeof readVerifiedVerificationFile>>
     | undefined;

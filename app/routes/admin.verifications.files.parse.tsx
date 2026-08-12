@@ -9,9 +9,14 @@ import {
 import { auth } from "~/services/auth.server";
 import {
   MAX_VERIFICATION_FILE_SIZE,
+  MAX_VERIFICATION_REQUEST_SIZE,
   isSupportedVerificationFile,
   readVerifiedVerificationFile,
 } from "~/services/verification-files.server";
+import {
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 
 const getSafeErrorMetadata = (error: unknown) => {
@@ -32,7 +37,21 @@ export const action: ActionFunction = async ({ request }) => {
     failureRedirect: "/login",
   });
 
-  const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(
+      request,
+      MAX_VERIFICATION_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json(
+        { uuid: uuidv4(), verificationData: null, status: "failed" },
+        { status: 413 }
+      );
+    }
+    throw error;
+  }
   const file = formData.get("file");
 
   if (!file || typeof file === "string") {
