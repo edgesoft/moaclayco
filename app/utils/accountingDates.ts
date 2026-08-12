@@ -1,9 +1,35 @@
+type AccountingDateParts = {
+  year: number;
+  monthIndex: number;
+  day: number;
+};
+
+const parseAccountingDateParts = (
+  value: unknown
+): AccountingDateParts | null => {
+  if (typeof value !== "string") return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, monthIndex, day, 12));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== monthIndex ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return { year, monthIndex, day };
+};
+
 export const parseAccountingDate = (value: unknown): Date | null => {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const date = new Date(`${value}T12:00:00.000Z`);
-  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value
-    ? null
-    : date;
+  const parts = parseAccountingDateParts(value);
+  return parts
+    ? new Date(Date.UTC(parts.year, parts.monthIndex, parts.day, 12))
+    : null;
 };
 
 const stockholmDateFormatter = new Intl.DateTimeFormat("sv-SE", {
@@ -110,6 +136,22 @@ export const accountingMonthKey = (value: string | Date) => {
   return year && month ? `${year}-${month}` : null;
 };
 
+export const accountingDateKey = (value: string | Date) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = stockholmDateFormatter.formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return year && month && day ? `${year}-${month}-${day}` : null;
+};
+
+export const accountingYear = (value: string | Date) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return partNumber(stockholmDateFormatter.formatToParts(date), "year");
+};
+
 export const accountingMonthKeyForVerification = (verification: {
   verificationDate: string | Date;
   metadata?: Array<{ key: string; value: string }>;
@@ -126,5 +168,33 @@ export const getAccountingMonthBounds = (month: string) => {
     monthIndex,
     start: stockholmMidnightUtc(year, monthIndex, 1),
     end: stockholmMidnightUtc(year, monthIndex + 1, 1),
+  };
+};
+
+export const getAccountingDateBounds = (from: string, to = from) => {
+  const fromParts = parseAccountingDateParts(from);
+  const toParts = parseAccountingDateParts(to);
+  if (!fromParts || !toParts || from > to) return null;
+
+  return {
+    start: stockholmMidnightUtc(
+      fromParts.year,
+      fromParts.monthIndex,
+      fromParts.day
+    ),
+    end: stockholmMidnightUtc(
+      toParts.year,
+      toParts.monthIndex,
+      toParts.day + 1
+    ),
+  };
+};
+
+export const getAccountingYearBounds = (year: number) => {
+  if (!Number.isInteger(year) || year < 2000 || year > 2200) return null;
+  return {
+    year,
+    start: stockholmMidnightUtc(year, 0, 1),
+    end: stockholmMidnightUtc(year + 1, 0, 1),
   };
 };

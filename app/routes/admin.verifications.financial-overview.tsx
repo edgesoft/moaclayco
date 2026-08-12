@@ -13,6 +13,10 @@ import { ReportType } from "~/types";
 import { accounts } from "~/utils/accounts";
 import { getDomain } from "~/utils/domain";
 import { AccountingDateField } from "~/components/admin/AccountingDateField";
+import {
+  getAccountingDateBounds,
+  parseAccountingDate,
+} from "~/utils/accountingDates";
 
 const normalizeDateParameter = (value: string | null, fallback: string) => {
   if (!value) return fallback;
@@ -22,10 +26,7 @@ const normalizeDateParameter = (value: string | null, fallback: string) => {
     : `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return fallback;
 
-  const date = new Date(`${normalized}T12:00:00.000Z`);
-  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === normalized
-    ? normalized
-    : fallback;
+  return parseAccountingDate(normalized) ? normalized : fallback;
 };
 
 export const loader: LoaderFunction = async ({ request }) => {
@@ -55,17 +56,11 @@ export const loader: LoaderFunction = async ({ request }) => {
     fromValue <= toValue;
   const safeFromValue = validPeriod ? fromValue : fiscalStartValue;
   const safeToValue = validPeriod ? toValue : fiscalEndValue;
-  const matchFrom = new Date(
-    `${report === "balance" ? fiscalStartValue : safeFromValue}T00:00:00.000Z`
+  const periodBounds = getAccountingDateBounds(
+    report === "balance" ? fiscalStartValue : safeFromValue,
+    safeToValue
   );
-  const inclusiveTo = new Date(`${safeToValue}T00:00:00.000Z`);
-  const matchTo = new Date(
-    Date.UTC(
-      inclusiveTo.getUTCFullYear(),
-      inclusiveTo.getUTCMonth(),
-      inclusiveTo.getUTCDate() + 1
-    )
-  );
+  if (!periodBounds) throw new Response("Ogiltig rapportperiod", { status: 400 });
 
   const accountTotals = await Verifications.aggregate<{
     account: number;
@@ -73,7 +68,10 @@ export const loader: LoaderFunction = async ({ request }) => {
   }>([
     {
       $match: {
-        verificationDate: { $gte: matchFrom, $lt: matchTo },
+        verificationDate: {
+          $gte: periodBounds.start,
+          $lt: periodBounds.end,
+        },
         domain: domain.domain,
       },
     },

@@ -1,5 +1,6 @@
 import { Verifications } from "~/schemas/verifications";
 import { ReportType, VerificationProps } from "~/types";
+import { getAccountingYearBounds } from "~/utils/accountingDates";
 
 export const accounts = [
     { value: 1510, label: "1510 - Kundfordringar", reportType: ReportType.BALANCE, isIncomingBalance: true  },
@@ -95,11 +96,13 @@ export const buildIncomingBalanceEntries = (
 };
 
 export const getIBJournalEntries = async (domain: string, year: number) => {
+  const bounds = getAccountingYearBounds(year);
+  if (!bounds) throw new Error("Ogiltigt bokföringsår för ingående balans");
   const previousVerifications = await Verifications.find({
     domain,
     verificationDate: {
-      $gte: new Date(Date.UTC(year, 0, 1)),
-      $lt: new Date(Date.UTC(year + 1, 0, 1)),
+      $gte: bounds.start,
+      $lt: bounds.end,
     },
   })
     .select("journalEntries")

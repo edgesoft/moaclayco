@@ -3,6 +3,7 @@ import { VerificationCounters } from "~/schemas/verification-counters";
 import { Verifications } from "~/schemas/verifications";
 import { normalizeJournalEntries } from "~/utils/verificationValidation";
 import { getIBJournalEntries } from "~/utils/accounts";
+import { accountingYear } from "~/utils/accountingDates";
 
 type MetadataEntry = { key: string; value: string | number };
 type FileEntry = { name: string; path: string };
@@ -127,9 +128,11 @@ export async function createVerification(input: CreateVerificationInput) {
   );
   if (!isIncomingBalance) {
     try {
+      const sourceYear = accountingYear(normalized.verificationDate);
+      if (!sourceYear) throw new Error("Verifikationen saknar bokföringsår");
       await refreshIncomingBalanceForFollowingYear(
         normalized.domain,
-        normalized.verificationDate.getUTCFullYear()
+        sourceYear
       );
     } catch (error) {
       // Själva verifikationen är redan sparad. Nästa bokning eller manuell

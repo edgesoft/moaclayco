@@ -15,6 +15,7 @@ import { VerificationProps } from "~/types";
 import {
   accountingMonthKey,
   accountingMonthKeyForVerification,
+  getAccountingYearBounds,
 } from "~/utils/accountingDates";
 import { getDomain } from "~/utils/domain";
 
@@ -37,6 +38,10 @@ export const loader: LoaderFunction = async ({ request }) => {
   const isOverview = pathname === "/admin/verifications";
   const needsLatestVerificationNumber = pathname.endsWith("/new");
   const currentYearMonth = accountingMonthKey(new Date()) as string;
+  const fiscalBounds = getAccountingYearBounds(user.fiscalYear);
+  if (!fiscalBounds) {
+    throw new Response("Ogiltigt bokföringsår", { status: 400 });
+  }
 
   if (!isOverview) {
     const latestVerification = needsLatestVerificationNumber
@@ -58,8 +63,8 @@ export const loader: LoaderFunction = async ({ request }) => {
 
   const verificationsPromise = Verifications.find({
     verificationDate: {
-      $gte: new Date(`${user.fiscalYear}-01-01`),
-      $lt: new Date(`${user.fiscalYear + 1}-01-01`),
+      $gte: fiscalBounds.start,
+      $lt: fiscalBounds.end,
     },
     domain: domain?.domain,
   })

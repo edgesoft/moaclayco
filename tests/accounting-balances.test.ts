@@ -6,10 +6,14 @@ import {
   buildVatTaxAccountEntries,
 } from "../app/utils/vat";
 import {
+  accountingDateKey,
   accountingMonthKey,
   accountingMonthKeyForVerification,
+  accountingYear,
   formatStockholmDateTime,
+  getAccountingDateBounds,
   getAccountingMonthBounds,
+  getAccountingYearBounds,
   parseStockholmDateTime,
 } from "../app/utils/accountingDates";
 import { buildTaxAccountJournalEntries } from "../app/utils/taxAccount";
@@ -127,6 +131,26 @@ test("accounting month boundaries follow Stockholm time", () => {
   assert.equal(march.end.toISOString(), "2026-03-31T22:00:00.000Z");
   assert.equal(april.start.toISOString(), "2026-03-31T22:00:00.000Z");
   assert.equal(accountingMonthKey(new Date("2026-03-31T22:30:00.000Z")), "2026-04");
+});
+
+test("accounting year boundaries follow Stockholm time", () => {
+  const bounds = getAccountingYearBounds(2026);
+  assert.ok(bounds);
+  assert.equal(bounds.start.toISOString(), "2025-12-31T23:00:00.000Z");
+  assert.equal(bounds.end.toISOString(), "2026-12-31T23:00:00.000Z");
+
+  const stockholmNewYear = new Date("2025-12-31T23:30:00.000Z");
+  assert.equal(accountingYear(stockholmNewYear), 2026);
+  assert.equal(accountingDateKey(stockholmNewYear), "2026-01-01");
+});
+
+test("accounting date ranges include the full Stockholm day across DST", () => {
+  const bounds = getAccountingDateBounds("2026-03-29");
+  assert.ok(bounds);
+  assert.equal(bounds.start.toISOString(), "2026-03-28T23:00:00.000Z");
+  assert.equal(bounds.end.toISOString(), "2026-03-29T22:00:00.000Z");
+  assert.equal(bounds.end.getTime() - bounds.start.getTime(), 23 * 60 * 60 * 1000);
+  assert.equal(getAccountingDateBounds("2026-03-30", "2026-03-29"), null);
 });
 
 test("discount expiry keeps the selected Stockholm wall time", () => {

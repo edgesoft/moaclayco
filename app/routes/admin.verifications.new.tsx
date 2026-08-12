@@ -26,7 +26,12 @@ import { getDomain } from "~/utils/domain";
 import { loader as rootLoader } from "~/root";
 import { auth } from "~/services/auth.server";
 import { createVerification, ensureIncomingBalance } from "~/services/verification.server";
-import { accountingMonthKey, parseAccountingDate } from "~/utils/accountingDates";
+import {
+  accountingDateKey,
+  accountingMonthKey,
+  accountingYear,
+  parseAccountingDate,
+} from "~/utils/accountingDates";
 import {
   deleteUploadedVerificationFile,
   uploadVerificationFile,
@@ -315,7 +320,8 @@ export const action: ActionFunction = async ({ request }) => {
     );
   }
 
-  if (user.fiscalYear !== dateForDatabase.getUTCFullYear()) {
+  const verificationYear = accountingYear(dateForDatabase);
+  if (user.fiscalYear !== verificationYear) {
     return json(
       {
         success: false,
@@ -385,7 +391,7 @@ export const action: ActionFunction = async ({ request }) => {
     }
   }
 
-  await ensureIncomingBalance(domain.domain, dateForDatabase.getUTCFullYear());
+  await ensureIncomingBalance(domain.domain, verificationYear);
 
   try {
     let uploadedFile: Awaited<ReturnType<typeof uploadVerificationFile>> | null = null;
@@ -475,7 +481,7 @@ export default function Verification() {
     "choose"
   );
   const initialVerificationDate = useRef(
-    new Date().toISOString().split("T")[0]
+    accountingDateKey(new Date()) ?? new Date().toISOString().split("T")[0]
   ).current;
 
   const {

@@ -20,7 +20,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { getDomain } from "~/utils/domain";
 import { auth } from "~/services/auth.server";
 import { createVerification, ensureIncomingBalance } from "~/services/verification.server";
-import { getAccountingMonthBounds, parseAccountingDate } from "~/utils/accountingDates";
+import {
+  accountingYear,
+  getAccountingMonthBounds,
+  parseAccountingDate,
+} from "~/utils/accountingDates";
 import { AccountingDateField } from "~/components/admin/AccountingDateField";
 import { buildVatTaxAccountEntries } from "~/utils/vat";
 
@@ -90,10 +94,12 @@ export const action: ActionFunction = async ({ request }) => {
 
   const formattedDate = parseAccountingDate(parsed.data.submissionDate);
   if (!formattedDate) return json({ error: "Ogiltigt datum" }, { status: 400 });
+  const paymentYear = accountingYear(formattedDate);
+  if (!paymentYear) return json({ error: "Ogiltigt bokföringsår" }, { status: 400 });
   const isRefund = vatBalance > 0;
   const journalEntries = buildVatTaxAccountEntries(vatBalance);
 
-  await ensureIncomingBalance(domain.domain, formattedDate.getUTCFullYear());
+  await ensureIncomingBalance(domain.domain, paymentYear);
   await createVerification({
     domain: domain.domain,
     idempotencyKey: `vat-payment:${month}`,

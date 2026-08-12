@@ -19,7 +19,11 @@ import { getDomain } from "~/utils/domain";
 import { auth } from "~/services/auth.server";
 import { buildVatReportEntries } from "~/utils/vat";
 import { createVerification, ensureIncomingBalance } from "~/services/verification.server";
-import { getAccountingMonthBounds, parseAccountingDate } from "~/utils/accountingDates";
+import {
+  accountingYear,
+  getAccountingMonthBounds,
+  parseAccountingDate,
+} from "~/utils/accountingDates";
 import { AccountingDateField } from "~/components/admin/AccountingDateField";
 
 type VatJournalEntry = {
@@ -109,7 +113,10 @@ export const action: ActionFunction = async ({ request }) => {
   if (bounds.year !== user.fiscalYear) {
     return json({ error: `Perioden måste tillhöra bokföringsår ${user.fiscalYear}` }, { status: 400 });
   }
-  const submissionYear = formattedDate.getUTCFullYear();
+  const submissionYear = accountingYear(formattedDate);
+  if (!submissionYear) {
+    return json({ error: "Ogiltigt rapportdatum" }, { status: 400 });
+  }
   if (submissionYear < bounds.year || submissionYear > bounds.year + 1) {
     return json(
       { error: "Du kan inte specificera momsrapporten så långt i förväg" },

@@ -1,6 +1,7 @@
 import * as oidc from "openid-client";
 import { Users } from "~/schemas/user";
 import type { User } from "~/types";
+import { accountingYear } from "~/utils/accountingDates";
 
 const GOOGLE_ISSUER = new URL("https://accounts.google.com");
 const DEFAULT_ALLOWED_EMAILS = [
@@ -153,7 +154,8 @@ const sessionUserFromDocument = (user: {
   firstname: user.firstname ?? "",
   lastname: user.lastname ?? "",
   email: normalizeGoogleEmail(user.email),
-  fiscalYear: user.fiscalYear ?? new Date().getFullYear(),
+  fiscalYear:
+    user.fiscalYear ?? accountingYear(new Date()) ?? new Date().getUTCFullYear(),
 });
 
 export const completeGoogleAuthentication = async (
@@ -236,7 +238,7 @@ export const completeGoogleAuthentication = async (
         typeof claims.given_name === "string" ? claims.given_name : "",
       lastname:
         typeof claims.family_name === "string" ? claims.family_name : "",
-      fiscalYear: new Date().getFullYear(),
+      fiscalYear: accountingYear(new Date()) ?? new Date().getUTCFullYear(),
       googleSubject,
       authProvider: "google",
     });
