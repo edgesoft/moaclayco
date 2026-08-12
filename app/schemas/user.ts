@@ -15,4 +15,6 @@ const UserSchema = new Schema({
 },
 { collection: 'users' });
 
+UserSchema.index({ email: 1 });
+
 export const Users = mongoose.models.Users || mongoose.model('Users', UserSchema);

@@ -93,6 +93,7 @@ VerificationsSchema.index(
   }
 );
 VerificationsSchema.index({ domain: 1, verificationDate: 1 });
+VerificationsSchema.index({ domain: 1, verificationDate: 1, verificationNumber: 1 });
 VerificationsSchema.index({ domain: 1, recordType: 1, verificationDate: 1 });
 VerificationsSchema.index({ domain: 1, "metadata.key": 1, "metadata.value": 1 });
 VerificationsSchema.index({ domain: 1, "metadata.key": 1, verificationDate: 1 });
