@@ -61,32 +61,27 @@ const VerificationsSchema = new Schema({
   },
 { collection: 'verifications' });
 
-VerificationsSchema.pre("validate", function (next) {
-  try {
-    if (
-      (this.recordType === "vatReport" ||
-        this.recordType === "incomingBalance") &&
-      (!Array.isArray(this.journalEntries) ||
-        this.journalEntries.every(
-          (entry: any) =>
-            Number(entry?.debit || 0) === 0 && Number(entry?.credit || 0) === 0
-        ))
-    ) {
-      this.journalEntries = [] as any;
-      next();
-      return;
-    }
-    const allowsLegacyAccount2050 = this.metadata?.some(
-      (entry: any) =>
-        entry?.key === "legacy2050Correction" && entry?.value === "true"
-    );
-    this.journalEntries = normalizeJournalEntries(this.journalEntries, {
-      allowLegacyAccount2050: allowsLegacyAccount2050,
-    }) as any;
-    next();
-  } catch (error) {
-    next(error as Error);
+VerificationsSchema.pre("validate", function () {
+  if (
+    (this.recordType === "vatReport" ||
+      this.recordType === "incomingBalance") &&
+    (!Array.isArray(this.journalEntries) ||
+      this.journalEntries.every(
+        (entry: any) =>
+          Number(entry?.debit || 0) === 0 && Number(entry?.credit || 0) === 0
+      ))
+  ) {
+    this.journalEntries = [] as any;
+    return;
   }
+
+  const allowsLegacyAccount2050 = this.metadata?.some(
+    (entry: any) =>
+      entry?.key === "legacy2050Correction" && entry?.value === "true"
+  );
+  this.journalEntries = normalizeJournalEntries(this.journalEntries, {
+    allowLegacyAccount2050: allowsLegacyAccount2050,
+  }) as any;
 });
 
 VerificationsSchema.index({ domain: 1, verificationNumber: 1 }, { unique: true });
