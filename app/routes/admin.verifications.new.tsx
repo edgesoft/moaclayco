@@ -33,6 +33,7 @@ import {
 } from "~/utils/accountingDates";
 import {
   deleteUploadedVerificationFile,
+  readVerifiedVerificationFile,
   uploadVerificationFile,
   validateVerificationFile,
 } from "~/services/verification-files.server";
@@ -297,9 +298,13 @@ export const action: ActionFunction = async ({ request }) => {
 
   const supportingFile = formData.get("supportingFile");
   const supportingFileLabel = formData.get("supportingFileLabel");
+  let verifiedSupportingFile:
+    | Awaited<ReturnType<typeof readVerifiedVerificationFile>>
+    | undefined;
   if (supportingFile instanceof File && supportingFile.size > 0) {
     try {
       validateVerificationFile(supportingFile);
+      verifiedSupportingFile = await readVerifiedVerificationFile(supportingFile);
     } catch (error) {
       return json(
         { success: false, errors: { file: error instanceof Error ? error.message : "Ogiltig fil" } },
@@ -393,7 +398,11 @@ export const action: ActionFunction = async ({ request }) => {
     let uploadedFile: Awaited<ReturnType<typeof uploadVerificationFile>> | null = null;
     try {
       if (supportingFile instanceof File && supportingFile.size > 0) {
-        uploadedFile = await uploadVerificationFile(supportingFile);
+        uploadedFile = await uploadVerificationFile(
+          supportingFile,
+          "documents",
+          verifiedSupportingFile
+        );
       }
       const newVerification = await createVerification({
         domain: domain?.domain,

@@ -10,6 +10,7 @@ import { auth } from "~/services/auth.server";
 import {
   MAX_VERIFICATION_FILE_SIZE,
   isSupportedVerificationFile,
+  readVerifiedVerificationFile,
 } from "~/services/verification-files.server";
 
 
@@ -55,12 +56,21 @@ export const action: ActionFunction = async ({ request }) => {
     );
   }
 
-  const fileBuffer = Buffer.from(await file.arrayBuffer());
+  let verifiedFile: Awaited<ReturnType<typeof readVerifiedVerificationFile>>;
+  try {
+    verifiedFile = await readVerifiedVerificationFile(file);
+  } catch {
+    return json(
+      { uuid: uuidv4(), verificationData: null, status: "failed" },
+      { status: 415 }
+    );
+  }
+
   let analysis;
   try {
     analysis = await interpretAccountingDocument({
-      buffer: fileBuffer,
-      mimeType: file.type,
+      buffer: verifiedFile.buffer,
+      mimeType: verifiedFile.mimeType,
       fileName: file.name,
     });
   } catch (error) {

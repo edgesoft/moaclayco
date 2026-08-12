@@ -6,6 +6,7 @@ import { suggestVerificationFileLabel } from "~/services/verification-file-label
 import {
   MAX_VERIFICATION_FILE_SIZE,
   isSupportedVerificationFile,
+  readVerifiedVerificationFile,
 } from "~/services/verification-files.server";
 import { fallbackVerificationFileLabel } from "~/utils/verificationFiles";
 
@@ -41,10 +42,20 @@ export const action: ActionFunction = async ({ request }) => {
     return json({ requestId, analysisKey, status: "failed", error: "Filen är tom eller för stor" }, { status: 413 });
   }
 
+  let verifiedFile: Awaited<ReturnType<typeof readVerifiedVerificationFile>>;
+  try {
+    verifiedFile = await readVerifiedVerificationFile(file);
+  } catch {
+    return json(
+      { requestId, analysisKey, status: "failed", error: "Filens innehåll eller filtyp är ogiltig" },
+      { status: 415 }
+    );
+  }
+
   try {
     const suggestion = await suggestVerificationFileLabel({
-      buffer: Buffer.from(await file.arrayBuffer()),
-      mimeType: file.type,
+      buffer: verifiedFile.buffer,
+      mimeType: verifiedFile.mimeType,
       fileName: file.name,
     });
 

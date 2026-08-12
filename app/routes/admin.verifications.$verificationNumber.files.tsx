@@ -8,6 +8,7 @@ import { getDomain } from "~/utils/domain";
 import { auth } from "~/services/auth.server";
 import {
   deleteUploadedVerificationFile,
+  readVerifiedVerificationFile,
   uploadVerificationFile,
   validateVerificationFile,
 } from "~/services/verification-files.server";
@@ -144,8 +145,10 @@ export const action: ActionFunction = async ({ request, params }) => {
     return json({ error: "Filen eller verifikationsnumret saknas" }, { status: 400 });
   }
 
+  let verifiedFile: Awaited<ReturnType<typeof readVerifiedVerificationFile>>;
   try {
     validateVerificationFile(file);
+    verifiedFile = await readVerifiedVerificationFile(file);
   } catch (error) {
     return json(
       { error: error instanceof Error ? error.message : "Ogiltig fil" },
@@ -162,7 +165,11 @@ export const action: ActionFunction = async ({ request, params }) => {
 
   let uploadedFile: Awaited<ReturnType<typeof uploadVerificationFile>> | null = null;
   try {
-    uploadedFile = await uploadVerificationFile(file, String(verificationNumber));
+    uploadedFile = await uploadVerificationFile(
+      file,
+      String(verificationNumber),
+      verifiedFile
+    );
     const updateResult = await Verifications.updateOne(
       { verificationNumber, domain: domain?.domain },
       { $push: { files: { name: label, path: uploadedFile.path } } }
