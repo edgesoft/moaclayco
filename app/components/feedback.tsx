@@ -20,23 +20,23 @@ const Feedback: React.FC<FeedbackProp> = ({
   forceInvisble = false,
   visibleInMillis,
 }): React.ReactElement | null => {
-  const [value, setValue] = useState<string>();
+  const [dismissedHeadline, setDismissedHeadline] = useState<string>();
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    let handle: ReturnType<typeof setTimeout> | undefined;
-    setValue(headline);
-    if (visibleInMillis) {
-      handle = setTimeout(() => setValue(undefined), visibleInMillis);
-    }
-    return () => {
-      if (handle) clearTimeout(handle);
-    };
-  }, [visibleInMillis, headline, message]);
+    if (!visibleInMillis) return;
+    const handle = setTimeout(
+      () => setDismissedHeadline(headline),
+      visibleInMillis
+    );
+    return () => clearTimeout(handle);
+  }, [visibleInMillis, headline]);
+
+  const visible = !forceInvisble && dismissedHeadline !== headline;
 
   return (
     <AnimatePresence>
-      {!forceInvisble && value ? (
+      {visible ? (
         <motion.div
           animate={{ opacity: 1, y: 0 }}
           aria-live={type === "error" ? "assertive" : "polite"}
@@ -53,7 +53,7 @@ const Feedback: React.FC<FeedbackProp> = ({
             {type === "error" ? "!" : "✓"}
           </span>
           <div className="mcc-feedback-copy">
-            <p>{value}</p>
+            <p>{headline}</p>
             {message ? <span>{message}</span> : null}
           </div>
           {!visibleInMillis ? (
@@ -62,7 +62,7 @@ const Feedback: React.FC<FeedbackProp> = ({
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                setValue(undefined);
+                setDismissedHeadline(headline);
               }}
               type="button"
             >

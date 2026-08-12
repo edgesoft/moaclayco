@@ -18,22 +18,18 @@ const hasLoadingState = ({ transition }: LoaderProps): boolean =>
   loadingState.includes(transition.state);
 
 export default function Loader({ transition, forceSpinner }: LoaderProps) {
+  if (!forceSpinner && !hasLoadingState({ transition })) return null;
+
+  return <DelayedLoader />;
+}
+
+function DelayedLoader() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    let handle: ReturnType<typeof setTimeout> | undefined;
-    if (forceSpinner || hasLoadingState({ transition })) {
-      handle = setTimeout(() => {
-        if (forceSpinner || hasLoadingState({ transition })) setShow(true);
-      }, 650);
-    } else {
-      setShow(false);
-    }
-
-    return () => {
-      if (handle) clearTimeout(handle);
-    };
-  }, [transition, forceSpinner]);
+    const handle = setTimeout(() => setShow(true), 650);
+    return () => clearTimeout(handle);
+  }, []);
 
   if (!show) return null;
 

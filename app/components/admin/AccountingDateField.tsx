@@ -88,13 +88,14 @@ export function AccountingDateField({
     };
   }, [open]);
 
-  useEffect(() => {
-    if (open && selectedDate) {
+  const toggleCalendar = () => {
+    if (!open && selectedDate) {
       setVisibleMonth(
         new Date(Date.UTC(selectedDate.getUTCFullYear(), selectedDate.getUTCMonth(), 1))
       );
     }
-  }, [open, selectedDate]);
+    setOpen((current) => !current);
+  };
 
   const days = useMemo(() => {
     const year = visibleMonth.getUTCFullYear();
@@ -145,7 +146,7 @@ export function AccountingDateField({
         }`}
         aria-haspopup="dialog"
         aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
+        onClick={toggleCalendar}
         className={`group flex h-14 w-full items-center justify-between rounded-2xl border bg-white px-4 text-left text-sm shadow-[0_1px_0_rgba(41,37,36,0.04)] outline-none transition hover:border-[#c58a79] focus:ring-2 ${
           error
             ? "border-red-400 focus:border-red-500 focus:ring-red-100"
