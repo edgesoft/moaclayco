@@ -70,5 +70,9 @@
   },
   "engines": {
     "node": ">=24.0.0 <25"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "unrs-resolver@1.12.2": true
   }
 }
