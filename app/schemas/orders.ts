@@ -19,6 +19,8 @@ const OrderSchema = new Schema({
     updatedAt: Date,
     webhookAt: Date,
     manualOrderAt: Date,
+    orderConfirmationEmailAt: Date,
+    shippingEmailAt: Date,
     checkoutToken: String,
     checkoutFingerprint: String,
     status: {

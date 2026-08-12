@@ -8,6 +8,7 @@ import EmailOrderTemplate, {
   Template,
   shortOrderNumber,
 } from "../app/components/mail/order";
+import { sendOrderEmail } from "../app/services/order-email.server";
 import type { Order } from "../app/types";
 
 const order: Order = {
@@ -106,4 +107,35 @@ test("order number formatting accepts MongoDB ObjectIds from live orders", () =>
     shortOrderNumber(new mongoose.Types.ObjectId("6a7c35036c097ff2e08f8569")),
     "#E08F8569"
   );
+});
+
+test("order email failures propagate so delivery can be retried", async () => {
+  await assert.rejects(
+    sendOrderEmail(order, Template.ORDER, {
+      sendMail: async () => {
+        throw new Error("SMTP unavailable");
+      },
+    }),
+    /SMTP unavailable/
+  );
+});
+
+test("order emails use a stable message id across retries", async () => {
+  const messages: Array<{ messageId?: string }> = [];
+  const mailer = {
+    sendMail: async (message: { messageId?: string }) => {
+      messages.push(message);
+      return { messageId: message.messageId };
+    },
+  };
+
+  await sendOrderEmail(order, Template.ORDER, mailer);
+  await sendOrderEmail(order, Template.ORDER, mailer);
+
+  assert.equal(messages.length, 2);
+  assert.equal(
+    messages[0].messageId,
+    "<order-6a7c2fcacabeecd95e0044b9@moaclayco.com>"
+  );
+  assert.equal(messages[1].messageId, messages[0].messageId);
 });

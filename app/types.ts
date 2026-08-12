@@ -17,6 +17,8 @@ export type Order = {
   _id: string;
   webhookAt?: Date | string,
   manualOrderAt?: Date | string,
+  orderConfirmationEmailAt?: Date | string,
+  shippingEmailAt?: Date | string,
   status?: "OPENED" | "PENDING" | "FAILED" | "CANCELED" | "SUCCESS" | "PAID_REVIEW" | "MANUAL_PROCESSING" | "SHIPPED";
   totalSum: number;
   paymentIntent?: {

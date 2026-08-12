@@ -317,8 +317,25 @@ const fromPaymentIntent = async (id: string, status: string) => {
     await session.endSession();
   }
 
-  if (transitionedOrder) {
-    await sendOrderEmail(transitionedOrder, Template.ORDER);
+  const orderForEmail =
+    transitionedOrder ??
+    (status === "SUCCESS"
+      ? ((await Orders.findOne({
+          "paymentIntent.id": id,
+          status: { $in: ["SUCCESS", "SHIPPED", "PAID_REVIEW"] },
+          orderConfirmationEmailAt: { $exists: false },
+        }).lean()) as Order | null)
+      : null);
+
+  if (orderForEmail && !orderForEmail.orderConfirmationEmailAt) {
+    await sendOrderEmail(orderForEmail, Template.ORDER);
+    await Orders.updateOne(
+      {
+        _id: orderForEmail._id,
+        orderConfirmationEmailAt: { $exists: false },
+      },
+      { $set: { orderConfirmationEmailAt: new Date() } }
+    );
   }
 };
 

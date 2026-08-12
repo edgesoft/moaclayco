@@ -252,22 +252,34 @@ export let action: ActionFunction = async ({ request, params }) => {
   }).lean();
 
   if (order) {
-    await Orders.updateOne(
-      {
-        _id: params.id,
-        domain: domain?.domain,
-      },
-      {
-        status: data
-          ? "SHIPPED"
-          : order.manualOrderAt
-          ? "MANUAL_PROCESSING"
-          : "SUCCESS",
-      }
-    );
-
     if (data) {
-      await sendOrderEmail(order, Template.SHIPPING);
+      const shippingEmailAt = order.shippingEmailAt
+        ? new Date(order.shippingEmailAt)
+        : new Date();
+      if (!order.shippingEmailAt) {
+        await sendOrderEmail(order, Template.SHIPPING);
+      }
+
+      await Orders.updateOne(
+        {
+          _id: params.id,
+          domain: domain?.domain,
+        },
+        { $set: { status: "SHIPPED", shippingEmailAt } }
+      );
+    } else {
+      await Orders.updateOne(
+        {
+          _id: params.id,
+          domain: domain?.domain,
+        },
+        {
+          $set: {
+            status: order.manualOrderAt ? "MANUAL_PROCESSING" : "SUCCESS",
+          },
+          $unset: { shippingEmailAt: "" },
+        }
+      );
     }
   }
 
