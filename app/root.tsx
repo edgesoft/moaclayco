@@ -157,6 +157,12 @@ function Document({
           
     
         {title ? <title>{title}</title> : null}
+        {data?.ENV.STRIPE_PUBLIC_KEY ? (
+          <meta
+            name="stripe-public-key"
+            content={data.ENV.STRIPE_PUBLIC_KEY}
+          />
+        ) : null}
         <Meta />
         <Links />
       </head>
@@ -172,13 +178,6 @@ function Document({
         />
         <ScrollRestoration />
         <Scripts />
-        {data ? (
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `window.ENV = ${JSON.stringify(data.ENV)}`,
-            }}
-          />
-        ) : null}
         <div id="portal" />
       </body>
     </html>

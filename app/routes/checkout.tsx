@@ -29,15 +29,12 @@ import { Order } from "~/types";
 import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
 
-declare global {
-  interface Window {
-    ENV: { STRIPE_PUBLIC_KEY?: string };
-  }
-}
-
 let stripePromise: Stripe | PromiseLike<Stripe | null> | null = null;
-if (typeof window !== "undefined") {
-  stripePromise = loadStripe(window.ENV?.STRIPE_PUBLIC_KEY ?? "");
+if (typeof document !== "undefined") {
+  const publicKey = document.querySelector<HTMLMetaElement>(
+    'meta[name="stripe-public-key"]'
+  )?.content;
+  stripePromise = loadStripe(publicKey ?? "");
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
