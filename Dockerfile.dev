@@ -14,7 +14,7 @@ ENV HOST=0.0.0.0
 ENV PORT=3000
 
 COPY package.json package-lock.json ./
-RUN npm ci --include=dev && node -e "const fs=require('node:fs');const crypto=require('node:crypto');const lock=fs.readFileSync('package-lock.json');fs.writeFileSync('node_modules/.package-lock.sha256',crypto.createHash('sha256').update(lock).digest('hex'))"
+RUN npm ci --include=dev && node -e "const fs=require('node:fs');const crypto=require('node:crypto');const lock=fs.readFileSync('package-lock.json');fs.writeFileSync('node_modules/.package-lock.sha256',crypto.createHash('sha256').update(lock).digest('hex')+'\n')"
 
 COPY . .
 

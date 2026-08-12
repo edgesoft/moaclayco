@@ -114,6 +114,38 @@ Run the deterministic local checks:
 docker compose -f compose.local.yml exec app npm test
 ```
 
+## Stripe webhook end-to-end test
+
+The Stripe E2E suite uses the Stripe sandbox and an isolated Docker environment.
+It never connects to the configured application database and captures all email
+in Mailpit. The suite starts a MongoDB replica set, the app, Mailpit, and a
+version-pinned Stripe CLI listener; it removes the containers and volumes when
+the run finishes.
+
+Set a sandbox `sk_test_...` key as `STRIPE_SRV` in `.env.stage.local`, or export
+it only for the test process, then run:
+
+```sh
+npm run test:e2e:stripe
+```
+
+The suite verifies valid and invalid signatures, successful, failed and canceled
+PaymentIntents, accounting, stock, discounts, captured confirmation email, and
+duplicate-event idempotency. Stripe sandbox objects are tagged with a unique
+`e2eRunId` and remain visible in Stripe Workbench for diagnostics. Set
+`STRIPE_E2E_KEEP=1` only when you intentionally want to inspect the isolated
+containers after a failed run.
+
+The `Stripe Webhook E2E` GitHub Actions workflow runs the same suite manually.
+Add the sandbox key as the repository secret `STRIPE_E2E_SECRET_KEY`, then start
+the workflow from the Actions tab. Keep this key limited to a dedicated Stripe
+sandbox; never use a live `sk_live_...` key.
+
+Stripe CLI delivers events using the sandbox account's configured event API
+version. The application currently creates Stripe requests with API version
+`2023-08-16`; upgrading that version is a separate migration and should be
+verified with this suite before deployment.
+
 Run a real API regression against a synthetic fixture:
 
 ```sh

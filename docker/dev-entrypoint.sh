@@ -7,7 +7,7 @@ current_hash=$(node -e "const fs=require('node:fs');const crypto=require('node:c
 installed_hash=""
 
 if [ -f "$marker" ]; then
-  IFS= read -r installed_hash < "$marker"
+  installed_hash=$(tr -d '\r\n' < "$marker")
 fi
 
 if [ "$current_hash" != "$installed_hash" ]; then
