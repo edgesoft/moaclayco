@@ -3,27 +3,34 @@ import { ActionFunction } from "@remix-run/node";
 import { Stripe } from "stripe";
 import { Items } from "~/schemas/items";
 import { Orders } from "~/schemas/orders";
-import { OrderItem, Order } from "~/types";
+import { Order } from "~/types";
 import { Discounts } from "~/schemas/discounts";
-import EmailOrderTemplate, { Template } from "~/components/mail/order";
-import { renderToString } from "react-dom/server";
+import EmailOrderTemplate, {
+  getOrderEmailSubject,
+  getOrderEmailText,
+  Template,
+} from "~/components/mail/order";
+import { renderToStaticMarkup } from "react-dom/server";
 import { transporter } from "~/services/email-provider.server";
 import stripeClient from "../stripeClient";
-import { Verifications } from "~/schemas/verifications";
-import { generateNextEntryNumber } from "~/utils/verificationUtil";
+import { createVerification } from "~/services/verification.server";
 import { themes } from "~/components/Theme";
+import { WebhookEvents } from "~/schemas/webhook-events";
 
 export const sendMail = async (order: Order, template: Template) => {
-
-  const theme = themes[order.domain]
+  const theme = themes[order.domain] ?? themes.moaclayco;
 
   try {
+    const markup = renderToStaticMarkup(
+      <EmailOrderTemplate order={order} template={template} />
+    );
     let info = await transporter.sendMail({
       from: theme.email,
       to: order.customer.email,
       bcc: `${theme.email},wicket.programmer@gmail.com`,
-      subject: template === Template.ORDER ? `Order ${order._id} (${theme.title})` :  `Din order ${order._id} är nu påväg!`,
-      html: renderToString(<EmailOrderTemplate order={order} template={template} />),
+      subject: getOrderEmailSubject(order, template),
+      text: getOrderEmailText(order, template),
+      html: `<!doctype html>${markup}`,
     });
 
     console.log("Message sent: %s", info.messageId);
@@ -32,6 +39,8 @@ export const sendMail = async (order: Order, template: Template) => {
   }
 };
 
+
+const cents = (value: number) => Math.round(value * 100) / 100;
 
 const makeAccountTransaction = async(paymentIntent: Stripe.PaymentIntent) => {
 
@@ -47,21 +56,21 @@ const makeAccountTransaction = async(paymentIntent: Stripe.PaymentIntent) => {
         const balanceTransaction = await stripeClient.balanceTransactions.retrieve(charge.balance_transaction);
 
         // Totalbelopp i SEK
-        const totalAmount = balanceTransaction.amount / 100; // Bruttobelopp (inklusive moms) i SEK
-        const stripeFee = balanceTransaction.fee / 100; // Stripe-avgiften i SEK
-        const netAmount = balanceTransaction.net / 100; // Nettobelopp att betalas ut i SEK
+        const totalAmount = cents(balanceTransaction.amount / 100); // Bruttobelopp (inklusive moms) i SEK
+        const stripeFee = cents(balanceTransaction.fee / 100); // Stripe-avgiften i SEK
+        const netAmount = cents(balanceTransaction.net / 100); // Nettobelopp att betalas ut i SEK
 
         // Beräkna momsbelopp baserat på bruttobeloppet
         const vatRate = 0.25; // 25% moms
-        const vatAmount = (totalAmount * vatRate) / (1 + vatRate); // Momsbelopp
-        const amountExVat = totalAmount - vatAmount; // Belopp exklusive moms
+        const vatAmount = cents((totalAmount * vatRate) / (1 + vatRate)); // Momsbelopp
+        const amountExVat = cents(totalAmount - vatAmount); // Belopp exklusive moms
 
         // Skapa bokföringspost
-        await Verifications.create({
+        await createVerification({
           domain: order.domain,
-          verificationDate: new Date(),
+          idempotencyKey: `stripe:payment:${paymentIntent.id}`,
+          verificationDate: new Date(charge.created * 1000),
           description: `Order id: ${order._id}\r\nPayment intent id: ${paymentIntent.id}`,
-          verificationNumber: await generateNextEntryNumber(order.domain),
           metadata: [
             {
               key: "orderId",
@@ -75,19 +84,19 @@ const makeAccountTransaction = async(paymentIntent: Stripe.PaymentIntent) => {
           journalEntries: [
             {
               account: 3001, // Försäljning exkl. moms
-              credit: amountExVat.toFixed(2), // Belopp exklusive moms
+              credit: amountExVat, // Belopp exklusive moms
             },
             {
               account: 2611, // Moms
-              credit: vatAmount.toFixed(2), // Momsbelopp
+              credit: vatAmount, // Momsbelopp
             },
             {
               account: 6570, // Stripe-avgifter
-              debit: stripeFee.toFixed(2), // Stripe-avgift
+              debit: stripeFee, // Stripe-avgift
             },
             {
               account: 1580, // Fordran på Stripe
-              debit: netAmount.toFixed(2), // Nettobelopp efter avgift
+              debit: netAmount, // Nettobelopp efter avgift
             }
           ]
         });
@@ -109,16 +118,16 @@ const handlePayoutPaid = async (payout: Stripe.Payout) => {
 
   console.log(`Payout ID: ${payoutId}`);
   console.log(`Payout amount: ${amountInSek} SEK`);
-  let domain = null
+  const domains = new Set<string>();
 
   // Hämta alla balance transactions som är kopplade till denna utbetalning
-  const balanceTransactions = await stripeClient.balanceTransactions.list({
-    payout: payoutId,
-  });
+  const balanceTransactions = await stripeClient.balanceTransactions
+    .list({ payout: payoutId, limit: 100 })
+    .autoPagingToArray({ limit: 10_000 });
 
   let metadata = []
   let index = 0; // Startar index på 0
-  for (const balanceTransaction of balanceTransactions.data) {
+  for (const balanceTransaction of balanceTransactions) {
     if (balanceTransaction.source) {
       try {
         // Hämta PaymentIntent kopplad till denna balance transaction
@@ -134,7 +143,7 @@ const handlePayoutPaid = async (payout: Stripe.Payout) => {
 
           if (order) {
             // Lägg till i beskrivningen
-            domain = order.domain
+            domains.add(order.domain)
             metadata.push({key: `orderId.${index}`, value: `${order._id}`})
             metadata.push({key: `paymentIntentId.${index}`, value: `${paymentIntentId}`})
             index = index + 1
@@ -143,75 +152,193 @@ const handlePayoutPaid = async (payout: Stripe.Payout) => {
           }
         }
       } catch (error) {
-        console.error(`Error retrieving PaymentIntent or order for balance transaction: ${error.message}`);
+        console.error(
+          "Error retrieving PaymentIntent or order for balance transaction:",
+          error
+        );
       }
     }
   }
 
-  if (!domain) throw new  Error("Could not find domain")
+  if (domains.size !== 1) {
+    throw new Error(
+      domains.size === 0
+        ? "Could not determine payout domain"
+        : "A Stripe payout contains orders from multiple domains"
+    );
+  }
+  const [domain] = domains;
 
   // Sätt ihop beskrivningen från alla delar
   // Skapa bokföringspost
-  await Verifications.create({
+  await createVerification({
     domain: domain,
-    verificationDate: new Date(),
+    idempotencyKey: `stripe:payout:${payoutId}`,
+    verificationDate: new Date((payout.arrival_date || payout.created) * 1000),
     description: description.trim(), // Rensa onödiga tomma rader
-    verificationNumber: await generateNextEntryNumber(domain),
     journalEntries: [
       {
-        account: 1930, // Bankkonto. Behöver inte vara 1930 om det är sgwoods
-        debit: amountInSek.toFixed(2),
+        account: 1930, // Bankkonto
+        debit: cents(amountInSek),
       },
       {
         account: 1580, // Fordran på Stripe
-        credit: amountInSek.toFixed(2),
+        credit: cents(amountInSek),
       }
     ],
-    metadata: metadata
+    metadata: [{ key: "payoutId", value: payoutId }, ...metadata]
   });
 
   console.log(`Bokföringspost skapad för utbetalning: ${payoutId}`);
 };
 
 
-const fromPaymentIntent = async (id: string, status: string) => {
-  const order: Order | null = await Orders.findOne({
-    "paymentIntent.id": id,
-  }).lean();
+class PaidOrderNeedsReviewError extends Error {}
 
-  if (order) {
+const fromPaymentIntent = async (id: string, status: string) => {
+  if (status !== "SUCCESS") {
     await Orders.updateOne(
-      { _id: order._id },
-      { status, webhookAt: new Date() }
+      {
+        "paymentIntent.id": id,
+        status: { $nin: ["SUCCESS", "SHIPPED", "PAID_REVIEW"] },
+      },
+      { $set: { status, webhookAt: new Date() } }
     );
-    if (order.discount && order.discount.amount > 0) {
-      await Discounts.updateOne(
-        { code: order.discount.code },
-        { $inc: { balance: -1 } }
-      );
-    }
-    if (status === "SUCCESS") {
-      order.items.map(async (i: OrderItem) => {
-        await Items.updateOne(
-          { _id: new mongoose.Types.ObjectId(i.itemRef) },
-          { $inc: { amount: -i.quantity } }
-        );
-      });
-      await sendMail(order, Template.ORDER);
-    }
-  } else {
-    console.log("Could not find order");
+    return;
   }
+
+  const session = await mongoose.startSession();
+  let transitionedOrder: Order | null = null;
+  try {
+    await session.withTransaction(async () => {
+      transitionedOrder = await Orders.findOneAndUpdate(
+        {
+          "paymentIntent.id": id,
+          status: { $nin: ["SUCCESS", "SHIPPED", "PAID_REVIEW"] },
+        },
+        { $set: { status: "SUCCESS", webhookAt: new Date() } },
+        { new: true, session }
+      ).lean();
+
+      if (!transitionedOrder) return;
+
+      for (const item of transitionedOrder.items) {
+        const result = await Items.updateOne(
+          {
+            _id: new mongoose.Types.ObjectId(item.itemRef),
+            domain: transitionedOrder.domain,
+            amount: { $gte: item.quantity },
+          },
+          { $inc: { amount: -item.quantity } },
+          { session }
+        );
+        if (result.modifiedCount !== 1) {
+          throw new PaidOrderNeedsReviewError("Insufficient stock for paid order");
+        }
+      }
+
+      if (
+        transitionedOrder.discount?.amount > 0 &&
+        transitionedOrder.discount.code
+      ) {
+        const result = await Discounts.updateOne(
+          {
+            domain: transitionedOrder.domain,
+            code: transitionedOrder.discount.code,
+            balance: { $gt: 0 },
+          },
+          { $inc: { balance: -1 } },
+          { session }
+        );
+        if (result.modifiedCount !== 1) {
+          throw new PaidOrderNeedsReviewError(
+            "Discount balance was exhausted before payment completed"
+          );
+        }
+      }
+    });
+  } catch (error) {
+    if (!(error instanceof PaidOrderNeedsReviewError)) throw error;
+    transitionedOrder = await Orders.findOneAndUpdate(
+      {
+        "paymentIntent.id": id,
+        status: { $nin: ["SUCCESS", "SHIPPED", "PAID_REVIEW"] },
+      },
+      { $set: { status: "PAID_REVIEW", webhookAt: new Date() } },
+      { new: true }
+    ).lean();
+  } finally {
+    await session.endSession();
+  }
+
+  if (transitionedOrder) {
+    await sendMail(transitionedOrder, Template.ORDER);
+  }
+};
+
+const isDuplicateKeyError = (error: unknown) =>
+  Boolean(
+    error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === 11000
+  );
+
+const claimStripeEvent = async (event: Stripe.Event) => {
+  try {
+    await WebhookEvents.create({
+      provider: "stripe",
+      eventId: event.id,
+      eventType: event.type,
+      status: "processing",
+    });
+    return true;
+  } catch (error) {
+    if (!isDuplicateKeyError(error)) throw error;
+  }
+
+  const staleBefore = new Date(Date.now() - 5 * 60 * 1000);
+  const claimed = await WebhookEvents.findOneAndUpdate(
+    {
+      provider: "stripe",
+      eventId: event.id,
+      $or: [
+        { status: "failed" },
+        { status: "processing", updatedAt: { $lt: staleBefore } },
+      ],
+    },
+    {
+      $set: {
+        status: "processing",
+        eventType: event.type,
+        lastError: null,
+        updatedAt: new Date(),
+      },
+    }
+  );
+  return Boolean(claimed);
 };
 
 export let action: ActionFunction = async ({ request }) => {
   const sig = request.headers.get("Stripe-Signature");
-  let body = await request.text();
+  const body = await request.text();
+  const webhookSecret = process.env.STRIPE_WEBHOOK;
+
+  if (!sig || !webhookSecret) {
+    return new Response("Stripe webhook is not configured", { status: 500 });
+  }
+
+  let event: Stripe.Event;
+  try {
+    event = stripeClient.webhooks.constructEvent(body, sig, webhookSecret);
+  } catch {
+    return new Response("Invalid Stripe signature", { status: 400 });
+  }
+
+  const claimed = await claimStripeEvent(event);
+  if (!claimed) return new Response("Already processed", { status: 200 });
 
   try {
-    let event = JSON.parse(body);
-    console.log(event)
-
     switch (event.type) {
       case "payment_intent.succeeded":
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
@@ -231,7 +358,26 @@ export let action: ActionFunction = async ({ request }) => {
           await handlePayoutPaid(payout);
           break;
     }
-  } catch (e) {}
-
-  return new Response().ok;
+    await WebhookEvents.updateOne(
+      { provider: "stripe", eventId: event.id },
+      { $set: { status: "completed", lastError: null } }
+    );
+    return new Response("OK", { status: 200 });
+  } catch (error) {
+    await WebhookEvents.updateOne(
+      { provider: "stripe", eventId: event.id },
+      {
+        $set: {
+          status: "failed",
+          lastError: error instanceof Error ? error.message : "Unknown error",
+        },
+      }
+    );
+    console.error("Stripe webhook processing failed", {
+      eventId: event.id,
+      eventType: event.type,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return new Response("Webhook processing failed", { status: 500 });
+  }
 };

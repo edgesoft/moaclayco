@@ -21,7 +21,7 @@ const OrderSchema = new Schema({
     manualOrderAt: Date,
     status: {
         type: String,
-        enum: ['OPENED', 'PENDING', 'FAILED', 'CANCELED', 'SUCCESS', 'MANUAL_PROCESSING',  'SHIPPED']
+        enum: ['OPENED', 'PENDING', 'FAILED', 'CANCELED', 'SUCCESS', 'PAID_REVIEW', 'MANUAL_PROCESSING',  'SHIPPED']
     },
     items: [{
         itemRef: String,
@@ -51,5 +51,9 @@ const OrderSchema = new Schema({
 
 },
 { collection: 'orders' });
+
+OrderSchema.index({ "paymentIntent.id": 1 }, { unique: true, sparse: true });
+OrderSchema.index({ domain: 1, status: 1, createdAt: -1 });
+OrderSchema.index({ domain: 1, createdAt: -1, _id: -1 });
 
 export const Orders = mongoose.models.Orders || mongoose.model('Orders', OrderSchema);

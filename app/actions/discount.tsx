@@ -5,6 +5,8 @@ import {
 import { Discounts as DiscountEntity } from "../schemas/discounts";
 import { z } from "zod";
 import { getDomain } from "~/utils/domain";
+import { auth } from "~/services/auth.server";
+import { parseStockholmDateTime } from "~/utils/accountingDates";
 
 const objectFromFormData = (formData: FormData) => {
   const obj: { [key: string]: string | File } = {};
@@ -26,25 +28,26 @@ const expireAtSchema = z.preprocess((input) => {
 }, z.union([z.literal("EMPTY").transform(() => ""), z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/, "Formatet måste vara ÅÅÅÅ-MM-DD TT:mm")]));
 
 export const formSchema = z.object({
-  code: z.string().min(1, "Code måste vara minst 1 tecken"),
+  code: z.string().trim().min(1, "Ange en rabattkod."),
   percentage: z.preprocess((val) => {
     if (typeof val === "string") {
       const parsed = parseFloat(val);
       return isNaN(parsed) ? val : parsed;
     }
     return val;
-  }, z.number().min(1, "Discount måste vara minst 1%").max(100, "Discount kan inte vara mer än 100%")),
+  }, z.number({ invalid_type_error: "Ange rabatten i procent." }).min(1, "Rabatten måste vara minst 1 %.").max(100, "Rabatten kan inte vara mer än 100 %.")),
   balance: z.preprocess((val) => {
     if (typeof val === "string") {
       const parsed = parseInt(val, 10);
       return isNaN(parsed) ? val : parsed;
     }
     return val;
-  }, z.number().min(1, "Balance måste vara minst 1")),
+  }, z.number({ invalid_type_error: "Ange hur många gånger koden får användas." }).int("Antalet måste vara ett heltal.").min(0, "Antalet kan inte vara mindre än 0.")),
   expireAt: expireAtSchema,
 });
 
 let action: ActionFunction = async ({ request, params }) => {
+  await auth.isAuthenticated(request, { failureRedirect: "/login" });
   let formData = await request.formData();
   let action = formData.get("action");
   const domain = getDomain(request)
@@ -52,7 +55,27 @@ let action: ActionFunction = async ({ request, params }) => {
   switch (action) {
     case "save":
       const formObject = objectFromFormData(formData);
-      const result = formSchema.parse(formObject); // Validerar och omvandlar datatyp där det behövs
+      const validation = formSchema.safeParse(formObject);
+      if (!validation.success) {
+        const errors = Object.fromEntries(
+          Object.entries(validation.error.flatten().fieldErrors).map(([key, messages]) => [
+            key,
+            messages?.[0],
+          ])
+        );
+        return json({ errors }, { status: 400 });
+      }
+      const result = validation.data;
+      const expireAt = result.expireAt
+        ? parseStockholmDateTime(result.expireAt)
+        : null;
+      if (result.expireAt && !expireAt) {
+        return json(
+          { errors: { expireAt: "Sluttiden är inte giltig i svensk tid" } },
+          { status: 400 }
+        );
+      }
+      const discountData = { ...result, expireAt };
       const obj: any = await DiscountEntity.findOne({ domain: domain?.domain, code: result.code }).lean();
 
       if (params.id) {
@@ -66,9 +89,9 @@ let action: ActionFunction = async ({ request, params }) => {
         }
 
         await DiscountEntity.updateOne(
-          { _id: params.id },
+          { _id: params.id, domain: domain?.domain },
           {
-            ...result,
+            ...discountData,
             domain: domain?.domain
           }
         );
@@ -81,12 +104,12 @@ let action: ActionFunction = async ({ request, params }) => {
           
         }
 
-        await DiscountEntity.create({...result, domain: domain?.domain});
+        await DiscountEntity.create({...discountData, domain: domain?.domain});
       }
 
       break;
     case "delete":
-      await DiscountEntity.deleteOne({ _id: params.id });
+      await DiscountEntity.deleteOne({ _id: params.id, domain: domain?.domain });
       break;
     default:
       throw new Error(`Ogiltig åtgärd: ${action}`);

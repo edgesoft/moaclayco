@@ -1,211 +1,894 @@
-import { LoaderFunction } from "@remix-run/node";
-import { Orders as OrderEntity } from "../schemas/orders";
+import { json } from "@remix-run/node";
+import type {
+  LinksFunction,
+  LoaderFunctionArgs,
+} from "@remix-run/node";
 import {
   Outlet,
+  ShouldRevalidateFunction,
+  useFetcher,
   useLoaderData,
   useNavigate,
+  useNavigation,
   useParams,
 } from "@remix-run/react";
-import React, { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Types } from "mongoose";
 import { auth } from "~/services/auth.server";
+import { Orders as OrderEntity } from "~/schemas/orders";
+import ordersStyles from "~/styles/orders.css";
 import { getDomain } from "~/utils/domain";
 
-export let loader: LoaderFunction = async ({ request, params }) => {
-  await auth.isAuthenticated(request, { failureRedirect: "/login" });
-  const domain = getDomain(request);
-
-  return OrderEntity.find(
-    {
-      status: {
-        $in: ["SUCCESS", "FAILED", "SHIPPED", "CANCELLED", "MANUAL_PROCESSING"],
-      },
-      domain: domain?.domain,
-    },
-    { status: 1, createdAt: 1, customer: 1, _id: 1, totalSum: 1 }
-  )
-    .sort({ createdAt: -1 })
-    .limit(100);
-};
+export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: ordersStyles },
+];
 
 enum Status {
   SUCCESS = "SUCCESS",
   FAILED = "FAILED",
   SHIPPED = "SHIPPED",
-  CANCELLED = "CANCELLED",
+  CANCELED = "CANCELED",
+  PAID_REVIEW = "PAID_REVIEW",
   MANUAL_PROCESSING = "MANUAL_PROCESSING",
 }
 
-const getLabel = (status: Status) => {
-  switch (status) {
-    case Status.SUCCESS:
-      return {
-        headline: "Betald",
-        color: "bg-blue-600",
-      };
-    case Status.FAILED:
-      return { headline: "Fel", color: "bg-red-600" };
-    case Status.SHIPPED:
-      return { headline: "Levererad", color: "bg-green-600" };
-    case Status.MANUAL_PROCESSING:
-      return { headline: "Manuell order", color: "bg-blue-600" };
-    default:
-      return {
-        headline: "Betald",
-        color: "bg-blue-600",
-      };
-  }
+type StatusTone =
+  | "paid"
+  | "failed"
+  | "shipped"
+  | "canceled"
+  | "review"
+  | "manual";
+
+type StatusMeta = {
+  label: string;
+  shortLabel: string;
+  tone: StatusTone;
 };
 
-type OrderLabelProp = {
-  status: Status;
+const statusMeta: Record<Status, StatusMeta> = {
+  [Status.SUCCESS]: { label: "Betald", shortLabel: "Betald", tone: "paid" },
+  [Status.FAILED]: {
+    label: "Betalning misslyckades",
+    shortLabel: "Misslyckad",
+    tone: "failed",
+  },
+  [Status.SHIPPED]: {
+    label: "Skickad",
+    shortLabel: "Skickad",
+    tone: "shipped",
+  },
+  [Status.CANCELED]: {
+    label: "Avbruten",
+    shortLabel: "Avbruten",
+    tone: "canceled",
+  },
+  [Status.PAID_REVIEW]: {
+    label: "Betald · kontrollera",
+    shortLabel: "Kontrollera",
+    tone: "review",
+  },
+  [Status.MANUAL_PROCESSING]: {
+    label: "Manuell order",
+    shortLabel: "Manuell",
+    tone: "manual",
+  },
 };
+
+const statusFor = (status: Status) =>
+  statusMeta[status] ?? statusMeta[Status.SUCCESS];
 
 export type Order = {
   status: Status;
   _id: string;
   createdAt: string;
   customer: {
-    firstname: string;
-    lastname: string;
+    firstname?: string;
+    lastname?: string;
   };
   totalSum: number;
 };
 
-const OrderLabel: React.FC<OrderLabelProp> = ({
-  status,
-}): JSX.Element | null => {
-  const label = getLabel(status);
-  return (
-    <span
-      className={`${label.color} text-white inline-flex px-2 text-xs font-semibold leading-5 rounded-full`}
-    >
-      {label.headline}
-    </span>
-  );
+type Filter = "all" | "todo" | "shipped" | "attention";
+
+type OrderCounts = Record<Filter, number>;
+
+type OrdersLoaderData = {
+  applied: {
+    filter: Filter;
+    search: string;
+  };
+  counts: OrderCounts;
+  matchingCount: number;
+  orders: Order[];
+  orderValue: number;
+  pageInfo: {
+    hasMore: boolean;
+    nextCursor: string | null;
+  };
 };
 
-function formatSwedishPrice(amount: number) {
-  return amount
-    .toLocaleString("sv-SE", {
-      style: "currency",
-      currency: "SEK",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })
-    .replace(" kr", " kr"); // Replace non-breaking space with a regular space before "kr"
-}
+type OrderStats = {
+  all: number;
+  attention: number;
+  orderValue: number;
+  shipped: number;
+  todo: number;
+};
 
-export default function Orders() {
-  let data: Order[] = useLoaderData();
-  let navigate = useNavigate();
-  let { id } = useParams();
-  let [showDetail, setShowDetail] = useState(id);
+const PAGE_SIZE = 50;
 
-  // Store the scroll position before navigation
-  const handleRowClick = (orderId: string) => {
-    sessionStorage.setItem("scrollPosition", window.scrollY.toString());
-    if (showDetail && showDetail === orderId) {
-      setShowDetail(undefined);
-      navigate(`/admin/orders`);
-    } else {
-      setShowDetail(orderId);
-      navigate(`/admin/orders/${orderId}`);
-    }
-  };
+const includedStatuses = Object.values(Status);
+const todoStatuses = [
+  Status.SUCCESS,
+  Status.MANUAL_PROCESSING,
+  Status.PAID_REVIEW,
+];
+const attentionStatuses = [
+  Status.FAILED,
+  Status.CANCELED,
+  Status.PAID_REVIEW,
+];
 
-  // Restore the scroll position after navigation
-  useEffect(() => {
-    if (id) {
-      const element = document.getElementById(id);
-      if (element) {
-        const y =
-          element.getBoundingClientRect().top +
-          window.scrollY -
-          element.getBoundingClientRect().height -
-          20;
+const filterStatuses: Record<Exclude<Filter, "all">, Status[]> = {
+  attention: attentionStatuses,
+  shipped: [Status.SHIPPED],
+  todo: todoStatuses,
+};
 
-        window.scrollTo({ top: y });
-      }
-    }
-  }, [id]); // Dependency on `id` ensures scroll restoration when a new row is clicked
+const filters: Array<{ key: Filter; label: string }> = [
+  { key: "all", label: "Alla" },
+  { key: "todo", label: "Att hantera" },
+  { key: "shipped", label: "Skickade" },
+  { key: "attention", label: "Behöver koll" },
+];
 
-  if (data.length === 0) {
-    return (
-      <div className="w-full mt-20 p-1 pt-4 mb-20">
-        <div className=" text-sm border p-2 pt-4 pb-4 text-white border-sky-950 bg-sky-700 rounded-lg">
-          Inga ordrar lagda
-        </div>
-      </div>
-    );
+const parseFilter = (value: string | null): Filter =>
+  filters.some((filter) => filter.key === value) ? (value as Filter) : "all";
+
+const escapeRegex = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const buildSearchCondition = (search: string) => {
+  const regex = new RegExp(escapeRegex(search), "i");
+  const normalizedSearch = search.toLocaleLowerCase("sv-SE");
+  const matchingStatuses = Object.entries(statusMeta)
+    .filter(([, meta]) =>
+      `${meta.label} ${meta.shortLabel}`
+        .toLocaleLowerCase("sv-SE")
+        .includes(normalizedSearch)
+    )
+    .map(([status]) => status);
+  const numericSearch = Number(search.replace(",", ".").replace(/[^0-9.-]/g, ""));
+  const conditions: Record<string, unknown>[] = [
+    {
+      $expr: {
+        $regexMatch: {
+          input: { $toString: "$_id" },
+          regex,
+        },
+      },
+    },
+    {
+      $expr: {
+        $regexMatch: {
+          input: {
+            $concat: [
+              { $ifNull: ["$customer.firstname", ""] },
+              " ",
+              { $ifNull: ["$customer.lastname", ""] },
+            ],
+          },
+          regex,
+        },
+      },
+    },
+  ];
+
+  if (matchingStatuses.length) {
+    conditions.push({ status: { $in: matchingStatuses } });
   }
 
+  if (Number.isFinite(numericSearch) && /\d/.test(search)) {
+    conditions.push({ totalSum: numericSearch });
+  }
+
+  return { $or: conditions };
+};
+
+type DecodedCursor = {
+  createdAt: Date;
+  id: Types.ObjectId;
+};
+
+const decodeCursor = (value: string | null): DecodedCursor | null => {
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+    const createdAt = new Date(parsed.createdAt);
+
+    if (
+      Number.isNaN(createdAt.getTime()) ||
+      !Types.ObjectId.isValid(parsed.id)
+    ) {
+      return null;
+    }
+
+    return { createdAt, id: new Types.ObjectId(parsed.id) };
+  } catch {
+    return null;
+  }
+};
+
+const encodeCursor = (order: { createdAt?: unknown; _id: unknown }) => {
+  const createdAt =
+    order.createdAt instanceof Date
+      ? order.createdAt
+      : new Date(String(order.createdAt ?? ""));
+  const id = String(order._id);
+
+  if (Number.isNaN(createdAt.getTime()) || !Types.ObjectId.isValid(id)) {
+    return null;
+  }
+
+  return Buffer.from(
+    JSON.stringify({
+      createdAt: createdAt.toISOString(),
+      id,
+    })
+  ).toString("base64url");
+};
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  await auth.isAuthenticated(request, { failureRedirect: "/login" });
+  const domain = getDomain(request);
+  const url = new URL(request.url);
+  const filter = parseFilter(url.searchParams.get("filter"));
+  const search = url.searchParams.get("q")?.trim().slice(0, 120) ?? "";
+  const cursor = decodeCursor(url.searchParams.get("cursor"));
+  const includeSummary = url.searchParams.get("partial") !== "1";
+  const baseMatch = {
+    domain: domain?.domain,
+    status: { $in: includedStatuses },
+  };
+  const filteredConditions: Record<string, unknown>[] = [baseMatch];
+
+  if (filter !== "all") {
+    filteredConditions.push({ status: { $in: filterStatuses[filter] } });
+  }
+
+  if (search) {
+    filteredConditions.push(buildSearchCondition(search));
+  }
+
+  const filteredMatch =
+    filteredConditions.length === 1
+      ? baseMatch
+      : { $and: filteredConditions };
+  const pageMatch = cursor
+    ? {
+        $and: [
+          filteredMatch,
+          {
+            $or: [
+              { createdAt: { $lt: cursor.createdAt } },
+              {
+                createdAt: cursor.createdAt,
+                _id: { $lt: cursor.id },
+              },
+            ],
+          },
+        ],
+      }
+    : filteredMatch;
+
+  const [pageDocuments, matchingCount, statsRows] = await Promise.all([
+    OrderEntity.find(pageMatch, {
+      status: 1,
+      createdAt: 1,
+      customer: 1,
+      _id: 1,
+      totalSum: 1,
+    })
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(PAGE_SIZE + 1)
+      .lean(),
+    cursor ? Promise.resolve(-1) : OrderEntity.countDocuments(filteredMatch),
+    includeSummary
+      ? OrderEntity.aggregate<OrderStats>([
+          { $match: baseMatch },
+          {
+            $group: {
+              _id: null,
+              all: { $sum: 1 },
+              attention: {
+                $sum: {
+                  $cond: [{ $in: ["$status", attentionStatuses] }, 1, 0],
+                },
+              },
+              orderValue: {
+                $sum: {
+                  $cond: [
+                    { $in: ["$status", [Status.FAILED, Status.CANCELED]] },
+                    0,
+                    { $ifNull: ["$totalSum", 0] },
+                  ],
+                },
+              },
+              shipped: {
+                $sum: {
+                  $cond: [{ $eq: ["$status", Status.SHIPPED] }, 1, 0],
+                },
+              },
+              todo: {
+                $sum: { $cond: [{ $in: ["$status", todoStatuses] }, 1, 0] },
+              },
+            },
+          },
+        ])
+      : Promise.resolve([] as OrderStats[]),
+  ]);
+
+  const hasMore = pageDocuments.length > PAGE_SIZE;
+  const visibleDocuments = pageDocuments.slice(0, PAGE_SIZE);
+  const lastDocument = visibleDocuments.at(-1);
+  const nextCursor = hasMore && lastDocument ? encodeCursor(lastDocument) : null;
+  const stats = statsRows[0] ?? {
+    all: 0,
+    attention: 0,
+    orderValue: 0,
+    shipped: 0,
+    todo: 0,
+  };
+  const orders: Order[] = visibleDocuments.map((order) => ({
+    _id: String(order._id),
+    createdAt: order.createdAt?.toISOString() ?? "",
+    customer: {
+      firstname: order.customer?.firstname,
+      lastname: order.customer?.lastname,
+    },
+    status: order.status as Status,
+    totalSum: Number(order.totalSum ?? 0),
+  }));
+
+  return json<OrdersLoaderData>({
+    applied: { filter, search },
+    counts: {
+      all: Number(stats.all ?? 0),
+      attention: Number(stats.attention ?? 0),
+      shipped: Number(stats.shipped ?? 0),
+      todo: Number(stats.todo ?? 0),
+    },
+    matchingCount,
+    orders,
+    orderValue: Number(stats.orderValue ?? 0),
+    pageInfo: {
+      hasMore: Boolean(nextCursor),
+      nextCursor,
+    },
+  });
+};
+
+export const shouldRevalidate: ShouldRevalidateFunction = ({
+  currentUrl,
+  defaultShouldRevalidate,
+  formMethod,
+  nextUrl,
+}) => {
+  if (formMethod && formMethod !== "GET") return defaultShouldRevalidate;
+
+  const staysInOrders =
+    currentUrl.pathname.startsWith("/admin/orders") &&
+    nextUrl.pathname.startsWith("/admin/orders");
+
+  if (staysInOrders && currentUrl.search === nextUrl.search) return false;
+  return defaultShouldRevalidate;
+};
+
+const formatPrice = (amount: number) =>
+  new Intl.NumberFormat("sv-SE", {
+    style: "currency",
+    currency: "SEK",
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+
+const formatOrderDate = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Datum saknas";
+
+  return new Intl.DateTimeFormat("sv-SE", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Stockholm",
+  })
+    .format(date)
+    .replace(" kl. ", " · ");
+};
+
+const shortOrderNumber = (orderId: string) =>
+  `#${orderId.slice(-8).toLocaleUpperCase("sv-SE")}`;
+
+const fixedWorkspaceMedia =
+  "(min-width: 960px) and (min-height: 620px)";
+
+const getQueryKey = (filter: Filter, search: string) =>
+  `${filter}\u0000${search.trim()}`;
+
+const getOrdersRequestUrl = (
+  filter: Filter,
+  search: string,
+  cursor?: string | null
+) => {
+  const params = new URLSearchParams();
+  const trimmedSearch = search.trim();
+
+  if (filter !== "all") params.set("filter", filter);
+  if (trimmedSearch) params.set("q", trimmedSearch);
+  if (cursor) params.set("cursor", cursor);
+  params.set("partial", "1");
+
+  const query = params.toString();
+  return query ? `/admin/orders?${query}` : "/admin/orders";
+};
+
+export default function Orders() {
+  const data = useLoaderData<OrdersLoaderData>();
+  const resultsFetcher = useFetcher<OrdersLoaderData>();
+  const moreFetcher = useFetcher<OrdersLoaderData>();
+  const navigate = useNavigate();
+  const navigation = useNavigation();
+  const { id } = useParams();
+  const [filter, setFilter] = useState<Filter>(data.applied.filter);
+  const [search, setSearch] = useState(data.applied.search);
+  const [orders, setOrders] = useState(data.orders);
+  const [matchingCount, setMatchingCount] = useState(data.matchingCount);
+  const [pageInfo, setPageInfo] = useState(data.pageInfo);
+  const [displayedQueryKey, setDisplayedQueryKey] = useState(() =>
+    getQueryKey(data.applied.filter, data.applied.search)
+  );
+  const [lastViewedId, setLastViewedId] = useState<string | undefined>(id);
+  const previousOrderId = useRef(id);
+  const navigationScrollPosition = useRef<number | null>(null);
+  const navigationListScrollPosition = useRef<number | null>(null);
+  const didInitializeQuery = useRef(false);
+  const activeQueryKey = getQueryKey(filter, search);
+  const isQueryPending =
+    activeQueryKey !== displayedQueryKey || resultsFetcher.state !== "idle";
+  const isLoadingMore = moreFetcher.state !== "idle";
+  const remainingCount = Math.max(0, matchingCount - orders.length);
+
+  useEffect(() => {
+    const html = document.documentElement;
+    const fixedWorkspace = window.matchMedia(fixedWorkspaceMedia);
+    let firstFrame = 0;
+    let secondFrame = 0;
+
+    const resetFixedWorkspaceScroll = () => {
+      if (!fixedWorkspace.matches) return;
+
+      const previousBehavior = html.style.scrollBehavior;
+      html.style.scrollBehavior = "auto";
+      window.scrollTo({ top: 0, behavior: "auto" });
+      html.style.scrollBehavior = previousBehavior;
+    };
+
+    const syncFixedWorkspace = () => {
+      resetFixedWorkspaceScroll();
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+      firstFrame = window.requestAnimationFrame(() => {
+        resetFixedWorkspaceScroll();
+        secondFrame = window.requestAnimationFrame(resetFixedWorkspaceScroll);
+      });
+    };
+
+    html.classList.add("orders-scroll-context");
+    fixedWorkspace.addEventListener("change", syncFixedWorkspace);
+    syncFixedWorkspace();
+
+    return () => {
+      fixedWorkspace.removeEventListener("change", syncFixedWorkspace);
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+      html.classList.remove("orders-scroll-context");
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      filter !== data.applied.filter ||
+      search.trim() !== data.applied.search
+    ) {
+      return;
+    }
+
+    setOrders(data.orders);
+    setMatchingCount(data.matchingCount);
+    setPageInfo(data.pageInfo);
+    setDisplayedQueryKey(getQueryKey(data.applied.filter, data.applied.search));
+  }, [data, filter, search]);
+
+  useEffect(() => {
+    if (!didInitializeQuery.current) {
+      didInitializeQuery.current = true;
+      return;
+    }
+
+    const timeout = window.setTimeout(
+      () => resultsFetcher.load(getOrdersRequestUrl(filter, search)),
+      search.trim() === data.applied.search ? 0 : 280
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [filter, search]);
+
+  useEffect(() => {
+    const nextData = resultsFetcher.data;
+    if (!nextData) return;
+
+    const responseKey = getQueryKey(
+      nextData.applied.filter,
+      nextData.applied.search
+    );
+    if (responseKey !== activeQueryKey) return;
+
+    setOrders(nextData.orders);
+    if (nextData.matchingCount >= 0) {
+      setMatchingCount(nextData.matchingCount);
+    }
+    setPageInfo(nextData.pageInfo);
+    setDisplayedQueryKey(responseKey);
+  }, [activeQueryKey, resultsFetcher.data]);
+
+  useEffect(() => {
+    const nextData = moreFetcher.data;
+    if (!nextData) return;
+
+    const responseKey = getQueryKey(
+      nextData.applied.filter,
+      nextData.applied.search
+    );
+    if (responseKey !== activeQueryKey) return;
+
+    setOrders((currentOrders) => {
+      const knownOrderIds = new Set(currentOrders.map((order) => order._id));
+      return [
+        ...currentOrders,
+        ...nextData.orders.filter((order) => !knownOrderIds.has(order._id)),
+      ];
+    });
+    if (nextData.matchingCount >= 0) {
+      setMatchingCount(nextData.matchingCount);
+    }
+    setPageInfo(nextData.pageInfo);
+  }, [activeQueryKey, moreFetcher.data]);
+
+  const loadMoreOrders = () => {
+    if (!pageInfo.nextCursor || isLoadingMore || isQueryPending) return;
+
+    moreFetcher.load(
+      getOrdersRequestUrl(filter, search, pageInfo.nextCursor)
+    );
+  };
+
+  const openOrder = (orderId: string) => {
+    const isCompact = window.matchMedia("(max-width: 959px)").matches;
+    const closesCurrentOrder = id === orderId;
+
+    sessionStorage.setItem("ordersScrollPosition", window.scrollY.toString());
+    sessionStorage.setItem("ordersLastViewedId", orderId);
+    navigationScrollPosition.current = window.scrollY;
+    navigationListScrollPosition.current =
+      document.querySelector<HTMLElement>(".orders-list")?.scrollTop ?? null;
+    setLastViewedId(orderId);
+
+    navigate(
+      closesCurrentOrder ? "/admin/orders" : `/admin/orders/${orderId}`,
+      { preventScrollReset: !isCompact }
+    );
+  };
+
+  useEffect(() => {
+    if (navigation.state !== "idle" || previousOrderId.current === id) return;
+
+    const isCompact = window.matchMedia("(max-width: 959px)").matches;
+    const usesFixedWorkspace = window.matchMedia(fixedWorkspaceMedia).matches;
+    const previousId = previousOrderId.current;
+    const persistedPosition = sessionStorage.getItem("ordersScrollPosition");
+    const persistedOrderId = sessionStorage.getItem("ordersLastViewedId");
+    const parsedPersistedPosition =
+      persistedPosition === null ? null : Number(persistedPosition);
+    const storedPosition =
+      navigationScrollPosition.current ??
+      (persistedOrderId === previousId &&
+      parsedPersistedPosition !== null &&
+      Number.isFinite(parsedPersistedPosition)
+        ? parsedPersistedPosition
+        : null);
+    const storedListPosition = navigationListScrollPosition.current;
+    previousOrderId.current = id;
+
+    if (isCompact && id) {
+      window.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
+
+    if (storedPosition !== null) {
+      const restorePosition = () => {
+        const html = document.documentElement;
+        const previousBehavior = html.style.scrollBehavior;
+        html.style.scrollBehavior = "auto";
+        window.scrollTo({
+          top: usesFixedWorkspace ? 0 : storedPosition,
+          behavior: "auto",
+        });
+        html.style.scrollBehavior = previousBehavior;
+
+        const list = document.querySelector<HTMLElement>(".orders-list");
+        if (!isCompact && list && storedListPosition !== null) {
+          list.scrollTop = storedListPosition;
+        }
+
+        if (isCompact && !id) {
+          const orderId = lastViewedId ?? persistedOrderId;
+          if (orderId) {
+            document
+              .getElementById(`order-${orderId}`)
+              ?.focus({ preventScroll: true });
+          }
+        }
+      };
+
+      restorePosition();
+      let secondFrame = 0;
+      const firstFrame = window.requestAnimationFrame(() => {
+        restorePosition();
+        secondFrame = window.requestAnimationFrame(restorePosition);
+      });
+      return () => {
+        window.cancelAnimationFrame(firstFrame);
+        window.cancelAnimationFrame(secondFrame);
+      };
+    }
+  }, [id, lastViewedId, navigation.state]);
+
   return (
-    <div className="w-full mt-20 p-1 pt-4 mb-20">
-      <div className="overflow-x-auto shadow-md sm:rounded-lg">
-        <table className="min-w-full text-sm text-left text-gray-500">
-          <thead className="text-xs text-gray-700 uppercase bg-gray-50">
-            <tr>
-              <th scope="col" className="max-w-xs pl-2 pr-2 py-3">
-                ORDER NR
-              </th>
-              <th scope="col" className="pr-2 py-3 w-32">
-                STATUS
-              </th>
-              <th scope="col" className="w-36 py-3 tracking-wider">
-                DATUM
-              </th>
-              <th
-                scope="col"
-                className="pr-4 py-3 tracking-wider hidden md:table-cell"
+    <main className={`orders-page${id ? " orders-page--detail" : ""}`}>
+      <div className="orders-shell">
+        <header className="orders-header">
+          <div>
+            <p className="orders-kicker">Ateljén · administration</p>
+            <h1>Ordrar</h1>
+            <p className="orders-intro">
+              Från betalning till packad beställning — de senaste ordrarna
+              först, med fler på begäran.
+            </p>
+          </div>
+          <p className="orders-header-note">
+            <span>Uppdaterad vy</span>
+            Öppna en order för leverans och bokföring
+          </p>
+        </header>
+
+        <section className="orders-summary" aria-label="Orderöversikt">
+          <div>
+            <span>Att hantera</span>
+            <strong>{data.counts.todo}</strong>
+          </div>
+          <div>
+            <span>Skickade</span>
+            <strong>{data.counts.shipped}</strong>
+          </div>
+          <div>
+            <span>Ordervärde</span>
+            <strong>{formatPrice(data.orderValue)}</strong>
+          </div>
+        </section>
+
+        <section
+          aria-busy={isQueryPending || undefined}
+          aria-label="Sök och filtrera ordrar"
+          className="orders-tools"
+        >
+          <label className="orders-search" htmlFor="order-search">
+            <span aria-hidden="true" className="orders-search-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.1"
+                strokeLinecap="round"
               >
-                NAMN
-              </th>
-              <th
-                scope="col"
-                className="pr-4 py-3 tracking-wider hidden sm:table-cell"
+                <circle cx="10.5" cy="10.5" r="5.75" />
+                <path d="m15 15 4.25 4.25" />
+              </svg>
+            </span>
+            <span className="sr-only">Sök bland ordrar</span>
+            <input
+              id="order-search"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Sök på kund eller ordernummer"
+              type="search"
+              value={search}
+            />
+            {isQueryPending ? (
+              <span
+                aria-label="Söker bland alla ordrar"
+                className="orders-search-progress"
+                role="status"
               >
-                PRIS
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((d) => {
-              return (
-                <React.Fragment key={d._id}>
-                  <tr
-                    id={d._id}
-                    className="bg-white border-b border-gray-200"
-                    onClick={() => handleRowClick(d._id)}
-                  >
-                    <td className="max-w-xs pl-2 pr-2 py-4 tracking-wider">
-                      {d._id.substring(0, 10)}{" "}
-                    </td>
-                    <td className="pr-2 py-4 w-32">
-                      <OrderLabel status={d.status} />
-                    </td>
-                    <td className="w-36 whitespace-nowrap py-4 tracking-wider">
-                      {d.createdAt.substring(0, 16).replace("T", " ")}
-                    </td>
-                    <td className="pr-4 py-4 tracking-wider  hidden md:table-cell">
-                      {`${d.customer.firstname} ${d.customer.lastname}`}
-                    </td>
-                    <td className="pr-4 py-4 tracking-wider  hidden sm:table-cell">
-                      {`${formatSwedishPrice(d.totalSum)}`}
-                    </td>
-                  </tr>
-                  {id === d._id ? (
-                    <tr>
-                      <td colSpan={5}>
-                        <Outlet />
-                      </td>
-                    </tr>
-                  ) : null}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+                <i aria-hidden="true" />
+              </span>
+            ) : null}
+            {search ? (
+              <button onClick={() => setSearch("")} type="button">
+                Rensa
+              </button>
+            ) : null}
+          </label>
+
+          <div className="orders-filters" role="group" aria-label="Orderfilter">
+            {filters.map((item) => (
+              <button
+                aria-pressed={filter === item.key}
+                className={filter === item.key ? "is-active" : ""}
+                key={item.key}
+                onClick={() => setFilter(item.key)}
+                type="button"
+              >
+                <span>{item.label}</span>
+                <small>{data.counts[item.key]}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <div
+          className={`orders-workspace${id ? " orders-workspace--detail" : ""}`}
+        >
+          <section className="orders-list" aria-label="Ordrar">
+            <div className="orders-list-heading">
+              <div>
+                <h2>Beställningar</h2>
+                <p>
+                  {isQueryPending
+                    ? "Söker i orderhistoriken…"
+                    : matchingCount === 1
+                      ? "Visar 1 order"
+                      : `Visar ${orders.length} av ${matchingCount} ordrar`}
+                </p>
+              </div>
+              {filter !== "all" || search ? (
+                <button
+                  onClick={() => {
+                    setFilter("all");
+                    setSearch("");
+                  }}
+                  type="button"
+                >
+                  Visa alla
+                </button>
+              ) : null}
+            </div>
+
+            {orders.length ? (
+              <>
+                <ol className="orders-order-list">
+                {orders.map((order) => {
+                  const meta = statusFor(order.status);
+                  const isSelected = id === order._id;
+                  const isOpening =
+                    navigation.state !== "idle" &&
+                    navigation.location?.pathname ===
+                      `/admin/orders/${order._id}`;
+                  const wasLastViewed = !id && lastViewedId === order._id;
+                  const customerName = [
+                    order.customer?.firstname,
+                    order.customer?.lastname,
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+
+                  return (
+                    <li key={order._id}>
+                      <button
+                        aria-busy={isOpening || undefined}
+                        aria-current={isSelected ? "true" : undefined}
+                        aria-expanded={isSelected}
+                        className={`orders-order-row${
+                          isSelected ? " is-selected" : ""
+                        }${
+                          isOpening ? " is-opening" : ""
+                        }${
+                          wasLastViewed ? " was-last-viewed" : ""
+                        }`}
+                        id={`order-${order._id}`}
+                        onClick={() => openOrder(order._id)}
+                        type="button"
+                      >
+                        <span className="orders-order-row__identity">
+                          <strong>{shortOrderNumber(order._id)}</strong>
+                          <small>{formatOrderDate(order.createdAt)}</small>
+                        </span>
+                        <span className="orders-order-row__customer">
+                          <strong>{customerName || "Kundnamn saknas"}</strong>
+                          <small className={`orders-compact-status tone-${meta.tone}`}>
+                            {meta.shortLabel}
+                          </small>
+                        </span>
+                        <span
+                          className={`orders-status tone-${meta.tone}`}
+                        >
+                          {meta.label}
+                        </span>
+                        <span className="orders-order-row__price">
+                          {formatPrice(order.totalSum)}
+                        </span>
+                        <span className="orders-order-row__arrow" aria-hidden="true">
+                          {isSelected ? "−" : "↗"}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+                </ol>
+                {!isQueryPending && pageInfo.hasMore ? (
+                  <div className="orders-load-more">
+                    <button
+                      disabled={isLoadingMore}
+                      onClick={loadMoreOrders}
+                      type="button"
+                    >
+                      <span>
+                        {isLoadingMore ? "Hämtar fler…" : "Ladda fler ordrar"}
+                      </span>
+                      <small>{remainingCount} kvar</small>
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div className="orders-empty">
+                <span aria-hidden="true">○</span>
+                <h2>
+                  {data.counts.all ? "Inga ordrar matchar" : "Inga ordrar ännu"}
+                </h2>
+                <p>
+                  {data.counts.all
+                    ? "Prova ett annat kundnamn, ordernummer eller filter."
+                    : "När en beställning är genomförd kommer den att visas här."}
+                </p>
+              </div>
+            )}
+          </section>
+
+          {id ? (
+            <aside
+              className="orders-detail-pane"
+              id="order-detail"
+              key={id}
+            >
+              <Outlet />
+            </aside>
+          ) : (
+            <aside className="orders-detail-placeholder" aria-hidden="true">
+              <span>01</span>
+              <div>
+                <p className="orders-kicker">Orderflöde</p>
+                <h2>Välj en beställning</h2>
+                <p>
+                  Här visas kundens uppgifter, orderrader och nästa steg för
+                  leverans och bokföring.
+                </p>
+              </div>
+            </aside>
+          )}
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

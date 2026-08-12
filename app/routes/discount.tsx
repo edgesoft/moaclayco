@@ -1,21 +1,35 @@
 import { ActionFunction, json } from "@remix-run/node";
 import { Discounts } from "../schemas/discounts";
+import { getDomain } from "~/utils/domain";
 
 export let action: ActionFunction = async ({ request }) => {
-  let body = new URLSearchParams(await request.text());
-
-  let discount = await Discounts.findOne({ code: body.get("code") });
-
-  if (!discount) {
-    return json({ percentage: null, amount: 0 });
+  const body = await request.formData();
+  const domain = getDomain(request);
+  const code = String(body.get("code") ?? "").trim();
+  if (!domain || !code) {
+    return json({ code, percentage: null, balance: 0 });
   }
 
   const now = new Date();
-  const expireAtInLocalTimezone = new Date(now.toLocaleString('sv-SE', {timeZone: 'Europe/Stockholm'}));
-  if (discount.expireAt && discount.expireAt < expireAtInLocalTimezone) {
-    return json({ percentage: null, amount: 0, error: "Discount has expired" }, { status: 400 });
+  const discount: any = await Discounts.findOne({
+    domain: domain.domain,
+    code,
+    balance: { $gt: 0 },
+    percentage: { $gt: 0, $lte: 100 },
+    $or: [
+      { expireAt: { $exists: false } },
+      { expireAt: null },
+      { expireAt: { $gt: now } },
+    ],
+  }).lean();
+
+  if (!discount) {
+    return json({ code, percentage: null, balance: 0 });
   }
 
-  return json({ amount: 0, ...discount.toObject() });
+  return json({
+    code,
+    percentage: discount.percentage,
+    balance: discount.balance,
+  });
 };
-
