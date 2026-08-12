@@ -1,0 +1,4 @@
+boto3==1.40.6
+pymongo==4.14.0
+reportlab==4.4.3
+svglib==1.5.1

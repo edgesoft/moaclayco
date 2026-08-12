@@ -1,0 +1,48 @@
+[
+  {
+    "_id": "fixture-1",
+    "domain": "sgwoods",
+    "description": "Ingående balans",
+    "verificationNumber": 1,
+    "verificationDate": "2024-01-01T00:00:00Z",
+    "metadata": [{"key": "IB", "value": "2024"}],
+    "files": [],
+    "journalEntries": [
+      {"account": 1930, "debit": 10000, "credit": 0},
+      {"account": 2999, "debit": 0, "credit": 10000}
+    ]
+  },
+  {
+    "_id": "fixture-2",
+    "domain": "sgwoods",
+    "description": "Försäljning av trädetaljer",
+    "verificationNumber": 2,
+    "verificationDate": "2024-02-12T10:30:00Z",
+    "metadata": [{"key": "order", "value": "fixture-order"}],
+    "files": [],
+    "journalEntries": [
+      {"account": 1580, "debit": 1250, "credit": 0},
+      {"account": 3001, "debit": 0, "credit": 1000},
+      {"account": 2611, "debit": 0, "credit": 250}
+    ]
+  },
+  {
+    "_id": "fixture-3",
+    "domain": "sgwoods",
+    "description": "Inköp av förbrukningsmaterial – Göteborg",
+    "verificationNumber": 3,
+    "verificationDate": "2024-03-05T15:00:00Z",
+    "metadata": [],
+    "files": [
+      {
+        "name": "Exempelunderlag (hämtas inte i fixture-läge)",
+        "path": "https://example-bucket.s3.eu-north-1.amazonaws.com/verifications/fixture.pdf"
+      }
+    ],
+    "journalEntries": [
+      {"account": 4000, "debit": 400, "credit": 0},
+      {"account": 2640, "debit": 100, "credit": 0},
+      {"account": 1930, "debit": 0, "credit": 500}
+    ]
+  }
+]
