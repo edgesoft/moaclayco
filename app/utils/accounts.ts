@@ -6,15 +6,15 @@ export const accounts = [
     { value: 1580, label: "1580 - Fordran på Stripe", reportType: ReportType.BALANCE, isIncomingBalance: true  },
     { value: 1910, label: "1910 - Kassa", reportType: ReportType.BALANCE, isIncomingBalance: true  },
     { value: 1930, label: "1930 - Bank", reportType: ReportType.BALANCE, isIncomingBalance: true },
+    { value: 2010, label: "2010 - Eget kapital", reportType: ReportType.LIABILITIES, isIncomingBalance: true },
     { value: 2012, label: "2012 - Avräkning för skatter och avgifter", reportType:ReportType.LIABILITIES, isIncomingBalance: true  },
-    { value: 2013, label: "2013 - Eget uttag", reportType: ReportType.LIABILITIES },
-    { value: 2018, label: "2018 - Egen insättning", reportType: ReportType.LIABILITIES },
-    { value: 2050, label: "2050 - Skattekontotransaktioner", reportType: ReportType.NONE },
+    { value: 2013, label: "2013 - Eget uttag", reportType: ReportType.LIABILITIES, isIncomingBalance: true },
+    { value: 2018, label: "2018 - Egen insättning", reportType: ReportType.LIABILITIES, isIncomingBalance: true },
     { value: 2440, label: "2440 - Leverantörsskulder", reportType: ReportType.LIABILITIES, isIncomingBalance: true  },
     { value: 2611, label: "2611 - Utgående moms på varor och frakt", reportType: ReportType.LIABILITIES, isIncomingBalance: true  },
-    { value: 2640, label: "2640 - Ingående moms", reportType: ReportType.LIABILITIES, isIncomingBalance: true  },
+    { value: 2640, label: "2640 - Ingående moms", reportType: ReportType.BALANCE, isIncomingBalance: true  },
     { value: 2650, label: "2650 - Momsskuld", reportType: ReportType.LIABILITIES, isIncomingBalance: true  },
-    { value: 2999, label: "2999 - Överföringskonto för UB/IB", reportType: ReportType.NONE },
+    { value: 2999, label: "2999 - Balanserat resultat från IB", reportType: ReportType.LIABILITIES },
     { value: 3001, label: "3001 - Försäljning av varor", vatAccount: 2611, reportType: ReportType.INCOME}, 
     { value: 3740, label: "3740 - Öres- och kronutjämning", reportType:  ReportType.INCOME }, 
     { value: 4000, label: "4000 - Material/Varukostnader", vatAccount: 2640, reportType: ReportType.EXPENSE },
@@ -22,6 +22,7 @@ export const accounts = [
     { value: 6570, label: "6570 - Kostnader för betalningsförmedling", reportType: ReportType.EXPENSE },
     { value: 6990, label: "6990 - Övriga externa kostnader", reportType: ReportType.EXPENSE }, 
     { value: 8313, label: "8313 - Ränteintäkter bank", reportType:  ReportType.INCOME },
+    { value: 8314, label: "8314 - Skattefria ränteintäkter", reportType: ReportType.INCOME },
   ];
 
   export const sumAccounts = (verifications: VerificationProps[], accounts: any[]) => {
@@ -43,40 +44,69 @@ export const accounts = [
   };
 
 
-  export const getIBJournalEntries = async (domain: string, year: number) => {
-    const previousVerifications = await Verifications.find({
-      domain: domain,
-      verificationDate: {
-        $gte: new Date(year, 0, 1), // Från årets början
-        $lte: new Date(year, 11, 31), // Till årets slut
-      },
-    }).exec();
-  
-    const filteredAccounts = accounts.filter((a) => a.isIncomingBalance).map((a) => a.value)
-      // remove IB and UB from previousVerifications
-    return  filteredAccounts.map((account) => {
-      const sum = sumAccounts(previousVerifications.filter((p) => {
-        // TODO: Is this really right?? Shouldn't IB be included?
-        if (p.metadata && p.metadata.key === "IB") {
-          return false
-        }
-  
-        return true
-      }), [account]); // Summera saldon för kontot
-      if (sum > 0 || sum < 0) {
-        return [
-          {
-            account, // Det aktuella kontot
-            debit: sum > 0 ? parseFloat(sum) : 0,
-            credit: sum < 0 ? Math.abs(parseFloat(sum)) : 0,
-          },
-          {
-            account: 2999, // Lägg till 2999 som motkonto
-            debit: sum < 0 ? Math.abs(parseFloat(sum)) : 0,
-            credit: sum > 0 ? parseFloat(sum) : 0,
-          },
-        ];
-      }
-      return []
-    }).flat();
+export const incomingBalanceAccounts = accounts
+  .filter((account) => account.isIncomingBalance)
+  .map((account) => account.value);
+
+type BalanceVerification = {
+  journalEntries: Array<{ account: number; debit?: number; credit?: number }>;
+};
+
+export const buildIncomingBalanceEntries = (
+  verifications: BalanceVerification[]
+) => {
+  const balances = new Map<number, number>(
+    incomingBalanceAccounts.map((account) => [account, 0])
+  );
+
+  for (const verification of verifications) {
+    for (const entry of verification.journalEntries ?? []) {
+      // 2050 förekommer i äldre data. I enskild firma hör skattekontot till 2012.
+      const account = entry.account === 2050 ? 2012 : entry.account;
+      if (!balances.has(account)) continue;
+      const changeInCents =
+        Math.round(Number(entry.debit || 0) * 100) -
+        Math.round(Number(entry.credit || 0) * 100);
+      balances.set(account, (balances.get(account) ?? 0) + changeInCents);
+    }
   }
+
+  const entries = Array.from(balances.entries())
+    .filter(([, balanceInCents]) => balanceInCents !== 0)
+    .map(([account, balanceInCents]) => ({
+      account,
+      debit: balanceInCents > 0 ? balanceInCents / 100 : 0,
+      credit: balanceInCents < 0 ? Math.abs(balanceInCents) / 100 : 0,
+    }));
+
+  const netBalanceInCents = Array.from(balances.values()).reduce(
+    (total, balance) => total + balance,
+    0
+  );
+  if (netBalanceInCents !== 0) {
+    entries.push({
+      account: 2999,
+      debit: netBalanceInCents < 0 ? Math.abs(netBalanceInCents) / 100 : 0,
+      credit: netBalanceInCents > 0 ? netBalanceInCents / 100 : 0,
+    });
+  }
+
+  return entries;
+};
+
+export const getIBJournalEntries = async (domain: string, year: number) => {
+  const previousVerifications = await Verifications.find({
+    domain,
+    verificationDate: {
+      $gte: new Date(Date.UTC(year, 0, 1)),
+      $lt: new Date(Date.UTC(year + 1, 0, 1)),
+    },
+  })
+    .select("journalEntries")
+    .lean();
+
+  // Årets IB måste ingå: den är startsaldot som årets rörelser byggs ovanpå.
+  return buildIncomingBalanceEntries(
+    previousVerifications as unknown as BalanceVerification[]
+  );
+};
