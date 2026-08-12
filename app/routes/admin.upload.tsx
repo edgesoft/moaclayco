@@ -8,9 +8,14 @@ import { Collections } from "~/schemas/collections";
 import { auth } from "~/services/auth.server";
 import { s3Client } from "~/services/s3.server";
 import { getDomain } from "~/utils/domain";
+import {
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 const awsItemPath = process.env.AWS_ITEM_PATH;
 const MAX_IMAGE_SIZE = 18 * 1024 * 1024;
+const MAX_IMAGE_REQUEST_SIZE = MAX_IMAGE_SIZE + 512 * 1024;
 const acceptedImagePattern = /\.(jpe?g|png|webp|heic|heif)$/i;
 
 if (!awsItemPath) {
@@ -62,7 +67,15 @@ async function uploadToS3(file: File, collectionRef: string) {
 export const action: ActionFunction = async ({ request }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
   const domain = getDomain(request);
-  const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(request, MAX_IMAGE_REQUEST_SIZE);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json({ error: "Bilden är större än 18 MB." }, { status: 413 });
+    }
+    throw error;
+  }
   const file = formData.get("file");
   const collectionRef = formData.get("collectionRef")?.toString().trim();
 
