@@ -8,6 +8,7 @@ import {
   createCheckoutAttemptToken,
   createCheckoutFingerprint,
 } from "../app/services/checkout-payment.server";
+import { Orders } from "../app/schemas/orders";
 
 const order = {
   _id: "64f10123456789abcdef0123",
@@ -27,6 +28,19 @@ test("checkout attempt cookie is signed and rejects tampering", async () => {
       `checkout_attempt=${value.startsWith("a") ? "b" : "a"}${value.slice(1)}`
   );
   assert.equal(await checkoutAttemptCookie.parse(tamperedHeader), null);
+});
+
+test("checkout token uniqueness ignores historical orders without a token", () => {
+  const checkoutTokenIndex = Orders.schema.indexes().find(
+    ([fields]) => fields.domain === 1 && fields.checkoutToken === 1
+  );
+
+  assert.ok(checkoutTokenIndex);
+  assert.equal(checkoutTokenIndex[1].unique, true);
+  assert.deepEqual(checkoutTokenIndex[1].partialFilterExpression, {
+    checkoutToken: { $type: "string" },
+  });
+  assert.equal(checkoutTokenIndex[1].sparse, undefined);
 });
 
 test("duplicate checkout requests use the same Stripe idempotency key", () => {

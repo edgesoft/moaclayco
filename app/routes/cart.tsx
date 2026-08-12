@@ -349,8 +349,9 @@ export let action: ActionFunction = async ({ request }) => {
 
   const checkoutFingerprint = createCheckoutFingerprint(orderData);
   let order: any;
+  // Index creation errors must not be mistaken for an upsert race.
+  await Orders.init();
   try {
-    await Orders.init();
     order = await Orders.findOneAndUpdate(
       { domain: resolvedDomain.domain, checkoutToken },
       {

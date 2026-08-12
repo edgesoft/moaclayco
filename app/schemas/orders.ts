@@ -59,7 +59,13 @@ const OrderSchema = new Schema({
 { collection: 'orders' });
 
 OrderSchema.index({ "paymentIntent.id": 1 }, { unique: true, sparse: true });
-OrderSchema.index({ domain: 1, checkoutToken: 1 }, { unique: true, sparse: true });
+OrderSchema.index(
+    { domain: 1, checkoutToken: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { checkoutToken: { $type: "string" } }
+    }
+);
 OrderSchema.index({ domain: 1, status: 1, createdAt: -1 });
 OrderSchema.index({ domain: 1, createdAt: -1, _id: -1 });
 
