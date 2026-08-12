@@ -4,7 +4,8 @@ This document records the security and build baseline introduced by issue #206.
 
 ## Enforced checks
 
-- Node.js 20 is used in development, CI, stage, and production containers.
+- Node.js 24 LTS on Debian Bookworm is used in development, CI, stage, and
+  production containers.
 - Dependencies are installed reproducibly with `npm ci` and `package-lock.json`.
 - TypeScript checking must pass in CI.
 - CI must complete a production build.
