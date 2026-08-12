@@ -147,10 +147,10 @@ export let action: ActionFunction = async ({ request, params }) => {
   const type = body.get("_action") || "";
 
   if (type === "verification") {
-    const order: Order | null = await Orders.findOne({
+    const order = await Orders.findOne({
       _id: params.id,
       domain: domain.domain,
-    }).lean();
+    }).lean<Order>();
 
     if (!order) return {}
 
@@ -267,10 +267,10 @@ export let action: ActionFunction = async ({ request, params }) => {
   }
 
   const data = shippingValue === "true";
-  const order: Order | null = await Orders.findOne({
+  const order = await Orders.findOne({
     _id: params.id,
     domain: domain.domain,
-  }).lean();
+  }).lean<Order>();
 
   if (order) {
     if (data) {

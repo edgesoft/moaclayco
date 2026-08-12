@@ -188,9 +188,9 @@ const handlePayoutPaid = async (payout: Stripe.Payout) => {
           const paymentIntentId = charge.payment_intent;
 
           // Hämta order kopplad till PaymentIntent
-          const order: Order | null = await Orders.findOne(
+          const order = await Orders.findOne(
             paymentIntentOrderQuery(String(paymentIntentId))
-          ).lean();
+          ).lean<Order>();
 
           if (order) {
             // Lägg till i beskrivningen
@@ -269,7 +269,7 @@ const fromPaymentIntent = async (id: string, status: string) => {
         },
         { $set: { status: "SUCCESS", webhookAt: new Date() } },
         { new: true, session }
-      ).lean();
+      ).lean<Order>();
 
       if (!transitionedOrder) return;
 
@@ -317,7 +317,7 @@ const fromPaymentIntent = async (id: string, status: string) => {
       },
       { $set: { status: "PAID_REVIEW", webhookAt: new Date() } },
       { new: true }
-    ).lean();
+    ).lean<Order>();
   } finally {
     await session.endSession();
   }

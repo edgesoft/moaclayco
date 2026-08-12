@@ -26,12 +26,12 @@ async function deleteFileFromS3(
   const fileName = requestedFileName.split("/").pop()?.split("?")[0];
   if (!fileName || fileName !== requestedFileName.split("?")[0]) return false;
 
-  const item: ItemProps | null = id
+  const item = id
     ? await Items.findOne({
         _id: id,
         collectionRef: collection,
         domain,
-      }).lean()
+      }).lean<ItemProps>()
     : null;
 
   if (id && !item) return false;
