@@ -6409,6 +6409,9 @@ input[type="search"]::-ms-reveal {
 .mcc-login-backdrop {
   background: rgba(244, 239, 232, 0.82);
   backdrop-filter: blur(8px);
+  border: 0;
+  cursor: pointer;
+  padding: 0;
 }
 
 .mcc-cookie-dialog,

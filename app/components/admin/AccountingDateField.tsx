@@ -126,6 +126,9 @@ export function AccountingDateField({
       <button
         id={id}
         type="button"
+        aria-label={`${label}: ${
+          selectedDate ? dateLabel.format(selectedDate) : "inget datum valt"
+        }`}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}

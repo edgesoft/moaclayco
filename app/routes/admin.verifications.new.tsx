@@ -968,8 +968,11 @@ export default function Verification() {
 
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1.25fr)_minmax(145px,.75fr)_minmax(145px,.75fr)]">
                       <div className="min-w-0 sm:col-span-2 lg:col-span-1">
-                        <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.13em] text-stone-500">
-                        Konto
+                        <label
+                          className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.13em] text-stone-500"
+                          htmlFor={`account-select-${index}`}
+                        >
+                          Konto
                         </label>
                         <Controller
                           control={control}
@@ -979,6 +982,7 @@ export default function Verification() {
                               {() => (
                                 <Select
                                   instanceId={`account-select-${index}`}
+                                  inputId={`account-select-${index}`}
                                   {...field}
                                   options={accounts}
                                   onChange={(option) =>

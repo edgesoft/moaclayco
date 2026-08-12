@@ -9,6 +9,7 @@
     "build": "react-router build",
     "deploy": "fly deploy --remote-only",
     "dev": "react-router dev",
+    "lint": "eslint app tests",
     "smoke": "node tools/smoke-check.mjs",
     "start": "react-router-serve ./build/server/index.js",
     "test": "tsx --test tests/accounting-balances.test.ts tests/accounting-document.test.ts tests/checkout-payment.test.ts tests/google-auth.test.ts tests/order-cookie.test.ts tests/order-email.test.tsx tests/verification-files.test.ts tests/verification-schema.test.ts tests/verification-validation.test.ts",

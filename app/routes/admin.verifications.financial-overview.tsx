@@ -377,7 +377,7 @@ export default function FinancialOverview() {
               <Form method="get" className="accounting-custom-period-form">
                 <input type="hidden" name="report" value={selectedReport} />
                 {isIncomeReport ? (
-                  <label>
+                  <div>
                     <span>Från</span>
                     <AccountingDateField
                       id="report-from"
@@ -385,11 +385,11 @@ export default function FinancialOverview() {
                       defaultValue={currentFrom}
                       label="Periodens startdatum"
                     />
-                  </label>
+                  </div>
                 ) : (
                   <input type="hidden" name="from" value={`${periodYear}-01-01`} />
                 )}
-                <label>
+                <div>
                   <span>Till</span>
                   <AccountingDateField
                     id="report-to"
@@ -397,7 +397,7 @@ export default function FinancialOverview() {
                     defaultValue={currentTo}
                     label="Periodens slutdatum"
                   />
-                </label>
+                </div>
                 <button type="submit">
                   Visa perioden <span aria-hidden="true">→</span>
                 </button>

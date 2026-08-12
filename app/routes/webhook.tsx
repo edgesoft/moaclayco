@@ -386,24 +386,28 @@ export let action: ActionFunction = async ({ request }) => {
 
   try {
     switch (event.type) {
-      case "payment_intent.succeeded":
+      case "payment_intent.succeeded": {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         const order = await resolveSucceededOrder(paymentIntent);
         await makeAccountTransaction(paymentIntent, order);
         await fromPaymentIntent(paymentIntent.id, "SUCCESS");
         break;
-      case "payment_intent.canceled":
+      }
+      case "payment_intent.canceled": {
         const paymentIntenCanceled = event.data.object as Stripe.PaymentIntent;
         await fromPaymentIntent(paymentIntenCanceled.id, "CANCELED");
         break;
-      case "payment_intent.payment_failed":
+      }
+      case "payment_intent.payment_failed": {
         const paymentIntentFailed = event.data.object as Stripe.PaymentIntent;
         await fromPaymentIntent(paymentIntentFailed.id, "FAILED");
         break;
-      case "payout.paid":
-          const payout = event.data.object as Stripe.Payout;
-          await handlePayoutPaid(payout);
-          break;
+      }
+      case "payout.paid": {
+        const payout = event.data.object as Stripe.Payout;
+        await handlePayoutPaid(payout);
+        break;
+      }
     }
     await WebhookEvents.updateOne(
       { provider: "stripe", eventId: event.id },

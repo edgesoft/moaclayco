@@ -84,7 +84,12 @@ export let loader: LoaderFunction = async ({ request, params }) => {
         );
       }
       return json({ order, intent, verification });
-    } catch (e) {}
+    } catch (error) {
+      console.error("Stripe PaymentIntent could not be retrieved", {
+        orderId: order._id,
+        error,
+      });
+    }
   }
   return json({ order, intent: null, verification });
 };
@@ -242,7 +247,7 @@ export let action: ActionFunction = async ({ request, params }) => {
         domain: domain?.domain,
       },
       {
-        status: Boolean(data)
+        status: data
           ? "SHIPPED"
           : order.manualOrderAt
           ? "MANUAL_PROCESSING"
@@ -250,7 +255,7 @@ export let action: ActionFunction = async ({ request, params }) => {
       }
     );
 
-    if (Boolean(data)) {
+    if (data) {
       await sendOrderEmail(order, Template.SHIPPING);
     }
   }

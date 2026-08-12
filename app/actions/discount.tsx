@@ -27,7 +27,7 @@ let action: ActionFunction = async ({ request, params }) => {
   const domain = getDomain(request)
 
   switch (action) {
-    case "save":
+    case "save": {
       const formObject = objectFromFormData(formData);
       const validation = formSchema.safeParse(formObject);
       if (!validation.success) {
@@ -82,9 +82,11 @@ let action: ActionFunction = async ({ request, params }) => {
       }
 
       break;
-    case "delete":
+    }
+    case "delete": {
       await DiscountEntity.deleteOne({ _id: params.id, domain: domain?.domain });
       break;
+    }
     default:
       throw new Error(`Ogiltig åtgärd: ${action}`);
   }

@@ -82,12 +82,15 @@ export default function LoginModal({
       aria-labelledby="login-modal-title"
       aria-modal="true"
       className="mcc-login-modal"
-      onMouseDown={(event) => {
-        if (event.currentTarget === event.target) onClose();
-      }}
       role="dialog"
     >
-      <div aria-hidden="true" className="mcc-login-backdrop" />
+      <button
+        aria-label="Stäng inloggningen"
+        className="mcc-login-backdrop"
+        onClick={onClose}
+        tabIndex={-1}
+        type="button"
+      />
       <div className="mcc-login-dialog" ref={dialogRef}>
         <button
           aria-label="Stäng inloggningen"
