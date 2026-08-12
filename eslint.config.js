@@ -1,7 +1,7 @@
 import js from "@eslint/js";
 import typescriptEslint from "@typescript-eslint/eslint-plugin";
 import typescriptParser from "@typescript-eslint/parser";
-import importPlugin from "eslint-plugin-import";
+import importPlugin from "eslint-plugin-import-x";
 import jsxA11y from "eslint-plugin-jsx-a11y";
 import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -28,13 +28,13 @@ export default [
     },
     plugins: {
       "@typescript-eslint": typescriptEslint,
-      import: importPlugin,
+      "import-x": importPlugin,
       "jsx-a11y": jsxA11y,
       react,
       "react-hooks": reactHooks,
     },
     settings: {
-      "import/resolver": {
+      "import-x/resolver": {
         typescript: true,
       },
       react: {
@@ -45,14 +45,14 @@ export default [
       ...typescriptEslint.configs.recommended.rules,
       ...react.configs.recommended.rules,
       ...jsxA11y.configs.recommended.rules,
-      ...importPlugin.configs.recommended.rules,
-      ...importPlugin.configs.typescript.rules,
+      ...importPlugin.flatConfigs.recommended.rules,
+      ...importPlugin.flatConfigs.typescript.rules,
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": [
         "warn",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      "import/no-unresolved": "off",
+      "import-x/no-unresolved": "off",
       "react-hooks/exhaustive-deps": "warn",
       "react-hooks/rules-of-hooks": "error",
       "react/prop-types": "off",
