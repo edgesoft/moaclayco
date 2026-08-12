@@ -56,14 +56,8 @@ const formSchema = z.object({
     .array(
       z.object({
         account: z.number().min(1, "Konto är obligatoriskt"),
-        debit: z.preprocess(
-          (v) => (v === "" || v === null ? 0 : parseFloat(v as string)),
-          z.number().min(0, "Debet måste vara ett tal")
-        ),
-        credit: z.preprocess(
-          (v) => (v === "" || v === null ? 0 : parseFloat(v as string)),
-          z.number().min(0, "Kredit måste vara ett tal")
-        ),
+        debit: z.number().min(0, "Debet måste vara ett tal"),
+        credit: z.number().min(0, "Kredit måste vara ett tal"),
       })
     )
     .min(2, "Du måste lägga till minst två konteringsrader")
@@ -1035,7 +1029,9 @@ export default function Verification() {
                             inputMode="decimal"
                             step="0.01"
                             placeholder="0,00"
-                            {...register(`journalEntries.${index}.debit` as const)}
+                            {...register(`journalEntries.${index}.debit` as const, {
+                              setValueAs: (value) => value === "" ? 0 : Number(value),
+                            })}
                             className="verification-amount-input min-w-0 flex-1 border-0 bg-transparent p-0 text-right text-xl font-semibold leading-none tabular-nums text-stone-900 outline-none placeholder:text-stone-300"
                           />
                           <span className="shrink-0 text-[11px] font-bold uppercase text-stone-400">
@@ -1054,7 +1050,9 @@ export default function Verification() {
                             inputMode="decimal"
                             step="0.01"
                             placeholder="0,00"
-                            {...register(`journalEntries.${index}.credit` as const)}
+                            {...register(`journalEntries.${index}.credit` as const, {
+                              setValueAs: (value) => value === "" ? 0 : Number(value),
+                            })}
                             className="verification-amount-input min-w-0 flex-1 border-0 bg-transparent p-0 text-right text-xl font-semibold leading-none tabular-nums text-stone-900 outline-none placeholder:text-stone-300"
                           />
                           <span className="shrink-0 text-[11px] font-bold uppercase text-stone-400">
