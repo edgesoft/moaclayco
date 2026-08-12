@@ -7,18 +7,9 @@ import { auth } from "~/services/auth.server";
 import { s3Client } from "~/services/s3.server";
 import type { ItemProps } from "~/types";
 import { getDomain } from "~/utils/domain";
+import { itemImageStorageKey } from "~/utils/itemImageStorage.server";
 
 const AWS_ITEM_PATH = process.env.AWS_ITEM_PATH;
-
-const keyFromItemImage = (imageUrl: string) => {
-  if (!AWS_ITEM_PATH) return null;
-  try {
-    const key = new URL(imageUrl).pathname.replace(/^\/+/, "");
-    return key.startsWith(`${AWS_ITEM_PATH}/`) ? key : null;
-  } catch {
-    return null;
-  }
-};
 
 async function deleteFileFromS3(
   id: string | null,
@@ -45,20 +36,27 @@ async function deleteFileFromS3(
       candidate.split("?")[0].endsWith(`/${fileName}`)
     );
     if (!image) return false;
-    const key = keyFromItemImage(image);
+    const key = itemImageStorageKey(image, AWS_ITEM_PATH, collection);
     if (!key) return false;
 
-    const remainingImages = item.images.filter((candidate) => candidate !== image);
-    await s3Client.send(
-      new DeleteObjectCommand({
-        Bucket: process.env.AWS_S3_BUCKET_NAME,
-        Key: key,
-      })
+    const updateResult = await Items.updateOne(
+      { _id: id, collectionRef: collection, domain, images: image },
+      { $pull: { images: image } }
     );
-    await Items.updateOne(
-      { _id: id, collectionRef: collection, domain },
-      { images: remainingImages }
-    );
+    if (updateResult.modifiedCount !== 1) return false;
+
+    try {
+      await s3Client.send(
+        new DeleteObjectCommand({
+          Bucket: process.env.AWS_S3_BUCKET_NAME,
+          Key: key,
+        })
+      );
+    } catch (error) {
+      // The database is the source of truth. A stale, unreferenced S3 object is
+      // safer than leaving the product with a permanently broken image URL.
+      console.error("Unreferenced item image could not be removed from S3", error);
+    }
     return true;
   }
 
