@@ -4,8 +4,10 @@ const { Schema } = mongoose;
 const UserSchema = new Schema({
     firstname: String,
     lastname: String,
-    email: String,
-    fiscalYear: { type: Number, default: new Date().getFullYear() } 
+    email: { type: String, lowercase: true, trim: true },
+    fiscalYear: { type: Number, default: new Date().getFullYear() },
+    googleSubject: { type: String, unique: true, sparse: true },
+    authProvider: String,
 },
 { collection: 'users' });
 
