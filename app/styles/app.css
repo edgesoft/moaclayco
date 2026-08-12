@@ -7858,6 +7858,57 @@ input[type="search"]::-ms-reveal {
     font-size: 0.62rem;
   }
 
+  .collection-page .mcc-shop-item__gallery-meta {
+    min-height: 3.35rem;
+    padding: 0.25rem 0.35rem 0.25rem 0.6rem;
+  }
+
+  .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__number {
+    font-size: 0.78rem;
+    height: 2.15rem;
+    width: 2.15rem;
+  }
+
+  .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__gallery-actions {
+    gap: 0.12rem;
+  }
+
+  .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__dots button {
+    height: 2.65rem;
+    width: 1.7rem;
+  }
+
+  .collection-page
+    .mcc-shop-item__gallery-meta
+    .mcc-shop-item__dots
+    button::after {
+    height: 0.42rem;
+    width: 0.42rem;
+  }
+
+  .collection-page
+    .mcc-shop-item__gallery-meta
+    .mcc-shop-item__dots
+    button[aria-current="true"]::after {
+    width: 1.45rem;
+  }
+
+  .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__edit,
+  .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__zoom,
+  .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__arrows button {
+    font-size: 1.05rem;
+    height: 2.65rem;
+    min-height: 2.65rem;
+    width: 2.65rem;
+  }
+
+  .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__edit svg,
+  .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__zoom svg,
+  .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__arrows svg {
+    height: 1.1rem;
+    width: 1.1rem;
+  }
+
   .collection-page .mcc-shop-item__copy .mcc-kicker {
     font-size: 0.67rem;
   }

@@ -32,6 +32,14 @@ test("a touch user can open a Collection", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/collections\/wanja$/);
   await expect(page.getByRole("heading", { name: "Wanja", level: 1 })).toBeVisible();
+
+  const galleryZoom = page.locator(
+    ".mcc-shop-item__gallery-meta .mcc-shop-item__zoom"
+  ).first();
+  const galleryZoomBox = await galleryZoom.boundingBox();
+  expect(galleryZoomBox).not.toBeNull();
+  expect(galleryZoomBox!.height).toBeGreaterThanOrEqual(42);
+  expect(galleryZoomBox!.width).toBeGreaterThanOrEqual(42);
   await expectNoHorizontalOverflow(page);
 });
 
