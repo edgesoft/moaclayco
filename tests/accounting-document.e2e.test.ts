@@ -10,6 +10,7 @@ import {
 type ExpectedEntry = {
   date: string;
   total: number;
+  sourceAccount?: string;
   accounts: Record<string, { debit: number; credit: number }>;
 };
 
@@ -53,6 +54,12 @@ test(
         `Missing transaction ${expectedEntry.date} ${expectedEntry.total}`
       );
       assert.deepEqual(suggestions[actualIndex].accounts, expectedEntry.accounts);
+      if (expectedEntry.sourceAccount) {
+        assert.equal(
+          suggestions[actualIndex].sourceAccount,
+          expectedEntry.sourceAccount
+        );
+      }
     });
   }
 );

@@ -36,5 +36,30 @@ The repository contains synthetic data only:
   signs are retained, balance rows are ignored, and deposits, preliminary tax,
   VAT, and interest use the expected sole-proprietorship accounts.
 
+Bank statements use a document-type-specific account context. The model matches
+Moa Clay Co's known SEB business account in local or IBAN form to BAS 1930 and
+the owner's known private SEB account to BAS 2018. Server validation then rejects
+a bank-statement result when the selected source account, amount direction, and
+journal line disagree. These rules are explicitly excluded from invoice and
+receipt interpretation.
+
+The output allowance is sized for long multi-page statements with up to 200
+entries; short invoices and receipts still return only their actual structured
+content.
+
+Invoice and receipt output is constrained to the accounts configured in the
+Moa app. Domestic Moa sales use 3001, hosting/domain/e-mail costs use the app's
+broader 6990 category, and a payment instruction that explicitly says it is not
+VAT evidence must never create input VAT on 2640. Receipt VAT follows the
+printed VAT breakdown, including mixed rates and discounts; bank transaction
+details alone are not treated as VAT-supporting receipts.
+
+Consumable production components such as clay, earring posts, and jewelry parts
+use 4000, while 5410 is reserved for durable tools, furniture, and equipment. A
+paid invoice or receipt with only a masked, unidentified card is conservatively
+posted against 2018 with review status; 1930 requires evidence of the business
+account or a known business card. The known-account context also recognizes the
+owner's older SEB account ending in 2115 as private.
+
 The API regression is intentionally opt-in because it uses real API credits and
 requires `OPENAI_API_KEY`. Unit tests always run in CI and never call OpenAI.

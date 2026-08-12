@@ -1,8 +1,9 @@
-import { data as json, LoaderFunction } from "react-router";
 import {
   Link,
+  LoaderFunction,
   Outlet,
   ShouldRevalidateFunction,
+  data as json,
   useLoaderData,
   useLocation,
   useSearchParams,
@@ -212,6 +213,7 @@ export default function VerificationsPage() {
   const normalizedPath = normalizePathname(location.pathname);
   const isOverview = normalizedPath === "/admin/verifications";
   const isReport = normalizedPath.endsWith("/financial-overview");
+  const isTaxAccount = normalizedPath.endsWith("/tax-account");
   const selectedReport = searchParams.get("report") || "income";
 
   const displayVerifications = useMemo(() => {
@@ -290,7 +292,7 @@ export default function VerificationsPage() {
 
           <nav
             aria-label="Bokföring"
-            className="accounting-nav mt-7 grid grid-cols-3"
+            className="accounting-nav mt-7 grid grid-cols-4"
           >
             <Link to="/admin/verifications" className={navClass(isOverview)}>
               Verifikationer
@@ -308,6 +310,13 @@ export default function VerificationsPage() {
               className={navClass(isReport && selectedReport === "balance")}
             >
               Balans
+            </Link>
+            <Link
+              to="/admin/verifications/tax-account"
+              prefetch="intent"
+              className={navClass(isTaxAccount)}
+            >
+              Skattekonto
             </Link>
           </nav>
         </header>

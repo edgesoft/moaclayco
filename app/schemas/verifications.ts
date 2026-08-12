@@ -76,7 +76,13 @@ VerificationsSchema.pre("validate", function (next) {
       next();
       return;
     }
-    this.journalEntries = normalizeJournalEntries(this.journalEntries) as any;
+    const allowsLegacyAccount2050 = this.metadata?.some(
+      (entry: any) =>
+        entry?.key === "legacy2050Correction" && entry?.value === "true"
+    );
+    this.journalEntries = normalizeJournalEntries(this.journalEntries, {
+      allowLegacyAccount2050: allowsLegacyAccount2050,
+    }) as any;
     next();
   } catch (error) {
     next(error as Error);

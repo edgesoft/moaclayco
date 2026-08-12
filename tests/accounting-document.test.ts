@@ -42,6 +42,31 @@ test("rejects an unbalanced accounting analysis", () => {
   );
 });
 
+test("rejects an account that is not configured in the app", () => {
+  const invalid = structuredClone(validAnalysis);
+  invalid.entries[0].accounts[0].account = "6540";
+
+  assert.throws(
+    () => validateAccountingAnalysis(invalid),
+    /account 6540, which is not configured in the app/
+  );
+});
+
+test("requires Moa sales invoices to use account 3001", () => {
+  const invalid = structuredClone(validAnalysis);
+  invalid.documentType = "sales_invoice";
+  invalid.entries[0].accounts = [
+    { account: "1510", debit: 1250, credit: 0 },
+    { account: "2611", debit: 0, credit: 250 },
+    { account: "6990", debit: 0, credit: 1000 },
+  ];
+
+  assert.throws(
+    () => validateAccountingAnalysis(invalid),
+    /does not use the configured sales account 3001/
+  );
+});
+
 test("converts an entry to the current verification form shape", () => {
   const suggestion = toVerificationSuggestion(validAnalysis.entries[0]);
 
@@ -119,5 +144,80 @@ test("rejects a VAT charge combined with a tax-account deposit", () => {
   assert.throws(
     () => validateAccountingAnalysis(invalid),
     /invalid VAT tax-account posting|combines a VAT charge/
+  );
+});
+
+test("accepts a business-bank statement entry on account 1930", () => {
+  const analysis: AccountingDocumentAnalysis = {
+    documentType: "bank_statement",
+    warnings: [],
+    entries: [
+      {
+        date: "2025-08-07",
+        description: "Stripe-utbetalning",
+        total: 1270.59,
+        sourceReference: "5490990543",
+        sourceAccount: "business_bank",
+        confidence: 1,
+        warnings: [],
+        accounts: [
+          { account: "1930", debit: 1270.59, credit: 0 },
+          { account: "1580", debit: 0, credit: 1270.59 },
+        ],
+      },
+    ],
+  };
+
+  assert.equal(validateAccountingAnalysis(analysis), analysis);
+});
+
+test("accepts a tax payment from the private bank account", () => {
+  const analysis: AccountingDocumentAnalysis = {
+    documentType: "bank_statement",
+    warnings: [],
+    entries: [
+      {
+        date: "2026-08-10",
+        description: "Inbetalning till skattekontot",
+        total: -366,
+        sourceReference: "7633981",
+        sourceAccount: "private_bank",
+        confidence: 1,
+        warnings: [],
+        accounts: [
+          { account: "2012", debit: 366, credit: 0 },
+          { account: "2018", debit: 0, credit: 366 },
+        ],
+      },
+    ],
+  };
+
+  assert.equal(validateAccountingAnalysis(analysis), analysis);
+});
+
+test("rejects a bank statement whose selected account and posting disagree", () => {
+  const analysis: AccountingDocumentAnalysis = {
+    documentType: "bank_statement",
+    warnings: [],
+    entries: [
+      {
+        date: "2025-03-24",
+        description: "Eget uttag",
+        total: -4568,
+        sourceReference: "PCB21P00250324125305410803000001",
+        sourceAccount: "private_bank",
+        confidence: 1,
+        warnings: [],
+        accounts: [
+          { account: "2013", debit: 4568, credit: 0 },
+          { account: "1930", debit: 0, credit: 4568 },
+        ],
+      },
+    ],
+  };
+
+  assert.throws(
+    () => validateAccountingAnalysis(analysis),
+    /identifies private_bank but does not use account 2018/
   );
 });

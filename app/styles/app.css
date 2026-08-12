@@ -7116,6 +7116,595 @@ input[type="search"]::-ms-reveal {
   }
 }
 
+/* Skattekonto: dokumentgranskning med samma varma, redaktionella rytm. */
+.tax-account-dropzone {
+  align-items: center;
+  background:
+    linear-gradient(rgba(255, 253, 249, 0.94), rgba(255, 253, 249, 0.94)),
+    repeating-linear-gradient(0deg, transparent 0 2rem, rgba(184, 110, 89, 0.08) 2rem calc(2rem + 1px));
+  border: 1px dashed #c9c5bc;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 26rem;
+  padding: 3rem 2rem;
+  text-align: center;
+  transition: background-color 180ms ease, border-color 180ms ease;
+}
+
+.tax-account-dropzone:hover,
+.tax-account-dropzone:focus-within {
+  border-color: var(--accounting-accent);
+}
+
+.tax-account-dropzone--working {
+  border-style: solid;
+}
+
+.tax-account-document-icon {
+  color: var(--accounting-accent);
+  height: 4.2rem;
+  width: 3.7rem;
+}
+
+.tax-account-document-icon svg {
+  height: 100%;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.35;
+  width: 100%;
+}
+
+.tax-account-progress {
+  background: #ebe7df;
+  height: 2px;
+  overflow: hidden;
+  width: min(18rem, 80%);
+}
+
+.tax-account-progress span {
+  animation: tax-account-progress 1.5s ease-in-out infinite;
+  background: var(--accounting-accent);
+  display: block;
+  height: 100%;
+  width: 35%;
+}
+
+@keyframes tax-account-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(385%); }
+}
+
+.tax-account-guide {
+  border-bottom: 1px solid var(--accounting-line);
+  border-top: 1px solid var(--accounting-line);
+  padding: 2rem 0.25rem;
+}
+
+.tax-account-source {
+  align-items: center;
+  background: rgba(255, 253, 249, 0.74);
+  border: 1px solid var(--accounting-line);
+  display: flex;
+  gap: 1.5rem;
+  justify-content: space-between;
+  padding: 1.15rem 1.25rem;
+}
+
+.tax-account-balance {
+  align-items: center;
+  border-bottom: 1px solid var(--accounting-line);
+  border-top: 1px solid var(--accounting-line);
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) minmax(180px, .8fr);
+  padding: 1.1rem 0;
+}
+
+.tax-account-balance > div:not(.tax-account-balance__check) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.tax-account-balance > div > span {
+  color: #8b8983;
+  font-size: 0.64rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.tax-account-balance > div > strong {
+  color: #242522;
+  font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  font-size: 1.25rem;
+  font-weight: 400;
+}
+
+.tax-account-balance__operator {
+  color: #b8b4ac;
+  font-family: Georgia, serif;
+  font-size: 1.15rem;
+}
+
+.tax-account-balance__check {
+  align-items: center;
+  color: #4f6654;
+  display: flex;
+  font-size: 0.7rem;
+  font-weight: 700;
+  gap: 0.55rem;
+  justify-self: end;
+}
+
+.tax-account-balance__check > span {
+  align-items: center;
+  background: #e7eee6;
+  border-radius: 50%;
+  color: #4f6654 !important;
+  display: flex;
+  font-size: 0.65rem !important;
+  height: 1.7rem;
+  justify-content: center;
+  width: 1.7rem;
+}
+
+.tax-account-message {
+  align-items: flex-start;
+  border-left: 3px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+}
+
+.tax-account-message strong {
+  font-family: ui-sans-serif, system-ui, sans-serif !important;
+  font-size: 0.78rem;
+  font-weight: 750 !important;
+}
+
+.tax-account-message span {
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+
+.tax-account-message--warning {
+  background: #f7f0df;
+  border-color: #c99548;
+  color: #6c522d;
+}
+
+.tax-account-message--error {
+  background: #f8eae7;
+  border-color: #b65e4a;
+  color: #743c30;
+  margin-bottom: 1.25rem;
+}
+
+.tax-account-review-head {
+  align-items: flex-end;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding-top: 0.45rem;
+}
+
+.tax-account-filters {
+  align-items: center;
+  border-bottom: 1px solid var(--accounting-line);
+  display: flex;
+  gap: 0.15rem;
+}
+
+.tax-account-filters button {
+  border-bottom: 2px solid transparent;
+  color: #8a8882;
+  font-size: 0.68rem;
+  font-weight: 750;
+  margin-bottom: -1px;
+  min-height: 2.5rem;
+  padding: 0 0.55rem;
+}
+
+.tax-account-filters button span {
+  color: #b1aea7;
+  font-size: 0.62rem;
+  margin-left: 0.2rem;
+}
+
+.tax-account-filters button.is-active {
+  border-color: var(--accounting-accent);
+  color: var(--accounting-ink);
+}
+
+.tax-account-row {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--accounting-line);
+}
+
+.tax-account-row__main {
+  align-items: center;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 4.2rem minmax(0, 1fr) minmax(8rem, auto) minmax(7.4rem, auto);
+  min-height: 5.2rem;
+  padding: 0.85rem 1rem;
+}
+
+.tax-account-row__date {
+  border-right: 1px solid #e6e3dc;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.tax-account-row__date > span {
+  color: #30312e;
+  font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  font-size: 1.45rem;
+}
+
+.tax-account-row__date > small {
+  color: #898780;
+  font-size: 0.64rem;
+  margin-top: 0.2rem;
+  text-transform: capitalize;
+}
+
+.tax-account-row__amount {
+  color: #536a57;
+  font-size: 0.82rem;
+  font-weight: 750;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tax-account-row__amount.is-negative {
+  color: #292a27;
+}
+
+.tax-account-status {
+  align-items: center;
+  color: #6d6b65;
+  display: flex;
+  font-size: 0.66rem;
+  font-weight: 750;
+  gap: 0.45rem;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.tax-account-status > span {
+  background: #aaa69e;
+  border-radius: 50%;
+  height: 0.42rem;
+  width: 0.42rem;
+}
+
+.tax-account-status--booked { color: #526657; }
+.tax-account-status--booked > span { background: #6c8a72; }
+.tax-account-status--missing { color: #985744; }
+.tax-account-status--missing > span { background: var(--accounting-accent); }
+.tax-account-status--review { color: #80602f; }
+.tax-account-status--review > span { background: #c39247; }
+
+.tax-account-row__detail {
+  background: rgba(248, 246, 241, 0.78);
+  border-top: 1px solid #e8e5de;
+  padding: 1rem 1.15rem 1.1rem 6.2rem;
+}
+
+.tax-account-row__detail--warning {
+  align-items: center;
+  background: #faf3e4;
+  display: flex;
+  gap: 1.5rem;
+  justify-content: space-between;
+}
+
+.tax-account-bank-choice {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid #d6d2ca;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 3.8rem;
+  padding: 0.65rem 0.85rem;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.tax-account-bank-choice:hover,
+.tax-account-bank-choice--active {
+  background: #fffaf7;
+  border-color: var(--accounting-accent);
+}
+
+.tax-account-bank-choice__mark {
+  border: 1px solid #aaa69e;
+  border-radius: 50%;
+  height: 1rem;
+  position: relative;
+  width: 1rem;
+}
+
+.tax-account-bank-choice--active .tax-account-bank-choice__mark {
+  border-color: var(--accounting-accent);
+}
+
+.tax-account-bank-choice--active .tax-account-bank-choice__mark::after {
+  background: var(--accounting-accent);
+  border-radius: 50%;
+  content: "";
+  inset: 0.2rem;
+  position: absolute;
+}
+
+.tax-account-bank-choice strong {
+  display: block;
+  font-size: 0.75rem;
+}
+
+.tax-account-bank-choice small {
+  color: #77746e;
+  display: block;
+  font-size: 0.65rem;
+  margin-top: 0.15rem;
+}
+
+.tax-account-text-action {
+  color: #6f6c65;
+  font-size: 0.68rem;
+  font-weight: 750;
+  padding: 0.5rem;
+  text-decoration: underline;
+  text-decoration-color: #c8c4bc;
+  text-underline-offset: 4px;
+}
+
+.tax-account-skip-action {
+  border-bottom: 1px solid #c8c4bc;
+  color: #77746e;
+  font-size: 0.68rem;
+  font-weight: 750;
+  min-height: 2rem;
+  padding: 0.35rem 0.1rem;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.tax-account-skip-action:hover {
+  border-color: #b86e59;
+  color: #8b4d3d;
+}
+
+.tax-account-skip-action--restore {
+  border-color: #8b665a;
+  color: #8b4d3d;
+}
+
+.tax-account-row--skipped {
+  opacity: 0.82;
+}
+
+.tax-account-row--skipped .tax-account-row__detail {
+  background: #f3f1ec;
+}
+
+.tax-account-skipped-note {
+  align-items: center;
+  color: #77746e;
+  display: flex;
+  font-size: 0.7rem;
+  font-weight: 750;
+  gap: 0.45rem;
+}
+
+.tax-account-skipped-note > span {
+  background: #aaa69e;
+  border-radius: 50%;
+  height: 0.42rem;
+  width: 0.42rem;
+}
+
+.tax-account-editor {
+  background: #fff;
+  border: 1px solid #dcd8cf;
+  padding: 1rem;
+}
+
+.tax-account-field-label {
+  color: #77746e;
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+}
+
+.tax-account-input {
+  background: #fff;
+  border: 1px solid #d5d1c9;
+  color: #262724;
+  font-size: 0.8rem;
+  min-height: 3rem;
+  outline: none;
+  padding: 0.65rem 0.75rem;
+  width: 100%;
+}
+
+.tax-account-input:focus {
+  border-color: var(--accounting-accent);
+  box-shadow: 0 0 0 2px #f2dfd8;
+}
+
+.tax-account-input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.tax-account-input[type="number"]::-webkit-inner-spin-button,
+.tax-account-input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.tax-account-submit {
+  align-items: center;
+  background: rgba(255, 253, 249, 0.96);
+  border: 1px solid var(--accounting-line);
+  bottom: 1rem;
+  box-shadow: 0 0.8rem 2rem rgba(64, 48, 40, 0.08);
+  display: flex;
+  gap: 1.5rem;
+  justify-content: space-between;
+  padding: 1rem 1.15rem;
+  position: sticky;
+  z-index: 8;
+}
+
+.tax-account-complete {
+  border-bottom: 1px solid var(--accounting-line);
+  border-top: 1px solid var(--accounting-line);
+  margin: 2rem auto 0;
+  max-width: 52rem;
+  padding: 4.5rem 1.5rem;
+  text-align: center;
+}
+
+.tax-account-complete__mark {
+  align-items: center;
+  background: #e8eee7;
+  border-radius: 50%;
+  color: #58715e;
+  display: flex;
+  height: 3rem;
+  justify-content: center;
+  margin: 0 auto 1.5rem;
+  width: 3rem;
+}
+
+.tax-account-complete .accounting-kicker {
+  justify-content: center;
+}
+
+@media (max-width: 900px) {
+  .tax-account-balance {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+
+  .tax-account-balance__check {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .tax-account-row__main {
+    grid-template-columns: 3.7rem minmax(0, 1fr) minmax(7rem, auto);
+  }
+
+  .tax-account-status {
+    grid-column: 2 / -1;
+    justify-content: flex-start;
+    margin-top: -0.5rem;
+  }
+
+  .tax-account-row__detail {
+    padding-left: 5.7rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .tax-account-dropzone {
+    min-height: 23rem;
+    padding: 2.5rem 1.25rem;
+  }
+
+  .tax-account-source {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .tax-account-balance {
+    align-items: stretch;
+    gap: 0;
+    grid-template-columns: 1fr;
+    padding: 0;
+  }
+
+  .tax-account-balance > div:not(.tax-account-balance__check) {
+    align-items: baseline;
+    border-bottom: 1px solid var(--accounting-line);
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 0.8rem 0.2rem;
+  }
+
+  .tax-account-balance__operator {
+    display: none;
+  }
+
+  .tax-account-balance__check {
+    padding: 0.8rem 0.2rem;
+  }
+
+  .tax-account-review-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tax-account-filters {
+    overflow-x: auto;
+  }
+
+  .tax-account-filters button {
+    flex: 1 0 auto;
+  }
+
+  .tax-account-row__main {
+    gap: 0.7rem;
+    grid-template-columns: 3.1rem minmax(0, 1fr) auto;
+    padding: 0.8rem;
+  }
+
+  .tax-account-row__date > span {
+    font-size: 1.25rem;
+  }
+
+  .tax-account-row__amount {
+    align-self: start;
+    font-size: 0.72rem;
+    padding-top: 0.2rem;
+  }
+
+  .tax-account-status {
+    grid-column: 2 / -1;
+  }
+
+  .tax-account-row__detail {
+    padding: 1rem;
+  }
+
+  .tax-account-row__detail--warning {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tax-account-submit {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.8rem;
+    position: static;
+  }
+
+  .tax-account-submit .accounting-primary-action {
+    align-self: flex-start;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mcc-cookie-modal *,
   .mcc-login-modal *,
@@ -7123,5 +7712,9 @@ input[type="search"]::-ms-reveal {
   .mcc-route-loader * {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .tax-account-progress span {
+    animation-duration: 0.01ms !important;
   }
 }

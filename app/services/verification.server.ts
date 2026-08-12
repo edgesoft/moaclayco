@@ -35,6 +35,9 @@ const normalizeInput = (input: CreateVerificationInput) => {
     key: String(key).trim(),
     value: String(value).trim(),
   }));
+  const allowsLegacyAccount2050 = metadata.some(
+    (entry) => entry.key === "legacy2050Correction" && entry.value === "true"
+  );
   const allowsEmptyJournal =
     recordType === "vatReport" || recordType === "incomingBalance";
   const isEmptyNonPostingRecord =
@@ -69,7 +72,9 @@ const normalizeInput = (input: CreateVerificationInput) => {
     recordType,
     journalEntries: isEmptyNonPostingRecord
       ? []
-      : normalizeJournalEntries(input.journalEntries),
+      : normalizeJournalEntries(input.journalEntries, {
+          allowLegacyAccount2050: allowsLegacyAccount2050,
+        }),
     idempotencyKey: input.idempotencyKey?.trim() || undefined,
     metadata,
     files: (input.files ?? []).map(({ name, path }) => ({
@@ -153,6 +158,109 @@ export async function createVerification(input: CreateVerificationInput) {
     }
   }
   return createdVerification;
+}
+
+export async function createVerificationsBatch(inputs: CreateVerificationInput[]) {
+  if (inputs.length === 0) return [];
+  if (inputs.length > 250) {
+    throw new Error("För många verifikationer i samma registrering");
+  }
+
+  const normalizedInputs = inputs.map(normalizeInput);
+  const domains = new Set(normalizedInputs.map((input) => input.domain));
+  if (domains.size !== 1) {
+    throw new Error("Alla verifikationer i en registrering måste tillhöra samma domän");
+  }
+
+  const domain = normalizedInputs[0].domain;
+  const session = await mongoose.startSession();
+  let savedVerifications: any[] = [];
+
+  try {
+    await session.withTransaction(async () => {
+      const idempotencyKeys = normalizedInputs
+        .map((input) => input.idempotencyKey)
+        .filter((key): key is string => Boolean(key));
+      const existing = idempotencyKeys.length
+        ? await Verifications.find({
+            domain,
+            idempotencyKey: { $in: idempotencyKeys },
+          })
+            .session(session)
+            .exec()
+        : [];
+      const existingByKey = new Map(
+        existing.map((verification) => [verification.idempotencyKey, verification])
+      );
+
+      const latest = await Verifications.findOne({ domain })
+        .sort({ verificationNumber: -1 })
+        .select("verificationNumber")
+        .session(session)
+        .lean();
+      const latestNumber = Number((latest as any)?.verificationNumber ?? 0);
+      await VerificationCounters.updateOne(
+        { domain },
+        {
+          $max: { sequence: latestNumber },
+          $setOnInsert: { domain },
+        },
+        { upsert: true, session }
+      );
+
+      const result: any[] = [];
+      for (const normalized of normalizedInputs) {
+        const alreadySaved = normalized.idempotencyKey
+          ? existingByKey.get(normalized.idempotencyKey)
+          : null;
+        if (alreadySaved) {
+          result.push(alreadySaved);
+          continue;
+        }
+
+        const counter = await VerificationCounters.findOneAndUpdate(
+          { domain },
+          { $inc: { sequence: 1 } },
+          { new: true, session }
+        );
+        if (!counter) throw new Error("Kunde inte tilldela verifikationsnummer");
+        const documents = await Verifications.create(
+          [{ ...normalized, verificationNumber: counter.sequence }],
+          { session }
+        );
+        const created = documents[0];
+        result.push(created);
+        if (normalized.idempotencyKey) {
+          existingByKey.set(normalized.idempotencyKey, created);
+        }
+      }
+      savedVerifications = result;
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  if (savedVerifications.length !== normalizedInputs.length) {
+    throw new Error("Alla verifikationer kunde inte sparas");
+  }
+
+  const sourceYears = Array.from(
+    new Set(
+      normalizedInputs
+        .filter((input) => !input.metadata.some((entry) => entry.key === "IB"))
+        .map((input) => accountingYear(input.verificationDate))
+        .filter((year): year is number => Boolean(year))
+    )
+  );
+  await Promise.all(
+    sourceYears.map((sourceYear) =>
+      refreshIncomingBalanceForFollowingYear(domain, sourceYear).catch((error) =>
+        console.error("Kunde inte uppdatera nästa års ingående balans", error)
+      )
+    )
+  );
+
+  return savedVerifications;
 }
 
 const incomingBalanceQuery = (domain: string, year: number) => ({

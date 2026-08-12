@@ -24,7 +24,7 @@ const totals = (entries: Array<{ debit: number; credit: number }>) => ({
   credit: entries.reduce((sum, entry) => sum + entry.credit, 0),
 });
 
-test("IB carries equity accounts and maps legacy 2050 to 2012", () => {
+test("IB does not treat legacy counter-account 2050 as tax-account balance", () => {
   const entries = buildIncomingBalanceEntries([
     {
       journalEntries: [
@@ -37,11 +37,9 @@ test("IB carries equity accounts and maps legacy 2050 to 2012", () => {
 
   assert.deepEqual(entries, [
     { account: 1930, debit: 1_500, credit: 0 },
-    { account: 2012, debit: 0, credit: 840 },
     { account: 2018, debit: 0, credit: 1_500 },
-    { account: 2999, debit: 840, credit: 0 },
   ]);
-  assert.deepEqual(totals(entries), { debit: 2_340, credit: 2_340 });
+  assert.deepEqual(totals(entries), { debit: 1_500, credit: 1_500 });
 });
 
 test("existing IB is cleared when the recalculated balance is zero", async () => {

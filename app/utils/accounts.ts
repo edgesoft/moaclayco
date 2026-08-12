@@ -60,8 +60,9 @@ export const buildIncomingBalanceEntries = (
 
   for (const verification of verifications) {
     for (const entry of verification.journalEntries ?? []) {
-      // 2050 förekommer i äldre data. I enskild firma hör skattekontot till 2012.
-      const account = entry.account === 2050 ? 2012 : entry.account;
+      // 2050 förekommer som motkonto i äldre data och ska inte föras över
+      // som ett extra saldo på skattekontot 2012.
+      const account = entry.account;
       if (!balances.has(account)) continue;
       const changeInCents =
         Math.round(Number(entry.debit || 0) * 100) -

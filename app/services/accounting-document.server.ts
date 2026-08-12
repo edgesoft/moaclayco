@@ -2,6 +2,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import type { Responses } from "openai/resources/responses/responses";
 import { z } from "zod";
 import { getOpenAIClient } from "~/services/openapi.server";
+import { accounts as configuredAccountingAccounts } from "~/utils/accounts";
 import { normalizeJournalEntries } from "~/utils/verificationValidation";
 import {
   fallbackVerificationFileLabel,
@@ -69,6 +70,13 @@ const documentLabelByType: Record<AccountingDocumentAnalysis["documentType"], st
   other: "Bokföringsunderlag",
 };
 
+const configuredAccountingAccountNumbers = new Set(
+  configuredAccountingAccounts.map((account) => account.value)
+);
+const configuredAccountingAccountPrompt = configuredAccountingAccounts
+  .map((account) => account.label)
+  .join("; ");
+
 export const toAccountingDocumentLabel = (
   analysis: AccountingDocumentAnalysis,
   originalFileName: string
@@ -109,9 +117,14 @@ Grundregler:
   både debit och credit.
 - Använd fyrsiffriga BAS-konton. Använd aldrig konto 2050; verksamheten är en
   enskild firma.
-- Gissa inte om ett bankkonto är företagskonto eller privatkonto. Markera
-  sourceAccount som unknown och lägg en tydlig varning när dokumentet inte ger
-  tillräckligt stöd.
+- Använd endast konton som finns i Moa-appens kontoplan:
+  ${configuredAccountingAccountPrompt}.
+  Hitta inte på närliggande BAS-konton som 3041, 3051 eller 6540. Välj det
+  närmast riktiga kontot i listan och lägg en varning om kategorin är osäker.
+- Gissa inte om ett bankkonto är företagskonto eller privatkonto. För
+  bank_statement får du använda de uttryckliga identifierarna och bevisreglerna
+  i det separata bankutdragsavsnittet nedan. Markera annars sourceAccount som
+  unknown och lägg en tydlig varning när dokumentet inte ger tillräckligt stöd.
 - Ingående och utgående saldo i ett kontoutdrag är kontrollsummor, inte egna
   transaktioner.
 - Returnera alla poster i kontoutdraget. Hoppa inte över ränta, avgifter,
@@ -132,13 +145,77 @@ Vanliga konteringsregler för denna enskilda firma:
   2650 och 2012. Lägg aldrig till 1930 eller 2018 på samma entry. En separat
   rad "Inbetalning bokförd" blir en separat entry med sitt eget faktiska datum.
 - Leverantörsfaktura som är betald: debit relevant kostnadskonto och 2640 för
-  ingående moms, credit 1930 för totalen. Om den är obetald används 2440.
-- Inköp av lera, råmaterial och varor för produktion bokförs på 4000 om
-  dokumentet inte ger stöd för ett mer specifikt kostnadskonto.
+  ingående moms. Credit 1930 bara när underlaget identifierar betalning från
+  företagskontot. Om betalningen är genomförd men betalningskontot inte kan
+  identifieras, använd credit 2018, sourceAccount unknown och en tydlig varning
+  om att privat utlägg behöver verifieras. Om fakturan är obetald används 2440.
+- Om ett dokument uttryckligen säger att det inte är ett underlag för moms får
+  2640 aldrig användas, även om dokumentet visar en rad kallad moms eller tax.
+  Bokför hela bruttobeloppet på relevant kostnadskonto och lägg en varning om
+  att giltigt momsunderlag behöver hämtas separat.
+- Inköp av lera, öronstickare, smyckesdelar, råmaterial och andra komponenter
+  som förbrukas eller byggs in i produkter bokförs på 4000. Använd inte 5410 för
+  sådana förbrukade material. 5410 används för varaktiga verktyg, möbler och
+  inventarier som används i verksamheten men inte byggs in i det som säljs.
 - Frakt på samma leverantörsfaktura som ett material- eller varuinköp ska ingå
   i 4000 i detta bokföringsflöde; skapa inte en separat 57xx-rad för frakten.
-- Försäljningsfaktura: credit relevant försäljningskonto och 2611 för utgående
-  moms, debit 1510 om obetald eller 1930 om dokumentet visar betalning.
+- Webbhotell, domännamn, e-postabonnemang och liknande digitala tjänster bokförs
+  på 6990 i Moa-appens förenklade kontoplan; använd inte 6540.
+- Försäljningsfaktura från Moa Clay Co: använd alltid 3001 för den momspliktiga
+  försäljningen och 2611 för utgående moms. Använd inte 3041 eller 3051. Debit
+  1510 om fakturan är obetald eller 1930 om dokumentet visar betalning.
+- För kvitton ska dokumentets tryckta totalsumma och faktiska momsuppdelning
+  följas. Räkna inte om hela köpet som 25 procent om kvittot visar flera
+  momssatser, rabatter eller en annan momsberäkning.
+- När ett kvitto bara visar ett maskerat kort och inte identifierar vilket konto
+  som belastats, använd sourceAccount unknown och credit 2018 som försiktig
+  hantering av privat utlägg. Använd credit 1930 endast när företagskontot eller
+  ett känt företagskort uttryckligen kan identifieras. Lägg alltid en varning om
+  att betalningskontot behöver verifieras.
+- En banktransaktionsdetalj är inte ett kvitto och ger inte i sig rätt att boka
+  ingående moms. Klassificera den som bank_statement och använd inte 2640 utan
+  ett separat kvitto eller en separat faktura.
+- Om kvittorader är överstrukna, markerade eller färgmarkerade utan en tydlig
+  förklaring ska hela den tryckta kvittosumman användas. Sänk confidence och
+  varna om att markeringarnas betydelse behöver granskas; exkludera inte rader
+  tyst.
+
+Kontoidentifiering för vanliga bankutdrag (gäller endast bank_statement):
+- En bankutskrift med rubriken "Detaljer om transaktionen" är också en
+  bank_statement, även när dokumentet bara innehåller en transaktion.
+- sourceAccount beskriver kontot som utdraget eller transaktionsdetaljen gäller,
+  inte mottagarens eller motpartens konto.
+- Moa Clay Co:s företagskonto hos SEB är 5722 32 953 76, normaliserat
+  57223295376. Samma konto kan visas som IBAN SE84 5000 0000 0572 2329 5376,
+  normaliserat SE8450000000057223295376. När något av dessa identifierare syns
+  är sourceAccount business_bank och kontoraden för det berörda bankkontot är
+  BAS 1930.
+- Moa Gustafssons privata SEB-konto är 5130 00 238 99, normaliserat
+  51300023899. När det identifieras som kontot som utdraget eller
+  transaktionsdetaljen gäller är sourceAccount private_bank och motkontot för
+  ägarens privata betalning är BAS 2018.
+- Ett äldre privat SEB-konto för Moa Gustafsson är 5709 00 121 15, normaliserat
+  57090012115. När detta konto syns i en transaktionsdetalj är sourceAccount
+  private_bank och betalningen bokförs mot BAS 2018.
+- Ett utdrag med rubriken "Moaclayco" och företagskontots nummer gäller
+  företagskontot för samtliga transaktionsrader. Ett personnamn, Stripe-poster
+  eller annan verksamhetsaktivitet är bara stödbevis; det exakta kontonumret
+  väger tyngst.
+- I en transaktionsdetalj anger "Från konto" vilket konto en utgående betalning
+  gäller. Vid en inkommande transaktion kan "Till konto" eller motsvarande IBAN
+  identifiera kontot som transaktionen gäller. Läs alltid beloppets tecken och
+  fältrubrikerna tillsammans.
+- En positiv transaktion på företagskontot ska debitera 1930; en negativ ska
+  kreditera 1930. En negativ betalning från privatkontot för verksamhetens
+  räkning ska kreditera 2018.
+- Betalning från privatkontot till Skatteverket med meddelandet "Inbetalning till
+  200006116446" bokförs debit 2012 och credit 2018. sourceAccount är
+  private_bank eftersom transaktionsdetaljen gäller privatkontot.
+- Överföring från företagskontot 57223295376 till privatkontot 51300023899 är
+  eget uttag: debit 2013 och credit 1930. sourceAccount är business_bank.
+- Använd inte dessa kända konton eller bankutdragsregler för sales_invoice,
+  supplier_invoice eller receipt. De dokumenttyperna ska även fortsättningsvis
+  tolkas enbart från sitt eget innehåll och de vanliga konteringsreglerna ovan.
 
 Använd dokumentets faktiska innehåll som källa. Om kontovalet inte är säkert,
 välj det mest rimliga kontot, sänk confidence och förklara osäkerheten i warnings.
@@ -214,6 +291,46 @@ const assertTaxAccountPattern = (
   }
 };
 
+const assertBankStatementAccountPattern = (
+  entry: AccountingEntry,
+  entryIndex: number
+) => {
+  const bankAccountBySource = {
+    business_bank: "1930",
+    private_bank: "2018",
+  } as const;
+  const expectedAccount =
+    entry.sourceAccount === "business_bank" ||
+    entry.sourceAccount === "private_bank"
+      ? bankAccountBySource[entry.sourceAccount]
+      : null;
+  const fail = (message: string): never => {
+    throw new Error(`Entry ${entryIndex + 1} ${message}`);
+  };
+
+  if (entry.sourceAccount !== "unknown" && !expectedAccount) {
+    fail(`has invalid source account ${entry.sourceAccount} for a bank statement`);
+  }
+
+  if (!expectedAccount) return;
+
+  const statementLine = entry.accounts.find(
+    (line) => line.account === expectedAccount
+  );
+  if (!statementLine) {
+    throw new Error(
+      `Entry ${entryIndex + 1} identifies ${entry.sourceAccount} but does not use account ${expectedAccount}`
+    );
+  }
+
+  if (entry.total > 0 && statementLine.debit <= 0) {
+    fail(`has a positive amount that does not debit account ${expectedAccount}`);
+  }
+  if (entry.total < 0 && statementLine.credit <= 0) {
+    fail(`has a negative amount that does not credit account ${expectedAccount}`);
+  }
+};
+
 export const validateAccountingAnalysis = (
   analysis: AccountingDocumentAnalysis
 ) => {
@@ -230,6 +347,12 @@ export const validateAccountingAnalysis = (
         );
       }
       accountNumbers.add(line.account);
+
+      if (!configuredAccountingAccountNumbers.has(Number(line.account))) {
+        throw new Error(
+          `Entry ${entryIndex + 1} uses account ${line.account}, which is not configured in the app`
+        );
+      }
 
       if ((line.debit > 0 && line.credit > 0) || (line.debit === 0 && line.credit === 0)) {
         throw new Error(
@@ -257,6 +380,19 @@ export const validateAccountingAnalysis = (
 
     if (analysis.documentType === "tax_account_statement") {
       assertTaxAccountPattern(entry, entryIndex);
+    }
+
+    if (analysis.documentType === "bank_statement") {
+      assertBankStatementAccountPattern(entry, entryIndex);
+    }
+
+    if (
+      analysis.documentType === "sales_invoice" &&
+      !entry.accounts.some((line) => line.account === "3001")
+    ) {
+      throw new Error(
+        `Entry ${entryIndex + 1} does not use the configured sales account 3001`
+      );
     }
 
     const roundedTotal = roundCurrency(Math.abs(entry.total));
@@ -350,7 +486,7 @@ export const interpretAccountingDocument = async ({
       },
     ],
     ...inferenceOptions,
-    max_output_tokens: 12_000,
+    max_output_tokens: 32_000,
     store: false,
     text: {
       format: zodTextFormat(accountingDocumentSchema, "accounting_document"),
