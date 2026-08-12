@@ -7760,3 +7760,232 @@ input[type="search"]::-ms-reveal {
     animation-duration: 0.01ms !important;
   }
 }
+
+/* Mobil läsbarhet: ett isolerat lager som kan revertas utan desktop-påverkan. */
+@media (max-width: 767px) {
+  .mcc-site-header .mcc-scroll-brand__name {
+    font-size: 1.06rem;
+  }
+
+  .mcc-site-header .mcc-scroll-brand__collection {
+    font-size: 0.48rem;
+  }
+
+  .mcc-navigation-action {
+    font-size: 0.94rem;
+  }
+
+  .mcc-navigation-action small,
+  .mcc-navigation-collection-copy small {
+    font-size: 0.58rem;
+  }
+
+  .mcc-navigation-collection-copy strong {
+    font-size: clamp(1.18rem, 4.9vw, 1.42rem);
+  }
+
+  .landing-page .mcc-kicker,
+  .collection-page .mcc-kicker {
+    font-size: 0.73rem;
+  }
+
+  .landing-page .mcc-hero__intro,
+  .landing-page .mcc-latest .mcc-section-heading > p {
+    font-size: 1.02rem;
+  }
+
+  .landing-page .mcc-button,
+  .landing-page .mcc-collection-scene__link,
+  .landing-page .mcc-social-link {
+    font-size: 0.75rem;
+  }
+
+  .landing-page .mcc-hero-card small,
+  .landing-page .mcc-product-journey__label,
+  .landing-page .mcc-product-journey__step > span {
+    font-size: 0.64rem;
+  }
+
+  .landing-page .mcc-product-journey__step > p:not(.mcc-kicker),
+  .landing-page .mcc-collection-scene__description {
+    font-size: 0.96rem;
+  }
+
+  .landing-page .mcc-collection-scene__copy > strong {
+    font-size: 1.03rem;
+  }
+
+  .landing-page .mcc-product h3 {
+    font-size: 1.28rem;
+  }
+
+  .landing-page .mcc-product__copy p {
+    font-size: 0.88rem;
+  }
+
+  .landing-footer .mcc-footer-follow,
+  .landing-footer .mcc-footer-meta {
+    font-size: 0.76rem;
+  }
+
+  .landing-footer .mcc-footer-social__copy > span {
+    font-size: 1.16rem;
+  }
+
+  .landing-footer .mcc-footer-social__copy small {
+    font-size: 0.7rem;
+  }
+
+  .collection-page .mcc-collection-back,
+  .collection-page .mcc-collection-hero__footer a {
+    font-size: 0.73rem;
+  }
+
+  .collection-page .mcc-collection-hero__copy > strong {
+    font-size: 1.22rem;
+  }
+
+  .collection-page .mcc-collection-hero__copy > p:not(.mcc-kicker) {
+    font-size: 1.04rem;
+  }
+
+  .collection-page .mcc-collection-hero__footer > span {
+    font-size: 0.9rem;
+  }
+
+  .collection-page .mcc-collection-hero__media figcaption,
+  .collection-page .mcc-shop-item__gallery-meta {
+    font-size: 0.62rem;
+  }
+
+  .collection-page .mcc-shop-item__copy .mcc-kicker {
+    font-size: 0.67rem;
+  }
+
+  .collection-page .mcc-shop-item__heading > p {
+    font-size: 0.94rem;
+  }
+
+  .collection-page .mcc-shop-item__description {
+    font-size: 1rem;
+  }
+
+  .collection-page .mcc-shop-item__stock {
+    font-size: 0.66rem;
+  }
+
+  .collection-page .mcc-shop-item__details summary,
+  .collection-page .mcc-shop-item__actions > button {
+    font-size: 0.73rem;
+  }
+
+  .collection-page .mcc-shop-item__details li,
+  .collection-page .mcc-shop-item__additions label {
+    font-size: 0.92rem;
+  }
+
+  .collection-page .mcc-shop-item__additions strong {
+    font-size: 0.78rem;
+  }
+
+  .collection-page .mcc-shop-item__actions > button span:last-child {
+    font-size: 0.9rem;
+  }
+
+  .mcc-cart-page .mcc-cart-back,
+  .mcc-purchase-page .mcc-purchase-back {
+    font-size: 0.75rem;
+  }
+
+  .mcc-cart-page .mcc-cart-kicker,
+  .mcc-purchase-page .mcc-purchase-kicker {
+    font-size: 0.69rem;
+  }
+
+  .mcc-cart-page .mcc-cart-hero__title > div > p:last-child,
+  .mcc-purchase-page .mcc-purchase-hero__copy > p:last-child {
+    font-size: 0.98rem;
+  }
+
+  .mcc-cart-page .mcc-cart-steps li,
+  .mcc-purchase-page .mcc-purchase-steps li {
+    font-size: 0.59rem;
+  }
+
+  .mcc-cart-page .mcc-cart-steps li span,
+  .mcc-purchase-page .mcc-purchase-steps li span {
+    font-size: 0.82rem;
+  }
+
+  .mcc-cart-page .mcc-cart-section-heading > span,
+  .mcc-purchase-page .mcc-purchase-section-heading > span {
+    font-size: 0.65rem;
+  }
+
+  .mcc-cart-page .mcc-cart-product__eyebrow {
+    font-size: 0.63rem;
+  }
+
+  .mcc-cart-page .mcc-cart-product__name {
+    font-size: 1.55rem;
+  }
+
+  .mcc-cart-page .mcc-cart-product__unit-price,
+  .mcc-cart-page .mcc-cart-totals > div,
+  .mcc-cart-page .mcc-cart-delivery__intro {
+    font-size: 0.84rem;
+  }
+
+  .mcc-cart-page .mcc-cart-additions > p,
+  .mcc-cart-page .mcc-cart-discount > span,
+  .mcc-cart-page .mcc-cart-field > span {
+    font-size: 0.65rem;
+  }
+
+  .mcc-cart-page .mcc-cart-additions li,
+  .mcc-cart-page .mcc-cart-discount__status p,
+  .mcc-cart-page .mcc-cart-freight-note > div:first-child,
+  .mcc-cart-page .mcc-cart-delivery__footer > p {
+    font-size: 0.74rem;
+  }
+
+  .mcc-cart-page .mcc-cart-input {
+    font-size: 1rem;
+  }
+
+  .mcc-cart-page .mcc-cart-checkout,
+  .mcc-purchase-page button.mcc-checkout-submit[type="submit"],
+  .mcc-purchase-page .mcc-purchase-action {
+    font-size: 0.72rem;
+  }
+
+  .mcc-purchase-page .mcc-purchase-test-note,
+  .mcc-purchase-page .mcc-checkout-placeholder p,
+  .mcc-purchase-page .mcc-checkout-error,
+  .mcc-purchase-page .mcc-checkout-assurance,
+  .mcc-purchase-page .mcc-order-result__note {
+    font-size: 0.74rem;
+  }
+
+  .mcc-purchase-page .mcc-checkout-terms,
+  .mcc-purchase-page .mcc-purchase-totals > div {
+    font-size: 0.82rem;
+  }
+
+  .mcc-purchase-page .mcc-purchase-item__copy h3 {
+    font-size: 1.22rem;
+  }
+
+  .mcc-purchase-page .mcc-purchase-item__copy p,
+  .mcc-purchase-page .mcc-purchase-item__copy li {
+    font-size: 0.7rem;
+  }
+
+  .mcc-purchase-page .mcc-order-result__label {
+    font-size: 0.65rem;
+  }
+
+  .mcc-purchase-page .mcc-order-result__message {
+    font-size: 0.94rem;
+  }
+}
