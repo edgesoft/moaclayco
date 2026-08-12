@@ -223,7 +223,7 @@ const Report = ({
   totalLabel,
   verifications,
   account,
-}: ReportProps): JSX.Element => {
+}: ReportProps): React.ReactElement => {
   const totalAmount = Math.abs(sumAmounts(verifications, account));
 
   return (

@@ -52,8 +52,8 @@ export const loader: LoaderFunction = async ({ params, request }) => {
   );
 };
 
-export const meta: MetaFunction = ({ data }) => {
-  const { collection } = data as ItemLoaderProps;
+export const meta: MetaFunction = ({ loaderData }) => {
+  const { collection } = loaderData as ItemLoaderProps;
   const socialImage = imageWithWidth(collection.image, 1200);
 
   return [
@@ -100,7 +100,7 @@ function Product({
   const handledErrorAttemptRef = useRef<string | null>(null);
   const preloadRef = useRef<HTMLImageElement[]>([]);
   const retryCountsRef = useRef<Map<string, number>>(new Map());
-  const retryTimeoutRef = useRef<number>();
+  const retryTimeoutRef = useRef<number | undefined>(undefined);
   const { addItem, getItem } = useCart();
   const reduceMotion = useReducedMotion();
   const activeImage = images[currentIndex];

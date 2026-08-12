@@ -52,7 +52,7 @@ const Magnifier: React.FC<MagnifierProps> = ({
   close,
   images,
   onIndexChange,
-}): JSX.Element | null => {
+}): React.ReactElement | null => {
   const [isInteracting, setIsInteracting] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [portalNode, setPortalNode] = useState<HTMLElement | null>(null);

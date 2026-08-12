@@ -496,7 +496,7 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
   );
 }
 
-const CartComponent = (): JSX.Element | null => {
+const CartComponent = (): React.ReactElement | null => {
   const { items } = useCart();
   const totalItems = useMemo(
     () =>
@@ -527,7 +527,7 @@ const CartComponent = (): JSX.Element | null => {
   );
 };
 
-const Header = (): JSX.Element | null => {
+const Header = (): React.ReactElement | null => {
   const data = useLoaderData<IndexLoadingType>();
   const location = useLocation();
   const reduceMotion = useReducedMotion();

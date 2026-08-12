@@ -31,10 +31,10 @@ const verificationNumberFrom = (verification: unknown) => {
   return typeof verificationNumber === "number" ? verificationNumber : 0;
 };
 
-export const loader: LoaderFunction = async ({ request }) => {
+export const loader: LoaderFunction = async ({ request, url }) => {
   const user = await auth.isAuthenticated(request, { failureRedirect: "/login" });
   const domain = getDomain(request);
-  const pathname = normalizePathname(new URL(request.url).pathname);
+  const pathname = normalizePathname(url.pathname);
   const isOverview = pathname === "/admin/verifications";
   const needsLatestVerificationNumber = pathname.endsWith("/new");
   const currentYearMonth = accountingMonthKey(new Date()) as string;

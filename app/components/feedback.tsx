@@ -19,7 +19,7 @@ const Feedback: React.FC<FeedbackProp> = ({
   onHandleClick,
   forceInvisble = false,
   visibleInMillis,
-}): JSX.Element | null => {
+}): React.ReactElement | null => {
   const [value, setValue] = useState<string>();
   const reduceMotion = useReducedMotion();
 

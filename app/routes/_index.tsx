@@ -44,7 +44,7 @@ export const loader: LoaderFunction = async ({ request }) => {
 };
 
 export const meta: MetaFunction = ({ matches }) => {
-  const rootData = matches[0].data as IndexProps;
+  const rootData = matches[0].loaderData as IndexProps;
   const domain = getDomain(rootData.hostname);
   const theme = themes[domain?.domain ?? "moaclayco"];
 

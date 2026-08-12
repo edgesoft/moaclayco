@@ -89,8 +89,9 @@ export let loader: LoaderFunction = async ({ request, params }) => {
   return json({ order, intent: null, verification });
 };
 
-export let meta: MetaFunction = ({ data }) => {
-  const orderId = (data as OrderDetailLoaderData | undefined)?.order?._id ?? "okänd";
+export let meta: MetaFunction = ({ loaderData }) => {
+  const orderId =
+    (loaderData as OrderDetailLoaderData | undefined)?.order?._id ?? "okänd";
   return [
     {
       title: `Moa Clay Collection (order: ${orderId})`,

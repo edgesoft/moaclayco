@@ -76,7 +76,7 @@ function CollectionImageUpload({
   onStateChange: (summary: UploadSummary) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const requestRef = useRef<XMLHttpRequest>();
+  const requestRef = useRef<XMLHttpRequest | undefined>(undefined);
   const objectUrlsRef = useRef(new Set<string>());
   const [dragging, setDragging] = useState(false);
   const [image, setImage] = useState<ImageDraft | null>(() =>

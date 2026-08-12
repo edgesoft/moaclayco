@@ -21,7 +21,7 @@ const isPublicStorefrontPath = (pathname: string) => {
   return false;
 };
 
-const Footer = (): JSX.Element | null => {
+const Footer = (): React.ReactElement | null => {
   const theme = useTheme();
   const location = useLocation();
 

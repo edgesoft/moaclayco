@@ -85,8 +85,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 };
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
-  const theme = themes[data?.domain.domain ?? "moaclayco"];
+export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
+  const theme = themes[loaderData?.domain.domain ?? "moaclayco"];
   return [
     { title: `Betalning — ${theme.longName}` },
     { name: "description", content: `Slutför din beställning hos ${theme.longName}` },

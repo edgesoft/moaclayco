@@ -9,7 +9,7 @@ const AdditionalCartItem: React.FC<AdditionalItemProps> = ({
   item,
   handleSwitch,
   additionalIndex,
-}): JSX.Element => {
+}): React.ReactElement => {
   const [on, setOn] = useState(false);
   return (
     <span

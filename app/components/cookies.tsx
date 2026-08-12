@@ -13,7 +13,7 @@ function CookieIllustration() {
   );
 }
 
-const Cookies = (): JSX.Element | null => {
+const Cookies = (): React.ReactElement | null => {
   const [accepted, setAccepted, loaded] = useLocalStorage<boolean>(
     "accept-cookies",
     false

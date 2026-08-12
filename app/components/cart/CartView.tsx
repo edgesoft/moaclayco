@@ -1,7 +1,5 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { useFetcher } from "react-router";
-import { useNavigate } from "react-router-dom";
-import { HashLink } from "react-router-hash-link";
+import { Link, useFetcher, useNavigate } from "react-router";
 import { motion, useReducedMotion } from "framer-motion";
 import { useCart } from "react-use-cart";
 import Feedback from "~/components/feedback";
@@ -254,10 +252,10 @@ export default function CartView() {
       {cartTotal > 0 ? (
         <main className="mcc-cart-shell">
           <header className="mcc-cart-hero">
-            <HashLink className="mcc-cart-back" to="/">
+            <Link className="mcc-cart-back" to="/">
               <span aria-hidden="true">←</span>
               Fortsätt handla
-            </HashLink>
+            </Link>
 
             <div className="mcc-cart-hero__title">
               <div>
@@ -329,7 +327,7 @@ export default function CartView() {
                         ease: [0.22, 1, 0.36, 1],
                       }}
                     >
-                      <HashLink
+                      <Link
                         aria-label={`Visa ${item.headline}`}
                         className="mcc-cart-product__media"
                         to={`/collections/${item.collectionRef}#${item.id}`}
@@ -338,18 +336,18 @@ export default function CartView() {
                           alt={String(item.headline)}
                           src={String(item.image)}
                         />
-                      </HashLink>
+                      </Link>
 
                       <div className="mcc-cart-product__copy">
                         <p className="mcc-cart-product__eyebrow">
                           Ur kollektionen
                         </p>
-                        <HashLink
+                        <Link
                           className="mcc-cart-product__name"
                           to={`/collections/${item.collectionRef}#${item.id}`}
                         >
                           {item.headline}
-                        </HashLink>
+                        </Link>
                         <p className="mcc-cart-product__unit-price">
                           {item.price} SEK / st
                         </p>
