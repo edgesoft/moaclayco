@@ -5,6 +5,11 @@ import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
 import { auth } from "~/services/auth.server";
 import { getDomain } from "~/utils/domain";
+import {
+  MAX_STANDARD_FORM_REQUEST_SIZE,
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 const ItemSchema = z.object({
   amount: z
@@ -51,7 +56,21 @@ export const ItemAction: ActionFunction = async ({ request, params }) => {
   });
   if (!collection) return redirect("/");
 
-  const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(
+      request,
+      MAX_STANDARD_FORM_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json(
+        { errors: { form: "Formuläret är för stort" } },
+        { status: 413 }
+      );
+    }
+    throw error;
+  }
   const result = Object.fromEntries(
     Array.from(formData.entries()).map(([key, value]) => [key, value.toString()])
   );

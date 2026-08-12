@@ -8,6 +8,11 @@ import { auth } from "~/services/auth.server";
 import { s3Client } from "~/services/s3.server";
 import type { CollectionProps } from "~/types";
 import { getDomain } from "~/utils/domain";
+import {
+  MAX_STANDARD_FORM_REQUEST_SIZE,
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 const CollectionSchema = z.object({
   headline: z.string().trim().min(1, "Fyll i ett namn"),
@@ -60,7 +65,21 @@ export const CollectionAction: ActionFunction = async ({ params, request }) => {
   const domain = getDomain(request);
   if (!domain) return json({ errors: { form: "Okänd domän" } }, { status: 400 });
 
-  const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(
+      request,
+      MAX_STANDARD_FORM_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json(
+        { errors: { form: "Formuläret är för stort" } },
+        { status: 413 }
+      );
+    }
+    throw error;
+  }
   const intent = formData.get("intent")?.toString();
   const currentCollection = (params.collection
     ? await Collections.findOne({

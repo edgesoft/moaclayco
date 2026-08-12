@@ -8,6 +8,11 @@ import { s3Client } from "~/services/s3.server";
 import type { ItemProps } from "~/types";
 import { getDomain } from "~/utils/domain";
 import { itemImageStorageKey } from "~/utils/itemImageStorage.server";
+import {
+  MAX_STANDARD_FORM_REQUEST_SIZE,
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 const AWS_ITEM_PATH = process.env.AWS_ITEM_PATH;
 
@@ -74,7 +79,21 @@ export const action: ActionFunction = async ({ request }) => {
   const domain = getDomain(request);
   if (!domain) return json({ error: "Okänd domän." }, { status: 400 });
 
-  const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(
+      request,
+      MAX_STANDARD_FORM_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json(
+        { error: "Formuläret är för stort.", success: false },
+        { status: 413 }
+      );
+    }
+    throw error;
+  }
   const imageName = formData.get("imageName")?.toString();
   const id = formData.get("id")?.toString() || null;
   const collection = formData.get("collection")?.toString();

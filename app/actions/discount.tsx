@@ -7,6 +7,11 @@ import { getDomain } from "~/utils/domain";
 import { auth } from "~/services/auth.server";
 import { parseStockholmDateTime } from "~/utils/accountingDates";
 import { formSchema } from "~/schemas/discount-form";
+import {
+  MAX_STANDARD_FORM_REQUEST_SIZE,
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 const objectFromFormData = (formData: FormData) => {
   const obj: { [key: string]: string | File } = {};
@@ -22,7 +27,21 @@ const objectFromFormData = (formData: FormData) => {
 
 let action: ActionFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
-  let formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(
+      request,
+      MAX_STANDARD_FORM_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json(
+        { errors: { form: "Formuläret är för stort" } },
+        { status: 413 }
+      );
+    }
+    throw error;
+  }
   let action = formData.get("action");
   const domain = getDomain(request)
 
