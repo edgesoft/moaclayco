@@ -36,10 +36,56 @@ test("a touch user can open a Collection", async ({ page }) => {
   const galleryZoom = page.locator(
     ".mcc-shop-item__gallery-meta .mcc-shop-item__zoom"
   ).first();
+  const galleryDot = page.locator(
+    ".mcc-shop-item__gallery-meta .mcc-shop-item__dots button"
+  ).first();
   const galleryZoomBox = await galleryZoom.boundingBox();
+  const galleryDotBox = await galleryDot.boundingBox();
   expect(galleryZoomBox).not.toBeNull();
+  expect(galleryDotBox).not.toBeNull();
   expect(galleryZoomBox!.height).toBeGreaterThanOrEqual(42);
   expect(galleryZoomBox!.width).toBeGreaterThanOrEqual(42);
+  expect(galleryDotBox!.height).toBeGreaterThanOrEqual(42);
+  expect(galleryDotBox!.width).toBeGreaterThanOrEqual(42);
+  await expectNoHorizontalOverflow(page);
+});
+
+test("collection gallery controls are touch-friendly", async ({ page }) => {
+  await page.goto("/collections/hairpins");
+  await acceptCookies(page);
+
+  const firstGallery = page.locator(".mcc-shop-item").first();
+  const controls = firstGallery.locator(
+    ".mcc-shop-item__dots button, .mcc-shop-item__zoom, .mcc-shop-item__arrows button"
+  );
+  await expect(controls).toHaveCount(6);
+
+  for (let index = 0; index < (await controls.count()); index += 1) {
+    const controlBox = await controls.nth(index).boundingBox();
+    expect(controlBox).not.toBeNull();
+    expect(controlBox!.height).toBeGreaterThanOrEqual(42);
+    expect(controlBox!.width).toBeGreaterThanOrEqual(42);
+  }
+
+  await firstGallery
+    .getByRole("button", { name: /Nästa bild av/ })
+    .tap();
+  await expect(
+    firstGallery.getByRole("button", { name: /Visa bild 2 av/ })
+  ).toHaveAttribute("aria-current", "true");
+
+  await firstGallery
+    .getByRole("button", { name: /Visa .* i större format/ })
+    .tap();
+  const viewerControls = page.locator(".mcc-image-viewer__toolbar button");
+  await expect(viewerControls).toHaveCount(5);
+  for (let index = 0; index < (await viewerControls.count()); index += 1) {
+    const controlBox = await viewerControls.nth(index).boundingBox();
+    expect(controlBox).not.toBeNull();
+    expect(controlBox!.height).toBeGreaterThanOrEqual(42);
+    expect(controlBox!.width).toBeGreaterThanOrEqual(42);
+  }
+  await page.getByRole("button", { name: "Stäng stor bild" }).last().tap();
   await expectNoHorizontalOverflow(page);
 });
 
