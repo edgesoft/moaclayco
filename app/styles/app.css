@@ -3,7 +3,17 @@
 }
 
 html {
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
+  overscroll-behavior-x: none;
   scroll-behavior: smooth;
+}
+
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .landing-page {
@@ -1923,12 +1933,14 @@ input[type="search"]::-ms-reveal {
   display: flex;
   height: 5rem;
   justify-content: space-between;
-  left: 0;
+  left: var(--mcc-visible-viewport-left, 0px);
+  max-width: 100%;
   overflow: hidden;
   padding: 0 clamp(1rem, 3vw, 2.5rem);
   position: fixed;
-  right: 0;
-  top: 0;
+  right: auto;
+  top: var(--mcc-visible-viewport-top, 0px);
+  width: var(--mcc-visible-viewport-width, 100%);
   z-index: 40;
 }
 
@@ -2024,6 +2036,7 @@ input[type="search"]::-ms-reveal {
   font-style: italic;
   letter-spacing: -0.035em;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .mcc-scroll-brand__collection {
@@ -4581,7 +4594,11 @@ input[type="search"]::-ms-reveal {
   );
   background-size: 5px 5px;
   color: var(--mcc-cart-ink);
+  max-width: 100%;
   min-height: 100vh;
+  overflow-x: hidden;
+  overflow-x: clip;
+  width: 100%;
 }
 
 .mcc-cart-page,
@@ -5286,11 +5303,17 @@ input[type="search"]::-ms-reveal {
 
   .mcc-cart-hero__title {
     align-items: start;
+    gap: 0.75rem;
+  }
+
+  .mcc-cart-hero__title > div {
+    min-width: 0;
   }
 
   .mcc-cart-hero h1 {
-    font-size: clamp(4rem, 21vw, 5.6rem);
+    font-size: clamp(3.25rem, 17vw, 4.8rem);
     margin-bottom: 1.15rem;
+    white-space: nowrap;
   }
 
   .mcc-cart-hero__title > div > p:last-child {
@@ -5299,8 +5322,9 @@ input[type="search"]::-ms-reveal {
   }
 
   .mcc-cart-hero__count {
-    font-size: 3.25rem;
-    padding-top: 2.4rem;
+    flex: 0 0 auto;
+    font-size: clamp(2.5rem, 12vw, 3.1rem);
+    padding-top: 2.2rem;
   }
 
   .mcc-cart-steps {
@@ -5322,6 +5346,17 @@ input[type="search"]::-ms-reveal {
 
   .mcc-cart-section-heading h2 {
     font-size: 2.1rem;
+  }
+
+  .mcc-cart-summary .mcc-cart-section-heading {
+    display: grid;
+    gap: 0.5rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .mcc-cart-summary .mcc-cart-section-heading h2 {
+    font-size: clamp(1.65rem, 8.5vw, 2rem);
+    min-width: 0;
   }
 
   .mcc-cart-product {
@@ -6391,6 +6426,13 @@ input[type="search"]::-ms-reveal {
 }
 
 .mcc-cookie-modal {
+  z-index: 80;
+}
+
+.mcc-cookie-hydration-guard {
+  inset: 0;
+  pointer-events: auto;
+  position: fixed;
   z-index: 80;
 }
 

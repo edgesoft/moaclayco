@@ -14,6 +14,8 @@
     "start": "react-router-serve ./build/server/index.js",
     "test": "tsx --import=./tests/test-environment.mjs --test tests/accounting-balances.test.ts tests/accounting-document.test.ts tests/checkout-payment.test.ts tests/database-connection.test.ts tests/discount-form.test.ts tests/email-provider.test.ts tests/google-auth.test.ts tests/image-processing.test.ts tests/item-image-storage.test.ts tests/loader-data.test.ts tests/openai-responses.test.ts tests/order-cookie.test.ts tests/order-email.test.tsx tests/request-body.test.ts tests/root-revalidation.test.ts tests/stripe-webhook.test.ts tests/tax-account-reconciliation.test.ts tests/verification-file-content.test.ts tests/verification-files.test.ts tests/verification-schema.test.ts tests/verification-validation.test.ts",
     "test:e2e:accounting": "tsx --test tests/accounting-document.e2e.test.ts",
+    "test:e2e:mobile": "playwright test --config=playwright.mobile.config.ts",
+    "test:e2e:mobile:list": "playwright test --config=playwright.mobile.config.ts --list",
     "test:e2e:stripe": "node tools/run-stripe-e2e.mjs",
     "test:e2e:stripe:run": "tsx --test tests/stripe-webhook.e2e.test.ts",
     "typecheck": "react-router typegen && tsc"
@@ -48,6 +50,7 @@
   "devDependencies": {
     "@eslint-react/eslint-plugin": "^5.18.4",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.1",
     "@react-router/dev": "^8.3.0",
     "@react-router/fs-routes": "^8.3.0",
     "@tailwindcss/vite": "^4.3.3",

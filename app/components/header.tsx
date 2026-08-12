@@ -662,6 +662,7 @@ const Header = (): React.ReactElement | null => {
   const data = useLoaderData<IndexLoadingType>();
   const location = useLocation();
   const reduceMotion = useReducedMotion();
+  const headerRef = useRef<HTMLElement>(null);
   const [loginOpen, setLoginOpen] = React.useState(false);
   const showCompactBrand = true;
   const bannerContext = useBannerContext(location.pathname);
@@ -671,9 +672,38 @@ const Header = (): React.ReactElement | null => {
     bannerContext?.kind === "section" ||
     Boolean(bannerContext?.previous || bannerContext?.next);
 
+  useEffect(() => {
+    const header = headerRef.current;
+    const viewport = window.visualViewport;
+    if (!header || !viewport) return;
+
+    const alignWithVisibleViewport = () => {
+      header.style.setProperty(
+        "--mcc-visible-viewport-left",
+        `${viewport.offsetLeft}px`
+      );
+      header.style.setProperty(
+        "--mcc-visible-viewport-top",
+        `${viewport.offsetTop}px`
+      );
+      header.style.setProperty(
+        "--mcc-visible-viewport-width",
+        `${viewport.width}px`
+      );
+    };
+
+    alignWithVisibleViewport();
+    viewport.addEventListener("resize", alignWithVisibleViewport);
+    viewport.addEventListener("scroll", alignWithVisibleViewport);
+    return () => {
+      viewport.removeEventListener("resize", alignWithVisibleViewport);
+      viewport.removeEventListener("scroll", alignWithVisibleViewport);
+    };
+  }, []);
+
   return (
     <>
-      <header className="mcc-site-header">
+      <header className="mcc-site-header" ref={headerRef}>
         <OriginalBannerArtwork />
         <Link
           aria-label="Moa Clay Co – startsida"
