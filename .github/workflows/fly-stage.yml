@@ -1,35 +1,26 @@
 name: Fly Stage
 
 on:
-  workflow_run:
-    workflows:
-      - CI
-    types:
-      - completed
-    branches:
-      - next
-      - "next-**"
+  workflow_call:
+    secrets:
+      FLY_API_TOKEN:
+        required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: fly-stage-${{ github.event.workflow_run.head_branch }}
+  group: fly-stage
   cancel-in-progress: true
 
 jobs:
   deploy:
     name: Deploy app Stage
-    if: >-
-      ${{ github.event.workflow_run.event == 'push' &&
-          github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Check out the commit approved by CI
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Set up Fly CLI
         uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1
