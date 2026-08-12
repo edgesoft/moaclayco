@@ -105,6 +105,16 @@ type OrdersLoaderData = {
   };
 };
 
+type OrderResultsState = {
+  appliedLoaderData: OrdersLoaderData;
+  appliedMoreData: OrdersLoaderData | undefined;
+  appliedResultsData: OrdersLoaderData | undefined;
+  displayedQueryKey: string;
+  matchingCount: number;
+  orders: Order[];
+  pageInfo: OrdersLoaderData["pageInfo"];
+};
+
 type OrderStats = {
   all: number;
   attention: number;
@@ -415,6 +425,94 @@ const fixedWorkspaceMedia =
 const getQueryKey = (filter: Filter, search: string) =>
   `${filter}\u0000${search.trim()}`;
 
+const replaceOrderResults = (
+  current: OrderResultsState,
+  data: OrdersLoaderData,
+  displayedQueryKey: string
+): OrderResultsState => ({
+  ...current,
+  displayedQueryKey,
+  matchingCount:
+    data.matchingCount >= 0 ? data.matchingCount : current.matchingCount,
+  orders: data.orders,
+  pageInfo: data.pageInfo,
+});
+
+const appendOrderResults = (
+  current: OrderResultsState,
+  data: OrdersLoaderData
+): OrderResultsState => {
+  const knownOrderIds = new Set(current.orders.map((order) => order._id));
+  return {
+    ...current,
+    matchingCount:
+      data.matchingCount >= 0 ? data.matchingCount : current.matchingCount,
+    orders: [
+      ...current.orders,
+      ...data.orders.filter((order) => !knownOrderIds.has(order._id)),
+    ],
+    pageInfo: data.pageInfo,
+  };
+};
+
+const synchronizeOrderResults = ({
+  activeQueryKey,
+  current,
+  loaderData,
+  moreData,
+  resultsData,
+}: {
+  activeQueryKey: string;
+  current: OrderResultsState;
+  loaderData: OrdersLoaderData;
+  moreData: OrdersLoaderData | undefined;
+  resultsData: OrdersLoaderData | undefined;
+}): OrderResultsState => {
+  let next = current;
+
+  if (next.appliedLoaderData !== loaderData) {
+    next = { ...next, appliedLoaderData: loaderData };
+    const responseKey = getQueryKey(
+      loaderData.applied.filter,
+      loaderData.applied.search
+    );
+    if (responseKey === activeQueryKey) {
+      next = replaceOrderResults(next, loaderData, responseKey);
+    }
+  }
+
+  if (next.appliedResultsData !== resultsData) {
+    next = { ...next, appliedResultsData: resultsData };
+    if (resultsData) {
+      const responseKey = getQueryKey(
+        resultsData.applied.filter,
+        resultsData.applied.search
+      );
+      if (responseKey === activeQueryKey) {
+        next = replaceOrderResults(next, resultsData, responseKey);
+      }
+    }
+  }
+
+  if (next.appliedMoreData !== moreData) {
+    next = { ...next, appliedMoreData: moreData };
+    if (moreData) {
+      const responseKey = getQueryKey(
+        moreData.applied.filter,
+        moreData.applied.search
+      );
+      if (
+        responseKey === activeQueryKey &&
+        next.displayedQueryKey === responseKey
+      ) {
+        next = appendOrderResults(next, moreData);
+      }
+    }
+  }
+
+  return next;
+};
+
 const getOrdersRequestUrl = (
   filter: Filter,
   search: string,
@@ -442,18 +540,33 @@ export default function Orders() {
   const { id } = useParams();
   const [filter, setFilter] = useState<Filter>(data.applied.filter);
   const [search, setSearch] = useState(data.applied.search);
-  const [orders, setOrders] = useState(data.orders);
-  const [matchingCount, setMatchingCount] = useState(data.matchingCount);
-  const [pageInfo, setPageInfo] = useState(data.pageInfo);
-  const [displayedQueryKey, setDisplayedQueryKey] = useState(() =>
-    getQueryKey(data.applied.filter, data.applied.search)
-  );
+  const [results, setResults] = useState<OrderResultsState>(() => ({
+    appliedLoaderData: data,
+    appliedMoreData: undefined,
+    appliedResultsData: undefined,
+    displayedQueryKey: getQueryKey(data.applied.filter, data.applied.search),
+    matchingCount: data.matchingCount,
+    orders: data.orders,
+    pageInfo: data.pageInfo,
+  }));
   const [lastViewedId, setLastViewedId] = useState<string | undefined>(id);
   const previousOrderIdRef = useRef(id);
   const navigationScrollPositionRef = useRef<number | null>(null);
   const navigationListScrollPositionRef = useRef<number | null>(null);
   const didInitializeQueryRef = useRef(false);
   const activeQueryKey = getQueryKey(filter, search);
+  const synchronizedResults = synchronizeOrderResults({
+    activeQueryKey,
+    current: results,
+    loaderData: data,
+    moreData: moreFetcher.data,
+    resultsData: resultsFetcher.data,
+  });
+  if (synchronizedResults !== results) {
+    setResults(synchronizedResults);
+  }
+
+  const { displayedQueryKey, matchingCount, orders, pageInfo } = results;
   const isQueryPending =
     activeQueryKey !== displayedQueryKey || resultsFetcher.state !== "idle";
   const isLoadingMore = moreFetcher.state !== "idle";
@@ -497,20 +610,6 @@ export default function Orders() {
   }, []);
 
   useEffect(() => {
-    if (
-      filter !== data.applied.filter ||
-      search.trim() !== data.applied.search
-    ) {
-      return;
-    }
-
-    setOrders(data.orders);
-    setMatchingCount(data.matchingCount);
-    setPageInfo(data.pageInfo);
-    setDisplayedQueryKey(getQueryKey(data.applied.filter, data.applied.search));
-  }, [data, filter, search]);
-
-  useEffect(() => {
     if (!didInitializeQueryRef.current) {
       didInitializeQueryRef.current = true;
       return;
@@ -523,47 +622,6 @@ export default function Orders() {
 
     return () => window.clearTimeout(timeout);
   }, [data.applied.search, filter, loadOrderResults, search]);
-
-  useEffect(() => {
-    const nextData = resultsFetcher.data;
-    if (!nextData) return;
-
-    const responseKey = getQueryKey(
-      nextData.applied.filter,
-      nextData.applied.search
-    );
-    if (responseKey !== activeQueryKey) return;
-
-    setOrders(nextData.orders);
-    if (nextData.matchingCount >= 0) {
-      setMatchingCount(nextData.matchingCount);
-    }
-    setPageInfo(nextData.pageInfo);
-    setDisplayedQueryKey(responseKey);
-  }, [activeQueryKey, resultsFetcher.data]);
-
-  useEffect(() => {
-    const nextData = moreFetcher.data;
-    if (!nextData) return;
-
-    const responseKey = getQueryKey(
-      nextData.applied.filter,
-      nextData.applied.search
-    );
-    if (responseKey !== activeQueryKey) return;
-
-    setOrders((currentOrders) => {
-      const knownOrderIds = new Set(currentOrders.map((order) => order._id));
-      return [
-        ...currentOrders,
-        ...nextData.orders.filter((order) => !knownOrderIds.has(order._id)),
-      ];
-    });
-    if (nextData.matchingCount >= 0) {
-      setMatchingCount(nextData.matchingCount);
-    }
-    setPageInfo(nextData.pageInfo);
-  }, [activeQueryKey, moreFetcher.data]);
 
   const loadMoreOrders = () => {
     if (!pageInfo.nextCursor || isLoadingMore || isQueryPending) return;
