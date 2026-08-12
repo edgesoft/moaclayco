@@ -8,7 +8,7 @@ import {
   useNavigate,
 } from "react-router";
 import { Orders } from "../schemas/orders";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { auth } from "~/services/auth.server";
 import stripeClient from "../stripeClient";
 import { sendOrderEmail } from "~/services/order-email.server";
@@ -314,6 +314,11 @@ export let action: ActionFunction = async ({ request, params }) => {
 };
 
 export default function OrderDetail() {
+  const data = useLoaderData<OrderDetailLoaderData>();
+  return <OrderDetailContent key={String(data.order._id)} data={data} />;
+}
+
+function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
   let {
     order: {
       _id,
@@ -328,7 +333,7 @@ export default function OrderDetail() {
     },
     intent,
     verification,
-  } = useLoaderData<OrderDetailLoaderData>();
+  } = data;
   const [on, setOn] = useState(status === "SHIPPED");
   const orderFetcher = useFetcher<{ error?: string }>();
   const navigate = useNavigate();
@@ -346,10 +351,6 @@ export default function OrderDetail() {
     orderFetcher.state !== "idle" && pendingAction === "shipping";
   const creatingVerification =
     orderFetcher.state !== "idle" && pendingAction === "verification";
-
-  useEffect(() => {
-    setOn(status === "SHIPPED");
-  }, [status]);
 
   const closeDetail = () => {
     navigate("/admin/orders", { preventScrollReset: true });

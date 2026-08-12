@@ -1,5 +1,5 @@
 import { Option, selectStyle } from "./selectStyle";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import CreatableSelect from "react-select/creatable";
 
 type DropDownProps = {
@@ -14,34 +14,30 @@ type DropDownProps = {
 };
 
 export function DropDown({
+  ...props
+}: DropDownProps) {
+  const initialOption = props.currentOptions[0] ?? null;
+  return (
+    <DropDownControl
+      key={`${initialOption?.label ?? ""}:${initialOption?.value ?? ""}`}
+      {...props}
+      initialOption={initialOption}
+    />
+  );
+}
+
+function DropDownControl({
   label,
   name,
   options,
-  currentOptions,
   onChange = undefined,
-}: DropDownProps) {
-  const [selectedOption, setSelectedOption] = useState<Option | null>(
-    currentOptions[0] ?? null
-  );
-  const ref = useRef<HTMLInputElement>(null);
-  const currentLabel = currentOptions[0]?.label ?? "";
-  const currentValue = currentOptions[0]?.value ?? "";
-
-  useEffect(() => {
-    setSelectedOption(
-      currentValue ? { label: currentLabel, value: currentValue } : null
-    );
-    if (ref.current) {
-      ref.current.value = currentValue;
-    }
-  }, [currentLabel, currentValue]);
+  initialOption,
+}: DropDownProps & { initialOption: Option | null }) {
+  const [selectedOption, setSelectedOption] = useState<Option | null>(initialOption);
 
   const handleChange = (value: Option | null) => {
-    if (ref && ref.current) {
-      setSelectedOption(value);
-      ref.current.value = value?.value ?? "";
-      onChange?.(value);
-    }
+    setSelectedOption(value);
+    onChange?.(value);
   };
 
   return (
@@ -55,7 +51,12 @@ export function DropDown({
         styles={selectStyle as any}
         isClearable={true}
       ></CreatableSelect>
-      <input type="hidden" name={name} ref={ref} />
+      <input
+        type="hidden"
+        name={name}
+        value={selectedOption?.value ?? ""}
+        readOnly
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { VerificationProps } from "~/types";
 import { formatMonthName } from "~/utils/formatMonthName";
 import {
@@ -25,6 +25,17 @@ const findMinMax = (verifications: VerificationProps[]) =>
   );
 
 export function ListVerification({
+  ...props
+}: GroupVerificationProps) {
+  return (
+    <ListVerificationContent
+      key={String(props.isExpanded)}
+      {...props}
+    />
+  );
+}
+
+function ListVerificationContent({
   monthKey,
   groupedVerifications,
   vatReportVerification,
@@ -34,10 +45,6 @@ export function ListVerification({
   const [expanded, setExpanded] = useState(isExpanded);
   const verifications = groupedVerifications[monthKey] || [];
   const minMax = findMinMax(verifications);
-
-  useEffect(() => {
-    if (isExpanded) setExpanded(true);
-  }, [isExpanded]);
 
   const shouldRegisterVat = () => {
     if (!vatReportVerification) return false;
