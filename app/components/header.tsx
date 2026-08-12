@@ -3,7 +3,7 @@ import {
   useLoaderData,
   useLocation,
   useNavigate,
-} from "@remix-run/react";
+} from "react-router";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import React, { useEffect, useMemo, useRef } from "react";
 import { useCart } from "react-use-cart";

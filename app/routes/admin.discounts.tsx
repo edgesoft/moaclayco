@@ -1,5 +1,5 @@
-import type { LoaderFunction } from "@remix-run/node";
-import { Link, Outlet, useLoaderData, useLocation } from "@remix-run/react";
+import type { LoaderFunction } from "react-router";
+import { Link, Outlet, useLoaderData, useLocation } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import { Discounts as DiscountEntity } from "../schemas/discounts";
 import { auth } from "~/services/auth.server";

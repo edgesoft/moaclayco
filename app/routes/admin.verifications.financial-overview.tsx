@@ -1,11 +1,11 @@
-import { json, LoaderFunction } from "@remix-run/node";
+import { data as json, LoaderFunction } from "react-router";
 import {
   Form,
   Link,
   ShouldRevalidateFunction,
   useLoaderData,
   useSearchParams,
-} from "@remix-run/react";
+} from "react-router";
 import { useState } from "react";
 import { Verifications } from "~/schemas/verifications";
 import { auth } from "~/services/auth.server";

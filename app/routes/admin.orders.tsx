@@ -1,8 +1,8 @@
-import { json } from "@remix-run/node";
+import { data as json } from "react-router";
 import type {
   LinksFunction,
   LoaderFunctionArgs,
-} from "@remix-run/node";
+} from "react-router";
 import {
   Outlet,
   ShouldRevalidateFunction,
@@ -11,12 +11,12 @@ import {
   useNavigate,
   useNavigation,
   useParams,
-} from "@remix-run/react";
+} from "react-router";
 import { useEffect, useRef, useState } from "react";
 import { Types } from "mongoose";
 import { auth } from "~/services/auth.server";
 import { Orders as OrderEntity } from "~/schemas/orders";
-import ordersStyles from "~/styles/orders.css";
+import ordersStyles from "~/styles/orders.css?url";
 import { getDomain } from "~/utils/domain";
 
 export const links: LinksFunction = () => [

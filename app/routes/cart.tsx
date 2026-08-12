@@ -1,10 +1,10 @@
-import type { MetaFunction } from "@remix-run/react";
+import type { MetaFunction } from "react-router";
 import { Items } from "../schemas/items";
 import { Orders } from "../schemas/orders";
 import { Discounts } from "~/schemas/discounts";
 import getFreightCost from "~/utils/getFreightCost";
-import { json, redirect } from "@remix-run/node";
-import type { ActionFunction, LoaderFunction } from "@remix-run/node";
+import { data as json, redirect } from "react-router";
+import type { ActionFunction, LoaderFunction } from "react-router";
 import ClientOnly from "~/components/ClientOnly";
 import { getDomain } from "~/utils/domain";
 import { z } from "zod";

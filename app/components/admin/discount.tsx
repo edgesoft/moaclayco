@@ -1,10 +1,10 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Link, useFetcher, useLoaderData } from "@remix-run/react";
+import { Link, useFetcher, useLoaderData } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "react-toastify";
 import { z } from "zod";
-import { formSchema } from "~/actions/discount";
+import { formSchema } from "~/schemas/discount-form";
 import { formatDateToUTC } from "~/utils/formatDateToUTC";
 import type { DiscountType } from "~/types";
 

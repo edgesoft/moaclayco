@@ -6,23 +6,21 @@
   "scripts": {
     "audit:critical": "npm audit --audit-level=critical",
     "audit:production": "npm audit --omit=dev --audit-level=critical",
-    "build": "remix build",
+    "build": "react-router build",
     "deploy": "fly deploy --remote-only",
-    "dev": "remix dev",
+    "dev": "react-router dev",
     "smoke": "node tools/smoke-check.mjs",
-    "start": "remix-serve ./build/index.js",
+    "start": "react-router-serve ./build/server/index.js",
     "test": "tsx --test tests/accounting-balances.test.ts tests/accounting-document.test.ts tests/checkout-payment.test.ts tests/google-auth.test.ts tests/order-cookie.test.ts tests/order-email.test.tsx tests/verification-files.test.ts tests/verification-schema.test.ts tests/verification-validation.test.ts",
     "test:e2e:accounting": "tsx --test tests/accounting-document.e2e.test.ts",
-    "typecheck": "tsc"
+    "typecheck": "react-router typegen && tsc"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1108.0",
     "@aws-sdk/lib-storage": "^3.1108.0",
     "@hookform/resolvers": "^3.10.0",
-    "@remix-run/css-bundle": "^2.17.5",
-    "@remix-run/node": "^2.17.5",
-    "@remix-run/react": "^2.17.5",
-    "@remix-run/serve": "^2.17.5",
+    "@react-router/node": "^7.18.2",
+    "@react-router/serve": "^7.18.2",
     "@stripe/react-stripe-js": "^2.9.0",
     "@stripe/stripe-js": "^2.4.0",
     "framer-motion": "^10.18.0",
@@ -41,22 +39,28 @@
     "react-swipeable": "^7.0.2",
     "react-toastify": "^9.1.3",
     "react-use-cart": "^1.14.0",
+    "react-router": "^7.18.2",
+    "react-router-dom": "^7.18.2",
     "sharp": "^0.35.3",
     "stripe": "^13.11.0",
     "uuid": "^11.1.1",
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@remix-run/dev": "^2.17.5",
     "@remix-run/eslint-config": "^2.17.5",
+    "@react-router/dev": "^7.18.2",
+    "@react-router/fs-routes": "^7.18.2",
     "@types/nodemailer": "^8.0.1",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "@types/react-router-hash-link": "^2.4.9",
+    "autoprefixer": "^10.5.4",
     "eslint": "^8.57.1",
+    "postcss": "^8.5.26",
     "tailwindcss": "^3.4.19",
     "tsx": "^4.20.5",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^8.2.1"
   },
   "overrides": {
     "tar": "7.5.22"

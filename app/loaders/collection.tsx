@@ -1,5 +1,5 @@
-import { json, redirect } from "@remix-run/node";
-import type { LoaderFunction } from "@remix-run/node";
+import { data as json, redirect } from "react-router";
+import type { LoaderFunction } from "react-router";
 import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
 import { auth } from "~/services/auth.server";

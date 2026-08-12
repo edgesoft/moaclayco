@@ -1,4 +1,4 @@
-import { Link } from "@remix-run/react";
+import { Link } from "react-router";
 import { Fragment, useState } from "react";
 import { VerificationProps } from "~/types";
 import { accounts } from "~/utils/accounts";

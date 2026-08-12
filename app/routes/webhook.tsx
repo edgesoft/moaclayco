@@ -1,44 +1,16 @@
 import mongoose from "mongoose";
-import type { ActionFunction } from "@remix-run/node";
+import type { ActionFunction } from "react-router";
 import type { Stripe } from "stripe";
 import { Items } from "~/schemas/items";
 import { Orders } from "~/schemas/orders";
 import type { Order } from "~/types";
 import { Discounts } from "~/schemas/discounts";
-import EmailOrderTemplate, {
-  getOrderEmailSubject,
-  getOrderEmailText,
-  Template,
-} from "~/components/mail/order";
-import { renderToStaticMarkup } from "react-dom/server";
-import { transporter } from "~/services/email-provider.server";
+import { Template } from "~/components/mail/order";
 import stripeClient from "../stripeClient";
 import { createVerification } from "~/services/verification.server";
-import { themes } from "~/components/Theme";
 import { WebhookEvents } from "~/schemas/webhook-events";
 import { assertPaymentIntentMatchesOrder } from "~/services/checkout-payment.server";
-
-export const sendMail = async (order: Order, template: Template) => {
-  const theme = themes[order.domain] ?? themes.moaclayco;
-
-  try {
-    const markup = renderToStaticMarkup(
-      <EmailOrderTemplate order={order} template={template} />
-    );
-    let info = await transporter.sendMail({
-      from: theme.email,
-      to: order.customer.email,
-      bcc: `${theme.email},wicket.programmer@gmail.com`,
-      subject: getOrderEmailSubject(order, template),
-      text: getOrderEmailText(order, template),
-      html: `<!doctype html>${markup}`,
-    });
-
-    console.log("Message sent: %s", info.messageId);
-  } catch (e) {
-    console.log(e);
-  }
-};
+import { sendOrderEmail } from "~/services/order-email.server";
 
 
 const cents = (value: number) => Math.round(value * 100) / 100;
@@ -346,7 +318,7 @@ const fromPaymentIntent = async (id: string, status: string) => {
   }
 
   if (transitionedOrder) {
-    await sendMail(transitionedOrder, Template.ORDER);
+    await sendOrderEmail(transitionedOrder, Template.ORDER);
   }
 };
 

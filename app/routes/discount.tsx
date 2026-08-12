@@ -1,4 +1,4 @@
-import { ActionFunction, json } from "@remix-run/node";
+import { ActionFunction, data as json } from "react-router";
 import { Discounts } from "../schemas/discounts";
 import { getDomain } from "~/utils/domain";
 

@@ -1,4 +1,4 @@
-import { json, LoaderFunction } from "@remix-run/node";
+import { data as json, LoaderFunction } from "react-router";
 import {
   Link,
   Outlet,
@@ -6,7 +6,7 @@ import {
   useLoaderData,
   useLocation,
   useSearchParams,
-} from "@remix-run/react";
+} from "react-router";
 import { useMemo, useState } from "react";
 import { ListVerification } from "~/components/admin/listVerification";
 import { Verifications } from "~/schemas/verifications";

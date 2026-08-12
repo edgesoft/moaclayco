@@ -1,13 +1,12 @@
 import {
   HeadersFunction,
-  json,
+  data as json,
   LinksFunction,
   LoaderFunction,
   redirect,
-} from "@remix-run/node";
+} from "react-router";
 import {
   Links,
-  LiveReload,
   Meta,
   Outlet,
   ShouldRevalidateFunction,
@@ -17,20 +16,20 @@ import {
   useLocation,
   isRouteErrorResponse,
   useRouteError,
-} from "@remix-run/react";
+} from "react-router";
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useRef } from "react";
 import Header from "./components/header";
 import Footer from "./components/footer";
 import { CartProvider } from "react-use-cart";
 import Cookies from "./components/cookies";
-import tailwindStyles from "./styles/tailwind.css";
-import appStyles from "./styles/app.css";
-import itemEditorStyles from "./styles/item-editor.css";
-import toastStyles from "./styles/toast.css";
+import tailwindStyles from "./styles/tailwind.css?url";
+import appStyles from "./styles/app.css?url";
+import itemEditorStyles from "./styles/item-editor.css?url";
+import toastStyles from "./styles/toast.css?url";
 import { Collections } from "./schemas/collections";
 import { auth } from "./services/auth.server";
-import s from "react-toastify/dist/ReactToastify.css";
+import s from "react-toastify/dist/ReactToastify.css?url";
 import { ToastContainer } from "react-toastify";
 import { CollectionProps, User } from "./types";
 import { ThemeProvider, useTheme } from "./components/Theme";
@@ -160,7 +159,6 @@ function Document({
           limit={3}
         />
         <ScrollRestoration />
-        <LiveReload />
         <Scripts />
         {data ? (
           <script
@@ -169,7 +167,6 @@ function Document({
             }}
           />
         ) : null}
-        {process.env.NODE_ENV === "development" && <LiveReload />}
         <div id="portal" />
       </body>
     </html>

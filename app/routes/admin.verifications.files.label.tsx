@@ -1,5 +1,5 @@
-import type { ActionFunction } from "@remix-run/node";
-import { json } from "@remix-run/node";
+import type { ActionFunction } from "react-router";
+import { data as json } from "react-router";
 import { v4 as uuidv4 } from "uuid";
 import { auth } from "~/services/auth.server";
 import { suggestVerificationFileLabel } from "~/services/verification-file-label.server";

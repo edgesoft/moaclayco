@@ -4,7 +4,7 @@ import {
   useNavigate,
   useOutletContext,
   useSubmit,
-} from "@remix-run/react";
+} from "react-router";
 import {
   ChangeEvent,
   DragEvent,
@@ -20,7 +20,7 @@ import { toast } from "react-toastify";
 import Select from "react-select";
 import { accounts } from "~/utils/accounts";
 import { Verifications } from "~/schemas/verifications";
-import { ActionFunction, json } from "@remix-run/node";
+import { ActionFunction, data as json } from "react-router";
 import ClientOnly from "~/components/ClientOnly";
 import { getDomain } from "~/utils/domain";
 import { loader as rootLoader } from "~/root";

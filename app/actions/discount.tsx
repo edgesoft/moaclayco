@@ -1,12 +1,12 @@
 import {
-  ActionFunction, json,
+  ActionFunction, data as json,
   redirect
-} from "@remix-run/node";
+} from "react-router";
 import { Discounts as DiscountEntity } from "../schemas/discounts";
-import { z } from "zod";
 import { getDomain } from "~/utils/domain";
 import { auth } from "~/services/auth.server";
 import { parseStockholmDateTime } from "~/utils/accountingDates";
+import { formSchema } from "~/schemas/discount-form";
 
 const objectFromFormData = (formData: FormData) => {
   const obj: { [key: string]: string | File } = {};
@@ -19,32 +19,6 @@ const objectFromFormData = (formData: FormData) => {
   }
   return obj;
 };
-
-const expireAtSchema = z.preprocess((input) => {
-  if (input === "") {
-    return "EMPTY";
-  }
-  return input;
-}, z.union([z.literal("EMPTY").transform(() => ""), z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/, "Formatet måste vara ÅÅÅÅ-MM-DD TT:mm")]));
-
-export const formSchema = z.object({
-  code: z.string().trim().min(1, "Ange en rabattkod."),
-  percentage: z.preprocess((val) => {
-    if (typeof val === "string") {
-      const parsed = parseFloat(val);
-      return isNaN(parsed) ? val : parsed;
-    }
-    return val;
-  }, z.number({ invalid_type_error: "Ange rabatten i procent." }).min(1, "Rabatten måste vara minst 1 %.").max(100, "Rabatten kan inte vara mer än 100 %.")),
-  balance: z.preprocess((val) => {
-    if (typeof val === "string") {
-      const parsed = parseInt(val, 10);
-      return isNaN(parsed) ? val : parsed;
-    }
-    return val;
-  }, z.number({ invalid_type_error: "Ange hur många gånger koden får användas." }).int("Antalet måste vara ett heltal.").min(0, "Antalet kan inte vara mindre än 0.")),
-  expireAt: expireAtSchema,
-});
 
 let action: ActionFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });

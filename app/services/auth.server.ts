@@ -1,4 +1,4 @@
-import { redirect } from "@remix-run/node";
+import { redirect } from "react-router";
 import { sessionStorage } from "~/services/session.server";
 import type { User } from "~/types";
 

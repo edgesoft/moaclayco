@@ -1,4 +1,4 @@
-import { LoaderFunction } from "@remix-run/node";
+import { LoaderFunction } from "react-router";
 import { Discounts as DiscountEntity } from "../schemas/discounts";
 import { auth } from "~/services/auth.server";
 import { getDomain } from "~/utils/domain";

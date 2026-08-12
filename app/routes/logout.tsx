@@ -1,4 +1,4 @@
-import { LoaderFunction, redirect } from "@remix-run/node";
+import { LoaderFunction, redirect } from "react-router";
 import { destroySession, getSession } from "../services/session.server";
 
 export let loader: LoaderFunction = async ({ request }) => {

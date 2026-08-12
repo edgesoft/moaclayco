@@ -1,4 +1,4 @@
-import { createCookie } from "@remix-run/node";
+import { createCookie } from "react-router";
 import { sessionSecret } from "~/services/session.server";
 
 export const orderCookie = createCookie("order", {

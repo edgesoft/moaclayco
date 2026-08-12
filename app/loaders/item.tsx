@@ -1,7 +1,7 @@
 import {
   LoaderFunction,
   redirect,
-} from "@remix-run/node";
+} from "react-router";
 import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
 import { getDomain } from "~/utils/domain";

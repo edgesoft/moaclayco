@@ -1,6 +1,6 @@
 import { Upload } from "@aws-sdk/lib-storage";
-import { json } from "@remix-run/node";
-import type { ActionFunction, LoaderFunction } from "@remix-run/node";
+import { data as json } from "react-router";
+import type { ActionFunction, LoaderFunction } from "react-router";
 import sharp from "sharp";
 import { Readable } from "stream";
 import { v4 as uuidv4 } from "uuid";
@@ -26,7 +26,7 @@ function bufferToStream(buffer: Buffer) {
   });
 }
 
-export async function uploadToS3(file: File) {
+async function uploadToS3(file: File) {
   const inputBuffer = Buffer.from(await file.arrayBuffer());
   const { data: optimizedBuffer, info } = await sharp(inputBuffer)
     .rotate()

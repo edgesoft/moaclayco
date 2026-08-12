@@ -1,11 +1,11 @@
-import type { LoaderFunction, MetaFunction } from "@remix-run/node";
-import { json } from "@remix-run/node";
+import type { LoaderFunction, MetaFunction } from "react-router";
+import { data as json } from "react-router";
 import {
   Link,
   useLoaderData,
   useOutletContext,
   useRevalidator,
-} from "@remix-run/react";
+} from "react-router";
 import {
   motion,
   useReducedMotion,

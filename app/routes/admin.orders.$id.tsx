@@ -1,10 +1,10 @@
-import { ActionFunction, json, LoaderFunction, MetaFunction } from "@remix-run/node";
+import { ActionFunction, data as json, LoaderFunction, MetaFunction } from "react-router";
 import { Orders } from "../schemas/orders";
-import { useFetcher, useLoaderData, useNavigate } from "@remix-run/react";
+import { useFetcher, useLoaderData, useNavigate } from "react-router";
 import { useEffect, useState } from "react";
 import { auth } from "~/services/auth.server";
 import stripeClient from "../stripeClient";
-import { sendMail } from "./webhook";
+import { sendOrderEmail } from "~/services/order-email.server";
 import { Template } from "~/components/mail/order";
 import { Order } from "~/types";
 import { Verifications } from "~/schemas/verifications";
@@ -250,7 +250,7 @@ export let action: ActionFunction = async ({ request, params }) => {
     );
 
     if (Boolean(data)) {
-      await sendMail(order, Template.SHIPPING);
+      await sendOrderEmail(order, Template.SHIPPING);
     }
   }
 

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createCookie } from "@remix-run/node";
+import { createCookie } from "react-router";
 import type Stripe from "stripe";
 import { sessionSecret } from "~/services/session.server";
 

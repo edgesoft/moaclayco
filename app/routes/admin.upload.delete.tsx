@@ -1,6 +1,6 @@
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { json } from "@remix-run/node";
-import type { ActionFunction } from "@remix-run/node";
+import { data as json } from "react-router";
+import type { ActionFunction } from "react-router";
 import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
 import { auth } from "~/services/auth.server";
@@ -20,7 +20,7 @@ const keyFromItemImage = (imageUrl: string) => {
   }
 };
 
-export async function deleteFileFromS3(
+async function deleteFileFromS3(
   id: string | null,
   collection: string,
   requestedFileName: string,

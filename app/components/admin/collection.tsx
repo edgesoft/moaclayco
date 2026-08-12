@@ -4,11 +4,9 @@ import {
   useActionData,
   useLoaderData,
   useNavigation,
-} from "@remix-run/react";
+} from "react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { CollectionAction } from "~/actions/collection";
-import { CollectionLoader } from "~/loaders/collection";
 import type { CollectionProps } from "~/types";
 
 type LoaderData = {
@@ -322,9 +320,6 @@ function CollectionImageUpload({
     </section>
   );
 }
-
-export const loader = CollectionLoader;
-export const action = CollectionAction;
 
 export default function CollectionEditor() {
   const { collection, itemCount } = useLoaderData<LoaderData>();

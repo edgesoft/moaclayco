@@ -1,5 +1,5 @@
-import { ActionFunction, json, LoaderFunction, redirect } from "@remix-run/node";
-import { Form, useLoaderData, useNavigate } from "@remix-run/react";
+import { ActionFunction, data as json, LoaderFunction, redirect } from "react-router";
+import { Form, useLoaderData, useNavigate } from "react-router";
 import { useState } from "react";
 import { z } from "zod";
 import { Users } from "~/schemas/user";

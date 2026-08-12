@@ -5,7 +5,7 @@ import {
   useLoaderData,
   useNavigation,
   useParams,
-} from "@remix-run/react";
+} from "react-router";
 import {
   useCallback,
   useEffect,
@@ -13,8 +13,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { ItemAction } from "~/actions/item";
-import { ItemLoader } from "~/loaders/item";
 import type { CollectionProps, ItemProps } from "~/types";
 
 type LoaderDataItemProps = {
@@ -756,9 +754,6 @@ function FileUpload({
     </section>
   );
 }
-
-export const loader = ItemLoader;
-export const action = ItemAction;
 
 export default function ItemComponent() {
   const actionData = useActionData<ActionData>();

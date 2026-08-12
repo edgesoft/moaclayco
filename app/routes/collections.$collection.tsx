@@ -1,12 +1,12 @@
-import type { LoaderFunction, MetaFunction } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
+import type { LoaderFunction, MetaFunction } from "react-router";
+import { data as json, redirect } from "react-router";
 import {
   Link,
   useLoaderData,
   useNavigate,
   useNavigation,
   useOutletContext,
-} from "@remix-run/react";
+} from "react-router";
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCart } from "react-use-cart";
