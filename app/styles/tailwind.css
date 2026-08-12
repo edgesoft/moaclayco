@@ -1,7 +1,36 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-@tailwind screens;
+@import "tailwindcss";
+
+@theme {
+  --color-rosa: #f0d5c8;
+  --font-note: "Noteworthy";
+  --animate-stripe: stripe 6s linear infinite;
+
+  @keyframes stripe {
+    0% {
+      background-position: 0 0;
+    }
+
+    100% {
+      background-position: 100% 0;
+    }
+  }
+}
+
+/* Preserve Tailwind v3 browser defaults that changed in v4. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
 
 @font-face {
   font-family: "Noteworthy";
