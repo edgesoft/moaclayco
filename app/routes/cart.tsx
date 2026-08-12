@@ -20,6 +20,11 @@ import {
   createCheckoutFingerprint,
   isCheckoutAttemptToken,
 } from "~/services/checkout-payment.server";
+import {
+  MAX_STANDARD_FORM_REQUEST_SIZE,
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 export let meta: MetaFunction = () => {
   return [
@@ -120,7 +125,6 @@ const redirectToCheckout = async (orderId: string) => {
 };
 
 export let action: ActionFunction = async ({ request }) => {
-  const formData = await request.formData();
   const resolvedDomain = getDomain(request);
   if (!resolvedDomain || !themes[resolvedDomain.domain]) {
     throw new Response("Okänd butik", { status: 404 });
@@ -142,6 +146,21 @@ export let action: ActionFunction = async ({ request }) => {
         },
       }
     );
+  }
+
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(
+      request,
+      MAX_STANDARD_FORM_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return cartError("Kundvagnen innehåller för mycket data.", true, {
+        status: 413,
+      });
+    }
+    throw error;
   }
 
   let untrustedItems: unknown;
