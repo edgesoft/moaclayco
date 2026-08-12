@@ -1,0 +1,37 @@
+{
+  "documentType": "tax_account_statement",
+  "entries": [
+    {
+      "date": "2026-01-12",
+      "total": 10000,
+      "accounts": {
+        "1930": { "debit": 0, "credit": 10000 },
+        "2012": { "debit": 10000, "credit": 0 }
+      }
+    },
+    {
+      "date": "2026-02-12",
+      "total": -3000,
+      "accounts": {
+        "2012": { "debit": 0, "credit": 3000 },
+        "2013": { "debit": 3000, "credit": 0 }
+      }
+    },
+    {
+      "date": "2026-03-12",
+      "total": -2500,
+      "accounts": {
+        "2012": { "debit": 0, "credit": 2500 },
+        "2650": { "debit": 2500, "credit": 0 }
+      }
+    },
+    {
+      "date": "2026-04-03",
+      "total": 25,
+      "accounts": {
+        "2012": { "debit": 25, "credit": 0 },
+        "8314": { "debit": 0, "credit": 25 }
+      }
+    }
+  ]
+}

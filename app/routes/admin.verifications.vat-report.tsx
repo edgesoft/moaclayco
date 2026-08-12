@@ -1,52 +1,73 @@
 import {
-  useNavigate,
+  Link,
   useSearchParams,
   useLoaderData,
+  useActionData,
+  useNavigation,
   useSubmit,
-} from "@remix-run/react";
-import {
   ActionFunction,
-  json,
+  data as json,
   LoaderFunction,
   redirect,
-} from "@remix-run/node";
-import { useForm } from "react-hook-form";
+} from "react-router";
+import { Controller, useForm } from "react-hook-form";
 import { Verifications } from "~/schemas/verifications"; // Din MongoDB schema
-import { classNames } from "~/utils/classnames";
-import { generateNextEntryNumber } from "~/utils/verificationUtil";
 import { formatMonthName } from "~/utils/formatMonthName";
 import { getDomain } from "~/utils/domain";
+import { toLoaderData } from "~/utils/loaderData";
 import { auth } from "~/services/auth.server";
-import { getIBJournalEntries } from "~/utils/accounts";
+import { buildVatReportEntries } from "~/utils/vat";
+import { createVerification, ensureIncomingBalance } from "~/services/verification.server";
+import {
+  accountingYear,
+  getAccountingMonthBounds,
+  parseAccountingDate,
+} from "~/utils/accountingDates";
+import { AccountingDateField } from "~/components/admin/AccountingDateField";
+import {
+  MAX_STANDARD_FORM_REQUEST_SIZE,
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
+type VatJournalEntry = {
+  _id?: string;
+  account: number;
+  debit: number;
+  credit: number;
+};
+
+type VatVerification = {
+  _id: string;
+  verificationNumber: number;
+  journalEntries: VatJournalEntry[];
+};
 
 // Loader-funktion för att hämta verifikationer från MongoDB för en viss månad
 export const loader: LoaderFunction = async ({ request }) => {
+  await auth.isAuthenticated(request, { failureRedirect: "/login" });
   const url = new URL(request.url);
   const domain = getDomain(request);
   if (!domain) throw new Error("Could not find domain");
 
   const month = url.searchParams.get("month"); // Få månaden som query param
   if (!month) {
-    return json({ error: "Ingen månad specificerad" }, { status: 400 });
+    throw new Response("Ingen månad specificerad", { status: 400 });
   }
 
-  const [year, monthNumber] = month.split("-"); // Dela upp månad och år
-  // Skapa start- och slutdatum för månaden
-  const startOfMonth = new Date(Number(year), Number(monthNumber) - 1, 1); // Första dagen i månaden
-  const endOfMonth = new Date(Number(year), Number(monthNumber), 0); // Sista dagen i månaden
-  endOfMonth.setHours(23, 59, 59, 999); // Sätt tiden till slutet av dagen
+  const bounds = getAccountingMonthBounds(month);
+  if (!bounds) throw new Response("Ogiltig månad", { status: 400 });
 
   // Hämta alla verifikationer för den angivna månaden
     // This should not include IB
-  const verifications = await Verifications.find({
+  const verifications = (await Verifications.find({
     verificationDate: {
-      $gte: startOfMonth,
-      $lte: endOfMonth, // Ändrat från $lt till $lte för att inkludera sista dagen
+      $gte: bounds.start,
+      $lt: bounds.end,
     },
     domain: domain.domain,
     "metadata.key": { $nin: ["vatReport", "IB"] },
-  });
+  }).lean()) as unknown as VatVerification[];
 
   // Filtrera fram relevanta journal entries
   const vatSales = verifications.filter(
@@ -61,20 +82,32 @@ export const loader: LoaderFunction = async ({ request }) => {
     (v) => v.journalEntries.some((entry) => entry.account === 2640) // Ingående moms
   );
 
-  return json({
+  return json(toLoaderData({
     vatSales,
     outgoingVAT,
     ingoingVAT,
-  });
+  }));
 };
 
 export const action: ActionFunction = async ({ request }) => {
-  const formData = await request.formData();
-  const domain = getDomain(request);
-  if (!domain) throw new Error("Could not find domain");
   const user = await auth.isAuthenticated(request, {
     failureRedirect: "/login",
   });
+  const domain = getDomain(request);
+  if (!domain) throw new Error("Could not find domain");
+
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(
+      request,
+      MAX_STANDARD_FORM_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json({ error: "Formuläret är för stort" }, { status: 413 });
+    }
+    throw error;
+  }
 
   const submissionDate = formData.get("submissionDate");
 
@@ -88,206 +121,96 @@ export const action: ActionFunction = async ({ request }) => {
     return json({ error: "Ingen månad specificerad" }, { status: 400 });
   }
 
-  const [year, monthNumber] = month.split("-");
-  const startOfMonth = new Date(Number(year), Number(monthNumber) - 1, 1);
-  const endOfMonth = new Date(Number(year), Number(monthNumber), 0);
-  endOfMonth.setHours(23, 59, 59, 999);
-
-  const formattedDate = new Date(submissionDate);
-
-  if (formattedDate.getFullYear() > Number(year) + 1) {
+  const bounds = getAccountingMonthBounds(month);
+  const formattedDate = parseAccountingDate(submissionDate);
+  if (!bounds || !formattedDate) {
+    return json({ error: "Ogiltig månad eller rapportdatum" }, { status: 400 });
+  }
+  if (bounds.year !== user.fiscalYear) {
+    return json({ error: `Perioden måste tillhöra bokföringsår ${user.fiscalYear}` }, { status: 400 });
+  }
+  const submissionYear = accountingYear(formattedDate);
+  if (!submissionYear) {
+    return json({ error: "Ogiltigt rapportdatum" }, { status: 400 });
+  }
+  if (submissionYear < bounds.year || submissionYear > bounds.year + 1) {
     return json(
       { error: "Du kan inte specificera momsrapporten så långt i förväg" },
       { status: 400 }
     );
   }
+  if (formattedDate.getTime() < bounds.end.getTime()) {
+    return json(
+      { error: "Momsdeklarationen kan registreras först när perioden är avslutad" },
+      { status: 400 }
+    );
+  }
 
-  const incomingVatAccount = 2640; // Ingående moms
-  const outgoingVatAccount = 2611; // Utgående moms
-  const vatDebtAccount = 2650; // Momsskuld eller momsfordran
-  const roundingAccount = 3740; // Öres- och kronutjämning
-  const taxAccount = 2012; // Avräkning för skatter och avgifter
+  const existingReport = await Verifications.findOne({
+    domain: domain.domain,
+    metadata: { $elemMatch: { key: "vatReport", value: month } },
+  })
+    .select("verificationNumber")
+    .lean();
+  if (existingReport) {
+    return json({ error: "Momsdeklarationen är redan registrerad" }, { status: 409 });
+  }
 
   // This should not include IB
-  const verifications = await Verifications.find({
+  const verifications = (await Verifications.find({
     verificationDate: {
-      $gte: startOfMonth,
-      $lt: endOfMonth,
+      $gte: bounds.start,
+      $lt: bounds.end,
     },
     "metadata.key": { $nin: ["vatReport", "IB"] },
     domain: domain.domain,
-  });
+  }).lean()) as unknown as VatVerification[];
 
   let totalIncomingVat = 0;
   let totalOutgoingVat = 0;
 
   verifications.forEach((v) => {
     v.journalEntries.forEach((entry) => {
-      if (entry.account === incomingVatAccount) {
-        // 2640
+      if (entry.account === 2640) {
         totalIncomingVat += entry.debit || 0;
         totalIncomingVat -= entry.credit || 0;
       }
-      if (entry.account === outgoingVatAccount) {
-        // 2611
+      if (entry.account === 2611) {
         totalOutgoingVat += entry.debit || 0;
         totalOutgoingVat -= entry.credit || 0;
       }
     });
   });
 
-  const vatToPayOrRefund =
-    Math.abs(totalOutgoingVat) - Math.abs(totalIncomingVat);
-  const roundedVatToPayOrRefund = Math.round(vatToPayOrRefund);
-  const roundingDifference = vatToPayOrRefund - roundedVatToPayOrRefund;
-
-  const journalEntries = [];
+  const journalEntries = buildVatReportEntries(totalIncomingVat, totalOutgoingVat);
 
   const metadata = [
     {
       key: "vatReport",
       value: month,
     },
+    {
+      key: "vatSubmittedAt",
+      value: formattedDate.toISOString().slice(0, 10),
+    },
   ];
 
-  console.log("2640", totalIncomingVat);
-  console.log("2611", totalOutgoingVat);
-  console.log("2650", vatToPayOrRefund);
-  console.log(
-    "RoundedVatToPayOrRefund (efter avrundning):",
-    roundedVatToPayOrRefund
-  );
-
-  journalEntries.push(
-    {
-      account: incomingVatAccount, // 2640
-      debit: totalIncomingVat < 0 ? Math.abs(totalIncomingVat) : 0,
-      credit: totalIncomingVat > 0 ? Math.abs(totalIncomingVat) : 0,
-    },
-    {
-      account: outgoingVatAccount, // 2611
-      debit: totalOutgoingVat < 0 ? Math.abs(totalOutgoingVat) : 0,
-      credit: totalOutgoingVat > 0 ? Math.abs(totalOutgoingVat) : 0,
-    }
-  );
-
-  console.log("totalIncomingVat", Math.abs(totalIncomingVat));
-  console.log("totalOutgoingVat", Math.abs(totalOutgoingVat));
-
-  //  Momsfordran (du ska få tillbaka)
-  if (Math.abs(totalIncomingVat) > Math.abs(totalOutgoingVat)) {
-    journalEntries.push({
-      account: vatDebtAccount, // 2650
-      debit: Math.abs(roundedVatToPayOrRefund),
-      credit: 0,
-    });
-
-    journalEntries.push({
-      account: vatDebtAccount, // 2650
-      debit: 0,
-      credit: Math.abs(roundedVatToPayOrRefund),
-    });
-
-    journalEntries.push({
-      account: taxAccount, // 2012
-      debit: Math.abs(roundedVatToPayOrRefund),
-      credit: 0,
-    });
-
-    metadata.push({
-      key: "vatRegisteredAtAccount",
-      value: "true",
-    });
-  }
-
-  //  Momsfordran (du ska betala)
-  if (Math.abs(totalOutgoingVat) > Math.abs(totalIncomingVat)) {
-    journalEntries.push({
-      account: vatDebtAccount, // 2650
-      debit: 0,
-      credit: Math.abs(roundedVatToPayOrRefund),
-    });
-  }
-
-  // check IB and UB
-  if (formattedDate.getFullYear() > Number(year)) {
-    // VAT report is registered for next year
-    // find IB verification for next year
-    let ibVerification = await Verifications.findOne({
-      domain: domain?.domain,
-      "metadata.key": "IB",
-      "metadata.value": formattedDate.getFullYear(),
-    }).exec();
-
-    if (ibVerification) {
-      // if found get current year journal entries
-      const journalEntries = await getIBJournalEntries(
-        domain.domain,
-        formattedDate.getFullYear()
-      );
-      ibVerification.journalEntries = journalEntries;
-      await ibVerification.save();
-    } else {
-      const journalEntries = await getIBJournalEntries(
-        domain.domain,
-        formattedDate.getFullYear() - 1
-      );
-      if (journalEntries.length > 0) {
-        await Verifications.create({
-          domain: domain?.domain,
-          verificationNumber: await generateNextEntryNumber(domain?.domain),
-          description: "Ingående balans",
-          verificationDate: new Date(formattedDate.getFullYear(), 0, 1),
-          metadata: [{ key: "IB", value: formattedDate.getFullYear() }],
-          journalEntries,
-        });
-      }
-    }
-  }
-  const newVerification = new Verifications({
+  await ensureIncomingBalance(domain.domain, bounds.year);
+  await createVerification({
     domain: domain.domain,
-    description: `Momsrapport för ${formatMonthName(month)}`,
-    verificationNumber: await generateNextEntryNumber(domain.domain),
+    idempotencyKey: `vat-report:${month}`,
+    recordType: "vatReport",
+    description: `Momsdeklaration för ${formatMonthName(month)}`,
     verificationDate: formattedDate,
     journalEntries: journalEntries,
     metadata,
   });
 
-  await newVerification.save();
-
-  if (roundingDifference !== 0) {
-    let totalDebet = 0;
-    let totalKredit = 0;
-
-    newVerification.journalEntries.forEach((entry) => {
-      totalDebet += entry.debit || 0;
-      totalKredit += entry.credit || 0;
-    });
-
-    if (totalDebet < totalKredit) {
-      newVerification.journalEntries.push({
-        account: roundingAccount,
-        debit: Math.abs(roundingDifference),
-        credit: 0,
-      });
-    }
-
-    if (totalDebet > totalKredit) {
-      newVerification.journalEntries.push({
-        account: roundingAccount,
-        debit: 0,
-        credit: Math.abs(roundingDifference),
-      });
-    }
-
-    await newVerification.save();
-  }
-
   return redirect("/admin/verifications");
 };
 
 // Funktion för att summera belopp i en lista av journalEntries
-const sumAmounts = (verifications, account) => {
+const sumAmounts = (verifications: VatVerification[], account: number) => {
   return verifications
     .reduce((total, v) => {
       const amount = v.journalEntries
@@ -299,58 +222,71 @@ const sumAmounts = (verifications, account) => {
           return acc;
         }, 0);
       return total + amount;
-    }, 0)
-    .toFixed(2);
+    }, 0);
 };
 
 type ReportProps = {
   label: string;
+  description?: string;
   totalLabel: string;
   account: number;
-  verifications: any[];
+  verifications: VatVerification[];
 };
 
 const Report = ({
   label,
+  description,
   totalLabel,
   verifications,
   account,
-}: ReportProps): JSX.Element => {
+}: ReportProps): React.ReactElement => {
+  const totalAmount = Math.abs(sumAmounts(verifications, account));
+
   return (
-    <div className="mb-8">
-      <h4 className="font-semibold text-lg text-gray-700">{label}</h4>
+    <section className="border-t border-stone-200 py-5 first:border-t-0 sm:py-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="font-serif text-xl leading-tight text-stone-950 sm:text-2xl">
+            {label}
+          </h3>
+          {description ? (
+            <p className="mt-1 text-xs leading-5 text-stone-500">{description}</p>
+          ) : null}
+        </div>
+        {verifications.length ? (
+          <strong className="shrink-0 text-sm tabular-nums text-stone-900">
+            {totalAmount.toFixed(2)} kr
+          </strong>
+        ) : null}
+      </div>
       {verifications.length > 0 ? (
-        <table className="w-full table-auto divide-y divide-gray-300">
-          <thead className="bg-gray-50">
+        <div className="mt-3 overflow-x-auto rounded-2xl border border-stone-200 bg-white">
+        <table className="w-full table-auto divide-y divide-stone-200">
+          <thead className="bg-[#f6f1eb]">
             <tr>
               <th
                 scope="col"
-                className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider"
+                className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500"
               >
                 Verifikationsnummer
               </th>
               <th
                 scope="col"
-                className="px-4 py-3 text-right text-sm font-medium text-gray-500 uppercase tracking-wider"
+                className="px-4 py-3 text-right text-[11px] font-bold uppercase tracking-[0.14em] text-stone-500"
               >
                 Belopp
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="divide-y divide-stone-100 bg-white">
             {verifications.map((v) => (
               <tr key={v._id}>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-                  <span
-                    className={classNames(
-                      `bg-green-600 text-white inline-flex px-2 text-xs font-semibold leading-5 rounded-full`
-                    )}
-                  >
-                    {" "}
+                <td className="whitespace-nowrap px-4 py-3 text-sm text-stone-700">
+                  <span className="font-bold text-[#985744]">
                     A{v.verificationNumber}
                   </span>
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-500">
+                <td className="whitespace-nowrap px-4 py-3 text-right text-sm tabular-nums text-stone-600">
                   {v.journalEntries
                     .filter((entry) => entry.account === account)
                     .map((entry) => (
@@ -364,125 +300,170 @@ const Report = ({
                 </td>
               </tr>
             ))}
-            <tr className="font-bold bg-gray-100">
+            <tr className="bg-[#f6f1eb] font-bold text-stone-900">
               <td className="px-4 py-3">Total {totalLabel.toLowerCase()}</td>
-              <td className="px-4 py-3 text-right">
-                {(-1 * sumAmounts(verifications, account)).toFixed(2)} SEK
+              <td className="px-4 py-3 text-right tabular-nums">
+                {totalAmount.toFixed(2)} SEK
               </td>
             </tr>
           </tbody>
         </table>
+        </div>
       ) : (
-        <p className="text-gray-500">Ingen {totalLabel.toLowerCase()}</p>
+        <div className="mt-3 rounded-xl bg-stone-100/70 px-4 py-3 text-sm text-stone-500">
+          Ingen {totalLabel.toLowerCase()} under perioden.
+        </div>
       )}
-    </div>
+    </section>
   );
 };
 
-// VATReportModal-komponenten
-export default function VATReportModal() {
-  const navigate = useNavigate();
-  const { vatSales, outgoingVAT, ingoingVAT } = useLoaderData(); // Data från loader
+export default function VATReportPage() {
+  const { vatSales, outgoingVAT, ingoingVAT } = useLoaderData<{
+    vatSales: VatVerification[];
+    outgoingVAT: VatVerification[];
+    ingoingVAT: VatVerification[];
+  }>();
   const [searchParams] = useSearchParams();
   const month = searchParams.get("month") || "";
   const submit = useSubmit();
-  const { register, handleSubmit } = useForm();
+  const actionData = useActionData<{ error?: string }>();
+  const navigation = useNavigation();
+  const isSubmitting = navigation.state === "submitting";
+  const { control, handleSubmit } = useForm<{ submissionDate: string }>({
+    defaultValues: { submissionDate: "" },
+  });
 
-  // Funktion som körs när användaren klickar på "Skapa verifikation"
-  const onSubmit = (data) => {
-    console.log("Skapar verifikation med följande data:", data);
-    // Skicka data till servern eller utför någon åtgärd här
-
+  const onSubmit = (data: Record<string, string>) => {
     submit(data, { method: "post" });
   };
 
   return (
-    <div
-      className="fixed z-10 inset-0 overflow-y-auto"
-      aria-labelledby="modal-title"
-      role="dialog"
-      aria-modal="true"
+    <section
+      aria-labelledby="vat-report-title"
+      className="-mx-4 overflow-visible border-y border-stone-300 bg-[#fffdf8] sm:mx-0 sm:rounded-[2rem] sm:border"
     >
-      <div className="flex items-end justify-center text-center sm:block sm:p-0">
-        <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"></div>
-        <span
-          className="hidden sm:inline-block sm:align-middle sm:h-screen"
-          aria-hidden="true"
+      <header className="border-b border-stone-200 px-4 py-6 sm:px-8 sm:py-8">
+        <Link
+          to="/admin/verifications"
+          className="inline-flex h-10 items-center text-xs font-bold text-stone-500 transition hover:text-[#985744]"
         >
-          &#8203;
-        </span>
-        <div className="inline-block align-bottom text-left bg-white rounded-lg shadow-xl overflow-hidden transform transition-all sm:align-middle sm:my-8 sm:w-full sm:max-w-6xl">
-          <div className="bg-white px-6 py-5 sm:p-6 sm:pb-4">
-            <div className="sm:flex sm:items-start ">
-              <div className="text-center sm:ml-4 sm:text-left w-full">
-                <h3
-                  className="text-xl leading-6 font-bold text-gray-900"
-                  id="modal-title"
+          <span aria-hidden="true" className="mr-2 text-base">←</span>
+          Till bokföringen
+        </Link>
+        <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.18em] text-[#985744]">
+          Moms · redovisningsperiod {month}
+        </p>
+        <h2
+          className="mt-2 max-w-3xl font-serif text-4xl leading-[1.05] text-stone-950 sm:text-5xl"
+          id="vat-report-title"
+        >
+          Momsdeklaration för {formatMonthName(month)}
+        </h2>
+        <p className="mt-4 max-w-2xl text-sm leading-6 text-stone-600 sm:text-base sm:leading-7">
+          Kontrollera periodens underlag och ange dagen då deklarationen faktiskt
+          lämnades till Skatteverket. Det datumet blir verifikationens datum.
+        </p>
+      </header>
+
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_21rem]">
+          <div className="order-2 px-4 pb-8 lg:order-1 lg:border-r lg:border-stone-200 lg:px-8 lg:py-7">
+            <div className="border-b border-stone-200 py-5 lg:pt-0">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-stone-400">
+                Periodens underlag
+              </p>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+                En tom period registreras som nollrapport utan konteringsrader.
+                Eventuella underlag kan kopplas till verifikationen efteråt.
+              </p>
+            </div>
+            <Report
+              totalLabel="Momspliktig försäljning"
+              account={3001}
+              label="Momspliktig försäljning"
+              description="Försäljning som inte hör till ruta 06, 07 eller 08."
+              verifications={vatSales}
+            />
+            <Report
+              totalLabel="Utgående moms"
+              account={2611}
+              label="Utgående moms"
+              verifications={outgoingVAT}
+            />
+            <Report
+              totalLabel="Ingående moms"
+              account={2640}
+              label="Ingående moms"
+              verifications={ingoingVAT}
+            />
+          </div>
+
+          <aside className="order-1 border-b border-stone-200 bg-[#faf5f0] px-4 py-5 lg:order-2 lg:border-b-0 lg:bg-transparent lg:p-6">
+            <div className="lg:sticky lg:top-28">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#985744]">
+                Registrera inlämning
+              </p>
+              <h3 className="mt-2 font-serif text-2xl text-stone-950">
+                När lämnades den in?
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-stone-600">
+                Deklarationen visas i den månad då du lämnade in den, även om
+                redovisningsperioden är en annan.
+              </p>
+
+              <label htmlFor="submissionDate" className="mt-5 block text-xs font-bold text-stone-700">
+                Inlämningsdatum hos Skatteverket
+              </label>
+              <div className="mt-2">
+                <Controller
+                  control={control}
+                  name="submissionDate"
+                  rules={{ required: true }}
+                  render={({ field }) => (
+                    <AccountingDateField
+                      id="submissionDate"
+                      value={field.value}
+                      onChange={field.onChange}
+                      label="Välj inlämningsdatum"
+                    />
+                  )}
+                />
+              </div>
+
+              {actionData?.error ? (
+                <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                  {actionData.error}
+                </p>
+              ) : null}
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-[9.5rem_minmax(17rem,22rem)] sm:justify-end lg:grid-cols-1">
+                <Link
+                  to="/admin/verifications"
+                  className="order-2 inline-flex h-14 w-full items-center justify-center rounded-2xl border border-stone-300 bg-[#fffdf9] px-5 text-sm font-bold text-stone-700 transition hover:border-[#c58a79] hover:bg-white hover:text-[#985744] focus:outline-none focus:ring-2 focus:ring-[#e7c8be] focus:ring-offset-2 sm:order-1 lg:order-2"
                 >
-                  Momsrapport för {formatMonthName(month)}
-                </h3>
-
-                <div className="mt-6">
-                  <div className="mb-6">
-                    <form
-                      onSubmit={handleSubmit(onSubmit)}
-                      className="flex items-center space-x-4 mt-4"
+                  Avbryt
+                </Link>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="relative order-1 inline-flex h-14 w-full items-center justify-center rounded-2xl border border-[#a85f4b] bg-[#a85f4b] px-14 text-sm font-bold text-white shadow-[0_8px_22px_rgba(126,67,51,0.16)] transition hover:-translate-y-px hover:border-[#8f4f3e] hover:bg-[#8f4f3e] focus:outline-none focus:ring-2 focus:ring-[#d7b0a3] focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0 sm:order-2 lg:order-1"
+                >
+                  {isSubmitting ? "Registrerar…" : "Registrera deklaration"}
+                  {!isSubmitting ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute right-3 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 text-lg"
                     >
-                      {/* Datumfält */}
-                      <div className="flex items-center space-x-2 w-2/3">
-                        <input
-                          type="date"
-                          id="submissionDate"
-                          {...register("submissionDate", { required: true })}
-                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        />
-                      </div>
-
-                      {/* Skapa verifikation-knapp */}
-                      <button
-                        type="submit"
-                        className="w-1/3 inline-flex items-center justify-center px-4 py-2 text-white text-base font-medium bg-blue-600 hover:bg-blue-700 border border-transparent rounded-md focus:outline-none shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                      >
-                        Skapa verifikation
-                      </button>
-                    </form>
-                  </div>
-
-                  {/* Resten av din komponent med Momspliktig försäljning, Utgående moms och Ingående moms */}
-                  {/* Momspliktig försäljning */}
-                  <Report
-                    totalLabel={`Momspliktig försäljning`}
-                    account={3001}
-                    label={` Momspliktig försäljning (ej ruta 06, 07, 08)`}
-                    verifications={vatSales}
-                  />
-                  <Report
-                    totalLabel={`Utgående moms`}
-                    account={2611}
-                    label={`Utgående moms`}
-                    verifications={outgoingVAT}
-                  />
-                  <Report
-                    totalLabel={`Ingående moms`}
-                    account={2640}
-                    label={`Ingående moms`}
-                    verifications={ingoingVAT}
-                  />
-                </div>
+                      →
+                    </span>
+                  ) : null}
+                </button>
               </div>
             </div>
-          </div>
-          <div className="bg-gray-50 px-6 py-3 sm:flex sm:flex-row-reverse">
-            <button
-              type="button"
-              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
-              onClick={() => navigate(-1)}
-            >
-              Stäng
-            </button>
-          </div>
+          </aside>
         </div>
-      </div>
-    </div>
+      </form>
+    </section>
   );
 }

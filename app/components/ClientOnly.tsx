@@ -1,16 +1,13 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useSyncExternalStore } from "react";
 
-let hydrating = true;
+const subscribeToHydration = () => () => undefined;
 
 function useHydrated() {
-  let [hydrated, setHydrated] = useState(() => !hydrating);
-
-  useEffect(function hydrate() {
-    hydrating = false;
-    setHydrated(true);
-  }, []);
-
-  return hydrated;
+  return useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false
+  );
 }
 
 type Props = {

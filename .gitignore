@@ -1,7 +1,16 @@
 node_modules
+.react-router/
 /.cache
 /build
 /public/build
+/public/build-dev*
 .env
+.env.*
+!.env.*.example
+exports/
+tmp/pdfs/
 imagemagick
-app/.DS_Store
+.DS_Store
+**/.DS_Store
+__pycache__/
+*.py[cod]

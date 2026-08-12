@@ -1,38 +1,41 @@
 import nodemailer from "nodemailer";
-import { themes } from "~/components/Theme";
-import { getDomain } from "~/utils/domain";
 
-type SendMail = {
-  domainUrl: string;
-  toAddress: string;
-  subject: string;
-  body: string;
-};
-
-export const transporter = nodemailer.createTransport({
-  host: "send.one.com",
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.EMAIL_USERNAME,
-    pass: process.env.EMAIL_PASSWORD,
-  },
-});
-
-export const sendEmail = async ({ domainUrl, toAddress, subject, body }: SendMail) => {
-
-  const domain = getDomain(domainUrl)
-  const theme = themes[domain?.domain || ""]
-
-  try {
-    await transporter.sendMail({
-      from: theme.email,
-      to: toAddress,
-      bcc: "wicket.programmer@gmail.com",
-      subject,
-      html: body,
-    });
-  } catch (e) {
-    console.log(e);
+const emailPort = (value: string | undefined) => {
+  if (!value?.trim()) return 465;
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error("EMAIL_PORT must be an integer between 1 and 65535");
   }
+  return port;
 };
+
+const emailSecure = (value: string | undefined, port: number) => {
+  if (!value?.trim()) return port === 465;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error('EMAIL_SECURE must be either "true" or "false"');
+};
+
+export const emailTransportOptions = (
+  environment: NodeJS.ProcessEnv = process.env
+) => {
+  const port = emailPort(environment.EMAIL_PORT);
+  const username = environment.EMAIL_USERNAME?.trim();
+  const password = environment.EMAIL_PASSWORD?.trim();
+  if (Boolean(username) !== Boolean(password)) {
+    throw new Error(
+      "EMAIL_USERNAME and EMAIL_PASSWORD must both be configured or both be empty"
+    );
+  }
+
+  return {
+    host: environment.EMAIL_HOST?.trim() || "send.one.com",
+    port,
+    secure: emailSecure(environment.EMAIL_SECURE, port),
+    ...(username && password
+      ? { auth: { user: username, pass: password } }
+      : {}),
+  };
+};
+
+export const transporter = nodemailer.createTransport(emailTransportOptions());

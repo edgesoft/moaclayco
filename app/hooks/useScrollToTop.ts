@@ -8,7 +8,7 @@ function useScrollToTop() {
         left: 0,
         behavior: 'auto',
       })
-    } catch (error) {
+    } catch {
       window.scrollTo(0, 0)
     }
   }, [])

@@ -1,11 +1,69 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-@tailwind screens;
+@import "tailwindcss";
+
+@theme {
+  --color-rosa: #f0d5c8;
+  --font-note: "Noteworthy";
+  --animate-stripe: stripe 6s linear infinite;
+
+  @keyframes stripe {
+    0% {
+      background-position: 0 0;
+    }
+
+    100% {
+      background-position: 100% 0;
+    }
+  }
+}
+
+/* Preserve Tailwind v3 browser defaults that changed in v4. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
 
 @font-face {
   font-family: "Noteworthy";
   src: url("/fonts/Noteworthy-Lt.woff") format("woff");
   font-style: normal;
   font-display: swap;
+}
+
+.verification-account__control {
+  min-height: 52px !important;
+  border-color: rgb(214 211 209) !important;
+  border-radius: 1rem !important;
+  box-shadow: none !important;
+  background: rgb(255 255 255) !important;
+}
+
+.verification-account__control--is-focused {
+  border-color: rgb(173 100 79) !important;
+  box-shadow: 0 0 0 2px rgb(243 228 222) !important;
+}
+
+.verification-account__menu {
+  z-index: 30 !important;
+  border-radius: 0.75rem !important;
+  overflow: hidden;
+}
+
+.verification-amount-input {
+  appearance: textfield;
+}
+
+.verification-amount-input::-webkit-inner-spin-button,
+.verification-amount-input::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
 }

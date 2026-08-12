@@ -1,10 +1,34 @@
-import { json, LoaderFunction } from "@remix-run/node";
-import { useLoaderData, useNavigate } from "@remix-run/react";
-import { Verifications } from "~/schemas/verifications"; // Din MongoDB schema
+import {
+  data as json,
+  Form,
+  Link,
+  LoaderFunction,
+  ShouldRevalidateFunction,
+  useLoaderData,
+  useSearchParams,
+} from "react-router";
+import { useState } from "react";
+import { Verifications } from "~/schemas/verifications";
 import { auth } from "~/services/auth.server";
 import { ReportType } from "~/types";
-import { accounts, sumAccounts } from "~/utils/accounts";
+import { accounts } from "~/utils/accounts";
 import { getDomain } from "~/utils/domain";
+import { AccountingDateField } from "~/components/admin/AccountingDateField";
+import {
+  getAccountingDateBounds,
+  parseAccountingDate,
+} from "~/utils/accountingDates";
+
+const normalizeDateParameter = (value: string | null, fallback: string) => {
+  if (!value) return fallback;
+
+  const normalized = value.includes("-")
+    ? value
+    : `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return fallback;
+
+  return parseAccountingDate(normalized) ? normalized : fallback;
+};
 
 export const loader: LoaderFunction = async ({ request }) => {
   const url = new URL(request.url);
@@ -12,189 +36,455 @@ export const loader: LoaderFunction = async ({ request }) => {
   const user = await auth.isAuthenticated(request, {
     failureRedirect: "/login",
   });
+  if (!domain) throw new Response("Okänd domän", { status: 404 });
+  const report = url.searchParams.get("report") === "balance" ? "balance" : "income";
 
-  const fromParam = url.searchParams.get("from"); // Få startdatum som query param
-  const toParam = url.searchParams.get("to"); // Få slutdatum som query param
+  const fromValue = normalizeDateParameter(
+    url.searchParams.get("from"),
+    `${user.fiscalYear}-01-01`
+  );
+  const toValue = normalizeDateParameter(
+    url.searchParams.get("to"),
+    `${user.fiscalYear}-12-31`
+  );
+  const fiscalStartValue = `${user.fiscalYear}-01-01`;
+  const fiscalEndValue = `${user.fiscalYear}-12-31`;
+  const validPeriod =
+    fromValue >= fiscalStartValue &&
+    fromValue <= fiscalEndValue &&
+    toValue >= fiscalStartValue &&
+    toValue <= fiscalEndValue &&
+    fromValue <= toValue;
+  const safeFromValue = validPeriod ? fromValue : fiscalStartValue;
+  const safeToValue = validPeriod ? toValue : fiscalEndValue;
+  const periodBounds = getAccountingDateBounds(
+    report === "balance" ? fiscalStartValue : safeFromValue,
+    safeToValue
+  );
+  if (!periodBounds) throw new Response("Ogiltig rapportperiod", { status: 400 });
 
-  // Om `from` och `to` inte finns, sätt standardvärden för hela året
-  const from = fromParam
-    ? new Date(
-        parseInt(fromParam.slice(0, 4)),
-        parseInt(fromParam.slice(4, 6)) - 1,
-        parseInt(fromParam.slice(6, 8))
-      ) // Format YYYYMMDD
-    : new Date(user.fiscalYear, 0, 1); // 1 januari innevarande år
-  const to = toParam
-    ? new Date(
-        parseInt(toParam.slice(0, 4)),
-        parseInt(toParam.slice(4, 6)) - 1,
-        parseInt(toParam.slice(6, 8)),
-        23,
-        59,
-        59,
-        999
-      ) // Format YYYYMMDD
-    : new Date(user.fiscalYear, 11, 31, 23, 59, 59, 999); // 31 december innevarande år
-
-  // Hämta alla verifikationer inom den angivna perioden
-  const verifications = await Verifications.find({
-    verificationDate: {
-      $gte: from,
-      $lte: to,
+  const accountTotals = await Verifications.aggregate<{
+    account: number;
+    amount: number;
+  }>([
+    {
+      $match: {
+        verificationDate: {
+          $gte: periodBounds.start,
+          $lt: periodBounds.end,
+        },
+        domain: domain.domain,
+      },
     },
-    domain: domain?.domain,
-  });
+    { $project: { journalEntries: 1 } },
+    { $unwind: "$journalEntries" },
+    {
+      $group: {
+        _id: "$journalEntries.account",
+        amount: {
+          $sum: {
+            $subtract: [
+              { $ifNull: ["$journalEntries.debit", 0] },
+              { $ifNull: ["$journalEntries.credit", 0] },
+            ],
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        account: "$_id",
+        amount: { $round: ["$amount", 2] },
+      },
+    },
+  ]).exec();
 
-  console.log(from, to);
-
-  return json({ verifications, from, to });
+  return json({ accountTotals, from: safeFromValue, to: safeToValue });
 };
 
-const filterAccounts = (type: ReportType) =>
-accounts.filter((account) => account.reportType === type);
+export const shouldRevalidate: ShouldRevalidateFunction = ({
+  currentUrl,
+  nextUrl,
+  defaultShouldRevalidate,
+}) => {
+  if (currentUrl.pathname !== nextUrl.pathname) return defaultShouldRevalidate;
 
+  const periodChanged = ["from", "to"].some(
+    (parameter) =>
+      currentUrl.searchParams.get(parameter) !==
+      nextUrl.searchParams.get(parameter)
+  );
 
+  return periodChanged ? defaultShouldRevalidate : false;
+};
 
-const FinancialReportSection = ({ title, accounts, verifications }) => (
-  <div className="mb-8">
-    <h4 className="font-semibold text-lg text-gray-700">{title}</h4>
-    <table className="w-full table-auto divide-y divide-gray-300">
-      <thead className="bg-gray-50">
-        <tr>
-          <th className="px-4 py-3 text-left text-sm font-medium text-gray-500 uppercase tracking-wider">
-            Kontonamn
-          </th>
-          <th className="px-4 py-3 text-right text-sm font-medium text-gray-500 uppercase tracking-wider">
-            Belopp
-          </th>
-        </tr>
-      </thead>
-      <tbody className="bg-white divide-y divide-gray-200">
-        {accounts.map((account) => (
-          <tr key={account.value}>
-            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
-              {account.label}
-            </td>
+const money = new Intl.NumberFormat("sv-SE", {
+  style: "currency",
+  currency: "SEK",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
-            <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-500">
-              {(
-                (account.reportType === ReportType.INCOME ||
-                account.reportType === ReportType.LIABILITIES
-                  ? -1
-                  : 1) * sumAccounts(verifications, [account.value])
-              ).toFixed(2)}{" "}
-              SEK
-            </td>
-          </tr>
-        ))}
-        <tr className="font-bold bg-gray-100">
-          <td className="px-4 py-3">Total {title.toLowerCase()}</td>
-          <td className="px-4 py-3 text-right">
-            {accounts
-              .reduce((total, account) => {
-                const accountSum = parseFloat(
-                  sumAccounts(verifications, [account.value])
-                );
+const dateForInput = (value: string) => value.slice(0, 10);
 
-                // Justera tecknet baserat på reportType
-                const adjustedSum =
-                  account.reportType === ReportType.INCOME ||
-                  account.reportType === ReportType.LIABILITIES
-                    ? -accountSum // Intäkter och skulder visas med inverterat tecken
-                    : accountSum; // Tillgångar och kostnader behåller sitt tecken
+const dateLabel = (value: string) =>
+  new Intl.DateTimeFormat("sv-SE", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Europe/Stockholm",
+  }).format(new Date(`${dateForInput(value)}T12:00:00.000Z`));
 
-                return total + adjustedSum;
-              }, 0)
-              .toFixed(2)}{" "}
-            SEK
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-);
+const reportAccounts = (type: ReportType) =>
+  accounts.filter((account) => account.reportType === type);
 
-function formatDateRange(startDate, endDate) {
-  const start = new Date(startDate).toISOString().slice(0, 10);
+const accountAmount = (
+  amountByAccount: Record<number, number>,
+  account: (typeof accounts)[number]
+) => {
+  const rawAmount = amountByAccount[account.value] || 0;
+  return account.reportType === ReportType.INCOME ||
+    account.reportType === ReportType.LIABILITIES
+    ? -rawAmount
+    : rawAmount;
+};
 
-  const endDateObj = new Date(endDate);
-  const isEndOfYear =
-    endDateObj.getMonth() === 11 && endDateObj.getDate() === 31;
-  const end = isEndOfYear
-    ? `${endDateObj.getFullYear()}-12-31`
-    : endDateObj.toISOString().slice(0, 10);
+const totalFor = (
+  amountByAccount: Record<number, number>,
+  reportType: ReportType
+) =>
+  reportAccounts(reportType).reduce(
+    (total, account) => total + accountAmount(amountByAccount, account),
+    0
+  );
 
-  return `${start} - ${end}`;
-}
-
-export default function FinancialReportModal() {
-  const navigate = useNavigate();
-  const { verifications, from, to } = useLoaderData(); // Data från loader
-
+function SummaryCard({
+  label,
+  value,
+  emphasis = false,
+}: {
+  label: string;
+  value: number;
+  emphasis?: boolean;
+}) {
   return (
     <div
-      className="fixed z-10 inset-0 overflow-y-auto"
-      aria-labelledby="modal-title"
-      role="dialog"
-      aria-modal="true"
+      className={`accounting-report-summary-item p-4 sm:p-5 ${
+        emphasis ? "accounting-report-summary-item--emphasis" : ""
+      }`}
     >
-      <div className="flex items-end justify-center text-center sm:block sm:p-0">
-        <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"></div>
-        <span
-          className="hidden sm:inline-block sm:align-middle sm:h-screen"
-          aria-hidden="true"
-        >
-          &#8203;
+      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 sm:text-xs">
+        {label}
+      </p>
+      <p
+        className={`mt-2 text-lg font-bold tabular-nums sm:text-2xl ${
+          emphasis
+            ? value >= 0
+              ? "text-emerald-900"
+              : "text-red-900"
+            : "text-slate-950"
+        }`}
+      >
+        {money.format(value)}
+      </p>
+    </div>
+  );
+}
+
+function ReportSection({
+  title,
+  description,
+  reportType,
+  amountByAccount,
+  showZeroAccounts,
+  adjustment,
+}: {
+  title: string;
+  description: string;
+  reportType: ReportType;
+  amountByAccount: Record<number, number>;
+  showZeroAccounts: boolean;
+  adjustment?: { label: string; value: number };
+}) {
+  const rows = reportAccounts(reportType)
+    .map((account) => ({
+      ...account,
+      amount: accountAmount(amountByAccount, account),
+    }))
+    .filter((account) => showZeroAccounts || Math.abs(account.amount) >= 0.005);
+  const total =
+    rows.reduce((sum, account) => sum + account.amount, 0) +
+    (adjustment?.value ?? 0);
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold text-slate-950">{title}</h3>
+            <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
+          </div>
+          <p className="shrink-0 text-sm font-bold tabular-nums text-slate-950 sm:text-base">
+            {money.format(total)}
+          </p>
+        </div>
+      </div>
+
+      {rows.length || adjustment ? (
+        <div className="divide-y divide-slate-100">
+          {rows.map((account) => {
+            const separatorIndex = account.label.indexOf(" - ");
+            const number =
+              separatorIndex >= 0
+                ? account.label.slice(0, separatorIndex)
+                : account.value;
+            const name =
+              separatorIndex >= 0
+                ? account.label.slice(separatorIndex + 3)
+                : account.label;
+
+            return (
+              <div
+                key={account.value}
+                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5 sm:px-6"
+              >
+                <span className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600">
+                  {number}
+                </span>
+                <span className="min-w-0 truncate text-sm font-medium text-slate-700">
+                  {name}
+                </span>
+                <span className="text-sm font-semibold tabular-nums text-slate-900">
+                  {money.format(account.amount)}
+                </span>
+              </div>
+            );
+          })}
+          {adjustment ? (
+            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5 sm:px-6">
+              <span className="rounded-lg bg-[#f3e4de] px-2 py-1 text-[11px] font-bold text-[#985744]">ÅR</span>
+              <span className="text-sm font-medium text-slate-700">{adjustment.label}</span>
+              <span className="text-sm font-semibold tabular-nums text-slate-900">{money.format(adjustment.value)}</span>
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <p className="px-4 py-8 text-center text-sm text-slate-500">
+          Inga belopp att visa för perioden.
+        </p>
+      )}
+
+      <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-4 sm:px-6">
+        <span className="text-sm font-bold text-slate-900">Summa {title.toLocaleLowerCase("sv-SE")}</span>
+        <span className="text-sm font-bold tabular-nums text-slate-950 sm:text-base">
+          {money.format(total)}
         </span>
-        <div className="inline-block align-bottom text-left bg-white rounded-lg shadow-xl overflow-hidden transform transition-all sm:align-middle sm:my-8 sm:w-full sm:max-w-6xl">
-          <div className="bg-white px-6 py-5 sm:p-6 sm:pb-4">
-            <div className="sm:flex sm:items-start ">
-              <div className="text-center sm:ml-4 sm:text-left w-full">
-                <h3
-                  className="text-xl leading-6 font-bold text-gray-900"
-                  id="modal-title"
-                >
-                  Balans- och Resultaträkning för {formatDateRange(from, to)}
-                </h3>
+      </div>
+    </section>
+  );
+}
 
-                <div className="mt-6">
-                  {/* Balansräkning */}
-                  <FinancialReportSection
-                    title="Tillgångar"
-                    accounts={filterAccounts(ReportType.BALANCE)}
-                    verifications={verifications}
-                  />
-                  <FinancialReportSection
-                    title="Skulder"
-                    accounts={filterAccounts(ReportType.LIABILITIES)}
-                    verifications={verifications}
-                  />
+export default function FinancialOverview() {
+  const { accountTotals, from, to } = useLoaderData<{
+    accountTotals: Array<{ account: number; amount: number }>;
+    from: string;
+    to: string;
+  }>();
+  const [searchParams] = useSearchParams();
+  const [showZeroAccounts, setShowZeroAccounts] = useState(false);
+  const selectedReport = searchParams.get("report") || "income";
+  const isIncomeReport = selectedReport === "income";
+  const amountByAccount = Object.fromEntries(
+    accountTotals.map(({ account, amount }) => [account, amount])
+  ) as Record<number, number>;
 
-                  {/* Resultaträkning */}
-                  <FinancialReportSection
-                    title="Intäkter"
-                    accounts={filterAccounts(ReportType.INCOME)}
-                    verifications={verifications}
-                  />
-                  <FinancialReportSection
-                    title="Kostnader"
-                    accounts={filterAccounts(ReportType.EXPENSE)}
-                    verifications={verifications}
+  const income = totalFor(amountByAccount, ReportType.INCOME);
+  const expenses = totalFor(amountByAccount, ReportType.EXPENSE);
+  const assets = totalFor(amountByAccount, ReportType.BALANCE);
+  const liabilities = totalFor(amountByAccount, ReportType.LIABILITIES);
+  const result = income - expenses;
+  const equityAndLiabilities = liabilities + result;
+  const balance = assets - equityAndLiabilities;
+  const currentFrom = dateForInput(from);
+  const currentTo = dateForInput(to);
+  const periodYear = Number(currentFrom.slice(0, 4));
+  const presets = [
+    { label: "Helår", from: `${periodYear}-01-01`, to: `${periodYear}-12-31` },
+    { label: "K1", from: `${periodYear}-01-01`, to: `${periodYear}-03-31` },
+    { label: "K2", from: `${periodYear}-04-01`, to: `${periodYear}-06-30` },
+    { label: "K3", from: `${periodYear}-07-01`, to: `${periodYear}-09-30` },
+    { label: "K4", from: `${periodYear}-10-01`, to: `${periodYear}-12-31` },
+  ];
+  const knownAccounts = new Set(accounts.map((account) => account.value));
+  const unknownAccountTotals = accountTotals.filter(
+    ({ account, amount }) => !knownAccounts.has(account) && Math.abs(amount) >= 0.005
+  );
+
+  const periodHref = (periodFrom: string, periodTo: string) => {
+    const query = new URLSearchParams({
+      report: selectedReport,
+      from: periodFrom,
+      to: periodTo,
+    });
+    return `/admin/verifications/financial-overview?${query.toString()}`;
+  };
+
+  return (
+    <div className="space-y-5 pb-16">
+      <section className="border-y border-stone-300 py-6 sm:py-8">
+        <div>
+          <div>
+            <p className="accounting-kicker text-xs font-bold uppercase tracking-[0.14em]">
+              Rapport
+            </p>
+            <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+              {isIncomeReport ? "Resultaträkning" : "Balansräkning"}
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+              {isIncomeReport
+                ? "Se periodens intäkter, kostnader och beräknade resultat."
+                : "Se företagets tillgångar, skulder och eget kapital per valt datum."}
+            </p>
+          </div>
+
+          <div className="accounting-period-picker mt-7">
+            <div className="accounting-period-heading">
+              <p>{isIncomeReport ? "Period" : "Balansdag"}</p>
+              <strong>{isIncomeReport ? `${dateLabel(from)}–${dateLabel(to)}` : dateLabel(to)}</strong>
+            </div>
+
+            <nav className="accounting-period-presets" aria-label="Välj rapportperiod">
+              {presets.map((preset) => {
+                const active =
+                  currentFrom === preset.from && currentTo === preset.to;
+                return (
+                  <Link
+                    key={preset.label}
+                    to={periodHref(preset.from, preset.to)}
+                    prefetch="intent"
+                    className={`accounting-period-preset ${
+                      active ? "accounting-period-preset--active" : ""
+                    }`}
+                  >
+                    {preset.label}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            <details className="accounting-custom-period">
+              <summary>Annan period</summary>
+              <Form method="get" className="accounting-custom-period-form">
+                <input type="hidden" name="report" value={selectedReport} />
+                {isIncomeReport ? (
+                  <div>
+                    <span>Från</span>
+                    <AccountingDateField
+                      id="report-from"
+                      name="from"
+                      defaultValue={currentFrom}
+                      label="Periodens startdatum"
+                    />
+                  </div>
+                ) : (
+                  <input type="hidden" name="from" value={`${periodYear}-01-01`} />
+                )}
+                <div>
+                  <span>Till</span>
+                  <AccountingDateField
+                    id="report-to"
+                    name="to"
+                    defaultValue={currentTo}
+                    label="Periodens slutdatum"
                   />
                 </div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-gray-50 px-6 py-3 sm:flex sm:flex-row-reverse">
-            <button
-              type="button"
-              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
-              onClick={() => navigate(-1)}
-            >
-              Stäng
-            </button>
+                <button type="submit">
+                  Visa perioden <span aria-hidden="true">→</span>
+                </button>
+              </Form>
+            </details>
           </div>
         </div>
+      </section>
+
+      <section className="accounting-report-summary grid grid-cols-1 sm:grid-cols-3" aria-label="Rapportsammanfattning">
+        {isIncomeReport ? (
+          <>
+            <SummaryCard label="Intäkter" value={income} />
+            <SummaryCard label="Kostnader" value={expenses} />
+            <SummaryCard label="Periodens resultat" value={result} emphasis />
+          </>
+        ) : (
+          <>
+            <SummaryCard label="Tillgångar" value={assets} />
+            <SummaryCard label="Skulder/eget kapital" value={equityAndLiabilities} />
+            <SummaryCard label="Balans" value={balance} emphasis />
+          </>
+        )}
+      </section>
+
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-medium text-slate-500">
+          {isIncomeReport ? `Period ${dateForInput(from)}–${dateForInput(to)}` : `Balans per ${dateForInput(to)}`}
+        </p>
+        <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-600">
+          <input
+            type="checkbox"
+            checked={showZeroAccounts}
+            onChange={(event) => setShowZeroAccounts(event.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600"
+          />
+          Visa nollkonton
+        </label>
+      </div>
+
+      {unknownAccountTotals.length ? (
+        <section className="border-y border-[#d7b0a3] bg-[#fbf3ef] px-4 py-4 text-sm text-[#7d493a] sm:px-6">
+          <p className="font-bold">Konton som behöver klassificeras</p>
+          <p className="mt-1 text-xs leading-5">
+            {unknownAccountTotals.map(({ account, amount }) => `${account}: ${money.format(amount)}`).join(" · ")}
+          </p>
+        </section>
+      ) : null}
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        {isIncomeReport ? (
+          <>
+            <ReportSection
+              title="Intäkter"
+              description="Försäljning och övriga intäkter under perioden."
+              reportType={ReportType.INCOME}
+              amountByAccount={amountByAccount}
+              showZeroAccounts={showZeroAccounts}
+            />
+            <ReportSection
+              title="Kostnader"
+              description="Inköp och övriga kostnader under perioden."
+              reportType={ReportType.EXPENSE}
+              amountByAccount={amountByAccount}
+              showZeroAccounts={showZeroAccounts}
+            />
+          </>
+        ) : (
+          <>
+            <ReportSection
+              title="Tillgångar"
+              description="Det företaget äger eller har rätt till."
+              reportType={ReportType.BALANCE}
+              amountByAccount={amountByAccount}
+              showZeroAccounts={showZeroAccounts}
+            />
+            <ReportSection
+              title="Skulder"
+              description="Skulder, eget kapital och avräkningskonton."
+              reportType={ReportType.LIABILITIES}
+              amountByAccount={amountByAccount}
+              showZeroAccounts={showZeroAccounts}
+              adjustment={{ label: "Beräknat resultat", value: result }}
+            />
+          </>
+        )}
       </div>
     </div>
   );

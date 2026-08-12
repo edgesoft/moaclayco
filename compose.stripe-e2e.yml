@@ -1,0 +1,140 @@
+name: moaclayco-stripe-e2e
+
+services:
+  mongo-e2e:
+    image: mongo:8.2.12
+    command:
+      - mongod
+      - --replSet
+      - rs0
+      - --bind_ip_all
+      - --port
+      - "27017"
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "quit(db.adminCommand({ ping: 1 }).ok === 1 ? 0 : 1)"
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+    volumes:
+      - stripe_e2e_mongo:/data/db
+
+  mongo-init:
+    image: mongo:8.2.12
+    depends_on:
+      mongo-e2e:
+        condition: service_healthy
+    restart: "no"
+    entrypoint:
+      - mongosh
+      - mongodb://mongo-e2e:27017/admin
+      - --quiet
+      - --eval
+    command:
+      - >-
+        try {
+          const status = rs.status();
+          quit(status.ok === 1 ? 0 : 1);
+        } catch (error) {
+          const result = rs.initiate({
+            _id: "rs0",
+            members: [{ _id: 0, host: "mongo-e2e:27017" }]
+          });
+          if (result.ok !== 1 && result.codeName !== "AlreadyInitialized") {
+            printjson(result);
+            quit(1);
+          }
+        }
+
+  mailpit:
+    image: axllent/mailpit:v1.30.0
+    environment:
+      MP_MAX_MESSAGES: "100"
+    ports:
+      - "127.0.0.1:${STRIPE_E2E_MAILPIT_PORT:-8026}:8025"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    environment:
+      AWS_ACCESS_KEY_ID: stripe-e2e-no-s3-access
+      AWS_COLLECTION_PATH: stripe-e2e/collections
+      AWS_ITEM_PATH: stripe-e2e/items
+      AWS_REGION: eu-north-1
+      AWS_S3_BUCKET_NAME: stripe-e2e-no-s3-access
+      AWS_SECRET_ACCESS_KEY: stripe-e2e-no-s3-access
+      AWS_VERIFICATIONS_PATH: stripe-e2e/verifications
+      EMAIL_HOST: mailpit
+      EMAIL_PASSWORD: ""
+      EMAIL_PORT: "1025"
+      EMAIL_SECURE: "false"
+      EMAIL_USERNAME: ""
+      HOST: 0.0.0.0
+      MONGODB_DATABASE: moaclayco-stripe-e2e
+      MONGODB_URL: mongodb://mongo-e2e:27017/moaclayco-stripe-e2e?replicaSet=rs0
+      NODE_ENV: development
+      PORT: "3000"
+      SESSION_SECRET: stripe-e2e-session-secret-only-for-isolated-local-tests
+      STRIPE_PUBLIC_KEY: pk_test_stripe_e2e_placeholder
+      STRIPE_SRV: ${STRIPE_SRV:?A Stripe sandbox secret key is required}
+      STRIPE_E2E_BASE_URL: http://app:3000
+      STRIPE_E2E_DATABASE: moaclayco-stripe-e2e
+      STRIPE_E2E_MAILPIT_URL: http://mailpit:8025
+      STRIPE_WEBHOOK: ${STRIPE_WEBHOOK:?Run the Stripe E2E orchestrator instead of starting this compose file directly}
+      __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: app
+    depends_on:
+      mailpit:
+        condition: service_started
+      mongo-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${STRIPE_E2E_APP_PORT:-3200}:3000"
+    volumes:
+      - .:/app
+      - stripe_e2e_node_modules:/app/node_modules
+    init: true
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - tools/smoke-check.mjs
+        - --url=http://localhost:3000
+        - --timeout=5000
+      interval: 3s
+      timeout: 7s
+      retries: 30
+      start_period: 20s
+
+  stripe-secret:
+    image: stripe/stripe-cli:v1.45.2
+    environment:
+      STRIPE_API_KEY: ${STRIPE_SRV:?A Stripe sandbox secret key is required}
+    command:
+      - listen
+      - --print-secret
+      - --skip-update
+
+  stripe-listener:
+    image: stripe/stripe-cli:v1.45.2
+    environment:
+      STRIPE_API_KEY: ${STRIPE_SRV:?A Stripe sandbox secret key is required}
+    command:
+      - listen
+      - --events
+      - payment_intent.succeeded,payment_intent.payment_failed,payment_intent.canceled,payout.paid
+      - --forward-to
+      - http://app:3000/webhook
+      - --skip-update
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  stripe_e2e_mongo:
+  stripe_e2e_node_modules:

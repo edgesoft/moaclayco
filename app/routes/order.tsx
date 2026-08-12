@@ -1,115 +1,188 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useCart } from "react-use-cart";
 import {
-  createCookie,
-  LoaderFunction,
+  data as json,
+  Link,
+  LoaderFunctionArgs,
   MetaFunction,
   redirect,
-} from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
-import { Orders } from "~/schemas/orders";
-import { Order } from "~/types";
+  useLoaderData,
+} from "react-router";
+import mongoose from "mongoose";
+import { useEffect } from "react";
+import { useCart } from "react-use-cart";
+import OrderSummary from "~/components/cart/OrderSummary";
 import { useTheme } from "~/components/Theme";
+import { Orders } from "~/schemas/orders";
+import { orderCookie } from "~/services/order-cookie.server";
+import stripeClient from "~/stripeClient";
+import { Order } from "~/types";
+import { getDomain } from "~/utils/domain";
+import { toLoaderData } from "~/utils/loaderData";
 
-export let loader: LoaderFunction = async ({ request }) => {
-  let url = new URL(await request.url);
-  let body = new URLSearchParams(url.search);
-  const paymentIntent = body.get("payment_intent");
-  let cookie = createCookie("order", {
-    expires: new Date(),
-  });
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const url = new URL(request.url);
+  const paymentIntentId = url.searchParams.get("payment_intent") ?? "";
+  const cookieOrderId = String(
+    (await orderCookie.parse(request.headers.get("Cookie"))) ?? ""
+  );
+  const domain = getDomain(request);
 
-  const order = (await Orders.findOne({
-    "paymentIntent.id": paymentIntent,
-  }).lean()) as Order;
-
-  if (!order) {
+  if (
+    !domain ||
+    !mongoose.Types.ObjectId.isValid(cookieOrderId) ||
+    !paymentIntentId
+  ) {
     return redirect("/");
   }
 
-  const serialize = {
+  const order = (await Orders.findOne({
+    _id: cookieOrderId,
+    domain: domain.domain,
+    "paymentIntent.id": paymentIntentId,
+  }).lean()) as Order | null;
+
+  if (!order) return redirect("/");
+
+  const paymentIntent = await stripeClient.paymentIntents.retrieve(paymentIntentId);
+  const paymentSucceeded = paymentIntent.status === "succeeded";
+  const serializedOrder: Order = {
     ...order,
-    redirect_status: body.get("redirect_status"),
+    _id: String(order._id),
+    items: order.items.map((item) => ({
+      ...item,
+      _id: String(item._id ?? item.itemRef),
+      itemRef: String(item.itemRef),
+    })),
   };
 
-  return new Response(JSON.stringify(serialize), {
-    status: 200,
-    headers: {
-      "Set-Cookie": await cookie.serialize(null),
-    },
-  });
+  return json(
+    toLoaderData({
+      ...serializedOrder,
+      redirect_status: paymentSucceeded ? "succeeded" : paymentIntent.status,
+      testMode:
+        process.env.STRIPE_PUBLIC_KEY?.startsWith("pk_test_") === true &&
+        process.env.STRIPE_SRV?.startsWith("sk_test_") === true,
+    }),
+    {
+      headers: paymentSucceeded
+        ? { "Set-Cookie": await orderCookie.serialize("", { maxAge: 0 }) }
+        : undefined,
+    }
+  );
 };
 
-export let meta: MetaFunction = () => {
-  return [
-    {
-      title: "Moa Clay Collection",
-    },
-    {
-      name: "description",
-      content: "Moa Clay Collection",
-    },
-  ];
-};
+export const meta: MetaFunction = () => [
+  { title: "Orderbekräftelse — Moa Clay Collection" },
+  { name: "description", content: "Status för din beställning hos Moa Clay Collection" },
+];
 
-export default function Index() {
-  const theme = useTheme()
-  let d = useLoaderData();
-  let data = null;
-  let navigation = useNavigate();
-  try {
-    data = JSON.parse(d);
-  } catch (e) {}
-
+export default function OrderPage() {
+  const theme = useTheme();
+  const data = useLoaderData<typeof loader>();
   const { emptyCart } = useCart();
+  const succeeded = data.redirect_status === "succeeded";
+  const shortOrderId = String(data._id).slice(-8).toUpperCase();
+
   useEffect(() => {
-    emptyCart();
-  }, []);
+    if (succeeded) emptyCart();
+  }, [succeeded, emptyCart]);
 
   return (
-    <div className="ml-4 mr-2 mt-20">
-      <div className="py-4">
-        {data.redirect_status === "succeeded" ? (
-          <>
-            <p className="text-gray-700 text-2xl font-bold">
-              Tack så mycket för din beställning!
-            </p>
-            <p className="py-2">
-              Ditt ordernummer är{" "}
-              <span className="font-semibold">{data._id}</span>
-            </p>
+    <main className="mcc-purchase-page mcc-order-page">
+      <div className="mcc-purchase-shell">
+        <header className="mcc-purchase-hero mcc-order-hero">
+          <Link className="mcc-purchase-back" to="/">
+            <span aria-hidden="true">←</span>
+            Till kollektionerna
+          </Link>
 
-            <p className="pt-4 text-base">
-              Du kommer få en orderbekräftelse på din mail med ditt ordernummer.
-              <br />
-              <br />
-              Vi kommer att skicka ordern så fort som möjligt. Om du har frågor
-              om din order så är du välkommen att skicka frågor till &nbsp;
-              <span className="text-blue-600">{theme?.email}</span>. Ange
-              ordernummer i din ämnesrad.
+          <div className="mcc-purchase-hero__copy">
+            <p className="mcc-purchase-kicker">
+              {succeeded ? "Beställningen är mottagen" : "Betalningen avbröts"}
             </p>
-          </>
-        ) : (
-          <>
-            <p className="text-gray-700 text-2xl font-bold">
-              Ditt köp gick inte igenom
+            <h1>{succeeded ? "Tack." : "Inte riktigt klart."}</h1>
+            <p>
+              {succeeded
+                ? "Vi packar din beställning omsorgsfullt och hör av oss när den är på väg."
+                : "Inga pengar har dragits. Du kan gå tillbaka och försöka igen."}
             </p>
-            <p className="py-2">
-              Du har avbrytit ditt köp eller så har betalningen inte gått
-              igenom.
-            </p>
-          </>
-        )}
-        <button
-          onClick={() => {
-            navigation("/");
-          }}
-          className="mt-2 p-2 text-gray-700 font-semibold bg-rosa rounded"
-        >
-          Se kollektioner
-        </button>
+          </div>
+
+          <ol aria-label="Steg i köpet" className="mcc-purchase-steps">
+            <li>
+              <span>01</span> Varukorg
+            </li>
+            <li aria-current={succeeded ? undefined : "step"}>
+              <span>02</span> Betalning
+            </li>
+            <li aria-current={succeeded ? "step" : undefined}>
+              <span>03</span> Klart
+            </li>
+          </ol>
+        </header>
+
+        {data.testMode ? (
+          <p className="mcc-purchase-test-note">
+            <span aria-hidden="true">○</span>
+            Testorder — inga riktiga pengar har dragits
+          </p>
+        ) : null}
+
+        <div className="mcc-order-layout">
+          <section className="mcc-order-result">
+            <div
+              aria-hidden="true"
+              className={`mcc-order-result__mark${succeeded ? " is-success" : ""}`}
+            >
+              {succeeded ? "✓" : "↩"}
+            </div>
+            <p className="mcc-order-result__label">Ordernummer</p>
+            <p className="mcc-order-result__number">{shortOrderId}</p>
+
+            {succeeded ? (
+              <>
+                <p className="mcc-order-result__message">
+                  En bekräftelse skickas till <strong>{data.customer.email}</strong>.
+                  Leveransen går till {data.customer.firstname} {data.customer.lastname}
+                  {" på "}{data.customer.postaddress}, {data.customer.zipcode}{" "}
+                  {data.customer.city}.
+                </p>
+                <div className="mcc-order-result__note">
+                  <span aria-hidden="true">◇</span>
+                  <p>
+                    Har du frågor? Skriv till{" "}
+                    <a href={`mailto:${theme?.email}`}>{theme?.email}</a> och ange
+                    ordernummer {shortOrderId}.
+                  </p>
+                </div>
+                <Link className="mcc-purchase-action" to="/">
+                  Se kollektioner <span aria-hidden="true">→</span>
+                </Link>
+              </>
+            ) : (
+              <>
+                <p className="mcc-order-result__message">
+                  Betalningen fick status <strong>{data.redirect_status}</strong>.
+                  Din varukorg finns kvar medan du försöker igen.
+                </p>
+                <Link
+                  className="mcc-purchase-action"
+                  to={`/checkout?order=${data._id}`}
+                >
+                  Försök betala igen <span aria-hidden="true">→</span>
+                </Link>
+              </>
+            )}
+          </section>
+
+          <OrderSummary
+            discount={data.discount}
+            freightCost={data.freightCost}
+            heading="Ordersammanfattning"
+            items={data.items}
+            totalSum={data.totalSum}
+          />
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

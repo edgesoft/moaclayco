@@ -1,11 +1,12 @@
 fly.toml
-Dockerfile
 .dockerignore
 node_modules
 .git
 *.log
 .DS_Store
 .env
+.env.*
+!.env.*.example
 /.cache
 /public/build
 /build

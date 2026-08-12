@@ -1,91 +1,121 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
-import { ActionFunction, LoaderFunction, json } from "@remix-run/node";
+import { data as json } from "react-router";
+import type { ActionFunction, LoaderFunction } from "react-router";
 import { Readable } from "stream";
-import sharp from 'sharp';
-import { v4 as uuidv4 } from 'uuid'; 
+import { v4 as uuidv4 } from "uuid";
+import { Collections } from "~/schemas/collections";
+import { auth } from "~/services/auth.server";
 import { s3Client } from "~/services/s3.server";
+import { getDomain } from "~/utils/domain";
+import { optimizeImageBuffer } from "~/utils/imageProcessing.server";
+import {
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
-
-const awsItemPath = process.env.AWS_ITEM_PATH
+const awsItemPath = process.env.AWS_ITEM_PATH;
+const MAX_IMAGE_SIZE = 18 * 1024 * 1024;
+const MAX_IMAGE_REQUEST_SIZE = MAX_IMAGE_SIZE + 512 * 1024;
+const acceptedImagePattern = /\.(jpe?g|png|webp|heic|heif)$/i;
 
 if (!awsItemPath) {
-  throw new Error("AWS configuration is not complete. Please check your environment variables.");
-}
-
-
-
-export async function uploadToS3(file: File | Blob, collectionRef: string) {
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const thumbnailBuffer = await sharp(buffer)
-  .resize(700) // Resize the image to have the given width
-  .webp({ quality: 90 }) // Convert the image to webp format with a quality of 90
-  .toBuffer();
-
-  const fileSize = thumbnailBuffer.length; // This is the size of the thumbnail file in bytes
-  const fileStream = bufferToStream(thumbnailBuffer);
-  const uniqueFileName = `${uuidv4()}.webp`;
-
-  const uploadParams = {
-    Bucket: process.env.AWS_S3_BUCKET_NAME,
-    Key: `${awsItemPath}/${collectionRef}/${uniqueFileName}`,
-    Body: fileStream,
-    ContentType: "webp",
-  };
-
-  try {
-    // Create a managed upload, which allows for pausing and resuming uploads.
-    const uploader = new Upload({
-      client: s3Client,
-      params: uploadParams,
-    });
-
-    uploader.on("httpUploadProgress", (progress) => {
-      console.log(progress); // This will print upload progress.
-      console.log(fileSize);
-    });
-
-    await uploader.done();
-    return { key: uploadParams.Key, uniqueFileName };
-  } catch (error) {
-    const e = error as Error;
-    console.error("Error uploading file: ", e);
-    throw new Error(`Failed to upload file: ${e.message}`);
-  }
+  throw new Error(
+    "AWS configuration is not complete. Please check your environment variables."
+  );
 }
 
 function bufferToStream(buffer: Buffer) {
-  const stream = new Readable({
+  return new Readable({
     read() {
       this.push(buffer);
       this.push(null);
     },
   });
+}
 
-  return stream;
+async function uploadToS3(file: File, collectionRef: string) {
+  const inputBuffer = Buffer.from(await file.arrayBuffer());
+  const { data: optimizedBuffer, info } = await optimizeImageBuffer(
+    inputBuffer,
+    1600
+  );
+  const uniqueFileName = `${uuidv4()}.webp`;
+  const key = `${awsItemPath}/${collectionRef}/${uniqueFileName}`;
+
+  const uploader = new Upload({
+    client: s3Client,
+    params: {
+      Body: bufferToStream(optimizedBuffer),
+      Bucket: process.env.AWS_S3_BUCKET_NAME,
+      ContentType: "image/webp",
+      Key: key,
+    },
+  });
+
+  await uploader.done();
+
+  return {
+    height: info.height,
+    key,
+    sizeBytes: info.size,
+    uniqueFileName,
+    width: info.width,
+  };
 }
 
 export const action: ActionFunction = async ({ request }) => {
-  const formData = await request.formData();
-  const file  = formData.get("file");
-  const collectionRef  = formData.get("collectionRef");
-
-  if (!collectionRef) return json({error: "collectionRef needs to be present"}, {status: 400})
-  if (!file) return json({ error: "No file uploaded" }, { status: 400 });
-
-  if (file instanceof File) {
-    try {
-        const result = await uploadToS3(file, collectionRef.toString()); // The utility function to upload the file to S3
-        return json(result);
-      } catch (error) {
-        console.error(error);
-        return json({ error: "Failed to upload file" }, { status: 500 });
-      }
+  await auth.isAuthenticated(request, { failureRedirect: "/login" });
+  const domain = getDomain(request);
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(request, MAX_IMAGE_REQUEST_SIZE);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json({ error: "Bilden är större än 18 MB." }, { status: 413 });
+    }
+    throw error;
   }
-  return json({ error: "Failed to upload file" }, { status: 500 });
+  const file = formData.get("file");
+  const collectionRef = formData.get("collectionRef")?.toString().trim();
 
+  if (!domain) return json({ error: "Okänd domän." }, { status: 400 });
+  if (!collectionRef) {
+    return json({ error: "Kollektionen saknas." }, { status: 400 });
+  }
+
+  const collection = await Collections.exists({
+    domain: domain.domain,
+    shortUrl: collectionRef,
+  });
+  if (!collection) {
+    return json({ error: "Kollektionen kunde inte hittas." }, { status: 404 });
+  }
+
+  if (!(file instanceof File) || file.size === 0) {
+    return json({ error: "Ingen bild valdes." }, { status: 400 });
+  }
+  if (!acceptedImagePattern.test(file.name)) {
+    return json(
+      { error: "Välj en bild i JPG-, PNG-, WebP- eller HEIC-format." },
+      { status: 415 }
+    );
+  }
+  if (file.size > MAX_IMAGE_SIZE) {
+    return json({ error: "Bilden är större än 18 MB." }, { status: 413 });
+  }
+
+  try {
+    return json(await uploadToS3(file, collectionRef));
+  } catch (error) {
+    console.error("Image upload failed", error);
+    return json(
+      { error: "Bilden kunde inte bearbetas eller laddas upp." },
+      { status: 500 }
+    );
+  }
 };
 
-export const loader: LoaderFunction = () => {
+export const loader: LoaderFunction = async ({ request }) => {
+  await auth.isAuthenticated(request, { failureRedirect: "/login" });
   return null;
 };

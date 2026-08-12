@@ -1,25 +1,27 @@
 import {
   ActionFunction,
-  json,
+  data as json,
+  Form,
   LoaderFunction,
   redirect,
-} from "@remix-run/node";
-import { useLoaderData, useNavigate, useSubmit } from "@remix-run/react";
-import { auth } from "~/services/auth.server";
-import { Controller, useForm } from "react-hook-form";
+  useLoaderData,
+  useNavigate,
+} from "react-router";
+import { useState } from "react";
 import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import ClientOnly from "~/components/ClientOnly";
-import Select from "react-select";
 import { Users } from "~/schemas/user";
-import { User } from "~/types";
+import { auth } from "~/services/auth.server";
 import { commitSession, sessionStorage } from "~/services/session.server";
+import { User } from "~/types";
+import {
+  MAX_STANDARD_FORM_REQUEST_SIZE,
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 const formSchema = z.object({
-  fiscalYear: z.string().min(1, "Datum är obligatoriskt"),
+  fiscalYear: z.coerce.number().int().min(2000).max(2200),
 });
-
-type FormData = z.infer<typeof formSchema>;
 
 export const loader: LoaderFunction = async ({ request }) => {
   const user = await auth.isAuthenticated(request, {
@@ -28,157 +30,113 @@ export const loader: LoaderFunction = async ({ request }) => {
   return json({ year: user.fiscalYear });
 };
 
-export const action: ActionFunction = async ({ request, params }) => {
-  const formData = await request.formData();
+export const action: ActionFunction = async ({ request }) => {
   const user: User = await auth.isAuthenticated(request, {
     failureRedirect: "/login",
   });
-
-  const fiscalYear = formData.get("fiscalYear");
-
-  // Validera med Zod och kolla om resultatet är success
-  const result = formSchema.safeParse({
-    fiscalYear,
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(
+      request,
+      MAX_STANDARD_FORM_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json({ error: "Formuläret är för stort" }, { status: 413 });
+    }
+    throw error;
+  }
+  const parsed = formSchema.safeParse({
+    fiscalYear: formData.get("fiscalYear"),
   });
 
+  if (!parsed.success) {
+    return json({ error: parsed.error.issues[0]?.message }, { status: 400 });
+  }
+
+  const fiscalYear = parsed.data.fiscalYear;
   await Users.updateOne({ _id: user._id }, { fiscalYear });
-  user.fiscalYear = parseInt(fiscalYear as string);
+  user.fiscalYear = fiscalYear;
 
-  let session = await sessionStorage.getSession(request.headers.get("cookie"));
+  const session = await sessionStorage.getSession(request.headers.get("cookie"));
   session.set("user", user);
-
-  // commit the session
-  let headers = new Headers({ "Set-Cookie": await commitSession(session) });
+  const headers = new Headers({ "Set-Cookie": await commitSession(session) });
 
   return redirect("/admin/verifications", { headers });
 };
 
-interface CustomStyles {
-  menu: (provided: any) => any;
-  menuList: (provided: any) => any;
-}
-
-const customStyles: CustomStyles = {
-  menu: (provided) => ({
-    ...provided,
-    zIndex: 5, // För säkerhet om andra element är överlappande
-    maxHeight: "120px", // Sätter maxhöjden för den utvecklade dropdown-listan
-    overflowY: "auto", // Gör dropdownen scrollbar om innehållet är längre
-  }),
-  menuList: (provided) => ({
-    ...provided,
-    maxHeight: "120px", // Höjden på själva listan
-    padding: "0", // Minska padding om det behövs
-  }),
-};
-
 export default function Settings() {
   const navigate = useNavigate();
-  const submit = useSubmit();
   const { year } = useLoaderData<{ year: number }>();
-  const getRelevantYears = (year: number): number[] => {
-    return [year - 2, year - 1, year, year + 1];
-  };
-
-  const relevantYears = getRelevantYears(year).map((year) => ({
-    label: year.toString(),
-    value: year.toString(),
-  }));
-
-  const {
-    handleSubmit,
-    control,
-    formState: { errors },
-  } = useForm<FormData>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      fiscalYear: year.toString(),
-    },
-  });
+  const [selectedYear, setSelectedYear] = useState(year);
+  const relevantYears = [year - 2, year - 1, year, year + 1];
 
   return (
-    <div
-      className="fixed z-10 inset-0 overflow-y-auto"
-      aria-labelledby="modal-title"
-      role="dialog"
-      aria-modal="true"
-    >
-      <div className="flex items-center justify-center min-h-screen text-center sm:block sm:p-0">
-        <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"></div>
-        <span
-          className="hidden sm:inline-block sm:align-middle sm:h-screen"
-          aria-hidden="true"
-        >
-          &#8203;
-        </span>
-        <div className="inline-block align-bottom w-full max-w-md  bg-white rounded-lg text-left shadow-xl overflow-hidden transform transition-all sm:align-middle sm:max-w-6xl">
-          <div className="bg-white px-6 py-5">
-            <div className="sm:flex sm:items-start">
-              <div className="w-full sm:text-left">
-                <h3
-                  className="text-lg leading-6 font-medium text-gray-900"
-                  id="modal-title"
-                >
-                  Välj bokföringsår
-                </h3>
-                <form
-                  onSubmit={handleSubmit((data) => {
-                    console.log(data);
+    <section className="pb-16" aria-labelledby="fiscal-year-title">
+      <button
+        type="button"
+        onClick={() => navigate("/admin/verifications")}
+        className="mb-3 inline-flex h-10 items-center rounded-lg px-1 text-xs font-bold text-slate-500 hover:text-slate-900"
+      >
+        <span aria-hidden="true" className="mr-2">←</span>
+        Till verifikationer
+      </button>
 
-                    submit(data, { method: "post" });
-                  })}
-                >
-                  <div>
-                    <Controller
-                      control={control}
-                      key={`fiscalYear`}
-                      name={`fiscalYear`}
-                      render={({ field }) => (
-                        <ClientOnly fallback={null}>
-                          {() => (
-                            <Select
-                              instanceId={`fiscalYear`}
-                              {...field}
-                              options={relevantYears}
-                              onChange={(option) =>
-                                field.onChange(option ? option.value : null)
-                              }
-                              value={relevantYears.find(
-                                (acc) => acc.value === field.value
-                              )}
-                              placeholder="Välj bokföringsår"
-                              styles={customStyles}
-                            />
-                          )}
-                        </ClientOnly>
-                      )}
-                    />
-                  </div>
-                  <div>
-                    <button
-                      type="submit"
-                      className="inline-flex justify-center mb-2 mt-2 px-4 py-2 w-full text-white text-base font-medium bg-blue-600 hover:bg-blue-700 border border-transparent rounded-md focus:outline-none shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:text-sm"
-                    >
-                      Spara
-                    </button>
-                  </div>
-                </form>
-              </div>
+      <div className="max-w-3xl border-y border-stone-300 py-7 sm:py-9">
+        <p className="accounting-kicker text-xs font-bold uppercase tracking-[0.14em]">
+          Inställning
+        </p>
+        <h2
+          id="fiscal-year-title"
+          className="mt-3 text-3xl tracking-tight text-stone-950 sm:text-4xl"
+        >
+          Välj bokföringsår
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-stone-500">
+          Listan och rapporterna visar verifikationer från det valda året.
+        </p>
+
+        <Form method="post" className="mt-7">
+          <fieldset>
+            <legend className="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-stone-500">
+              Bokföringsår
+            </legend>
+            <div className="grid grid-cols-4 border-b border-stone-300">
+              {relevantYears.map((relevantYear) => (
+                <label key={relevantYear} className="group cursor-pointer">
+                  <input
+                    type="radio"
+                    name="fiscalYear"
+                    value={relevantYear}
+                    checked={relevantYear === selectedYear}
+                    onChange={() => setSelectedYear(relevantYear)}
+                    className="peer sr-only"
+                  />
+                  <span className="-mb-px flex h-14 items-center justify-center border-b-2 border-transparent bg-transparent text-base font-medium text-stone-400 transition hover:text-stone-900 peer-checked:border-[#b86e59] peer-checked:text-[#985744] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[#b86e59]">
+                    {relevantYear}
+                  </span>
+                </label>
+              ))}
             </div>
+          </fieldset>
+
+          <div className="accounting-form-actions mt-7 grid gap-3 sm:grid-cols-[9.5rem_15rem] sm:justify-end">
+            <button
+              type="button"
+              onClick={() => navigate("/admin/verifications")}
+              className="accounting-cancel-action"
+            >
+              Avbryt
+            </button>
+            <button
+              type="submit"
+              className="accounting-submit-action"
+            >
+              Använd {selectedYear} <span aria-hidden="true">→</span>
+            </button>
           </div>
-          <div className="bg-gray-50 px-6 py-3 flex justify-end">
-            <div>
-              <button
-                type="button"
-                className="inline-flex justify-center mb-2 mt-2 px-4 py-2 w-full text-white text-base font-medium bg-blue-600 hover:bg-blue-700 border border-transparent rounded-md focus:outline-none shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:text-sm"
-                onClick={() => navigate(-1)}
-              >
-                Stäng
-              </button>
-            </div>
-          </div>
-        </div>
+        </Form>
       </div>
-    </div>
+    </section>
   );
 }

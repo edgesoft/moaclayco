@@ -1,214 +1,203 @@
-import { VerificationProps } from "~/types";
-import { ListItemVerification } from "./listItemVerification";
-import { formatMonthName } from "~/utils/formatMonthName";
-import { Link, Outlet, useNavigate } from "@remix-run/react";
+import { Link } from "react-router";
 import { useState } from "react";
-import { classNames } from "~/utils/classnames";
+import { VerificationProps } from "~/types";
+import { formatMonthName } from "~/utils/formatMonthName";
+import {
+  ListItemVerification,
+  MobileVerificationCard,
+} from "./listItemVerification";
 
 type GroupVerificationProps = {
   monthKey: string;
-  groupedVerifications: {
-    [key: string]: VerificationProps[];
-  };
+  groupedVerifications: Record<string, VerificationProps[]>;
   vatReportVerification: VerificationProps | undefined;
-  isExpanded: Boolean;
+  currentYearMonth: string;
+  isExpanded: boolean;
 };
 
-function findMinMax(array) {
-  return array.reduce(
-    (acc, obj) => {
-      acc.min = Math.min(acc.min, obj.verificationNumber);
-      acc.max = Math.max(acc.max, obj.verificationNumber);
-      return acc;
-    },
+const findMinMax = (verifications: VerificationProps[]) =>
+  verifications.reduce(
+    (range, verification) => ({
+      min: Math.min(range.min, verification.verificationNumber),
+      max: Math.max(range.max, verification.verificationNumber),
+    }),
     { min: Infinity, max: -Infinity }
+  );
+
+export function ListVerification({
+  ...props
+}: GroupVerificationProps) {
+  return (
+    <ListVerificationContent
+      key={String(props.isExpanded)}
+      {...props}
+    />
   );
 }
 
-export function ListVerification({
+function ListVerificationContent({
   monthKey,
   groupedVerifications,
   vatReportVerification,
+  currentYearMonth,
   isExpanded = false,
 }: GroupVerificationProps) {
-  const navigate = useNavigate();
   const [expanded, setExpanded] = useState(isExpanded);
+  const verifications = groupedVerifications[monthKey] || [];
+  const minMax = findMinMax(verifications);
 
-  const minMax = findMinMax(groupedVerifications[monthKey]);
-
-  const shouldRegisterVat = (verification: VerificationProps | undefined) => {
-    if (!verification) {
-      return false;
-    }
-    const account = verification.journalEntries.find(
+  const shouldRegisterVat = () => {
+    if (!vatReportVerification) return false;
+    const hasVatAccount = vatReportVerification.journalEntries?.some(
       (entry) => entry.account === 2650
     );
-
-    if (!account) {
-      return false;
-    }
-
-    const regged = verification.metadata.some(
+    const isRegistered = vatReportVerification.metadata?.some(
       (meta) =>
-        meta.key === "vatRegisteredAtAccount" && Boolean(meta.value) === true
+        meta.key === "vatRegisteredAtAccount" && String(meta.value) === "true"
+    );
+    return hasVatAccount && !isRegistered;
+  };
+
+  const isPastMonth = monthKey < currentYearMonth;
+
+  const rangeLabel =
+    verifications.length === 0
+      ? "Inga bokföringshändelser"
+      : minMax.min === minMax.max
+      ? `A${minMax.min}`
+      : `A${minMax.min}–A${minMax.max}`;
+  const registerVat = shouldRegisterVat();
+  const vatDone = Boolean(vatReportVerification) && !registerVat;
+  const isZeroVatReport = Boolean(vatReportVerification) &&
+    !vatReportVerification?.journalEntries?.some(
+      (entry) => Number(entry.debit || 0) !== 0 || Number(entry.credit || 0) !== 0
     );
 
-    return !regged;
-  };
-
-  const isPastMonth = (yearMonthKey: string) => {
-    const [year, month] = yearMonthKey.split("-");
-    const currentDate = new Date();
-    const currentYearMonth = `${currentDate.getFullYear()}-${String(
-      currentDate.getMonth() + 1
-    ).padStart(2, "0")}`;
-    return yearMonthKey < currentYearMonth;
-  };
-
-  const registerVat = shouldRegisterVat(vatReportVerification);
-
-
-
   return (
-    <div
-      key={monthKey}
-      className={classNames(
-         "mb-4 rounded-md",
-        !expanded ? `bg-gray-100 border-r border-b drop-shadow-lg border-gray-300` : `border border-gray-200 bg-white drop-shadow-lg `,
-       
-      )}
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setExpanded(!expanded);
-      }}
-    >
-      <div className="flex justify-between items-center mb-4 cursor-pointer p-2">
-        <h2 className="text-xl text-gray-400 font-semibold flex items-center justify-between cursor-pointer">
-          
-          <span className={classNames("inline-flex px-3 text-sm font-semibold leading-5 rounded-lg", expanded ? "bg-green-600 text-white shadow-md" : "bg-gray-200 text-gray-400 shadow-md")}>{formatMonthName(monthKey)} <svg
-            className={`w-5 h-5 transform transition-transform duration-300 ${
-              expanded ? "rotate-180" : "rotate-90"
-            }`}
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M9 5l7 7-7 7"
-            />
-          </svg></span>
-          
-        </h2>
-
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600 mr-2 flex items-center">
-            <span className="bg-gray-300 text-gray-500 inline-flex px-2 border-b border-gray-500 text-xs font-semibold leading-5 rounded-full">
-              A{minMax.min}
-            </span>
-            {minMax.min < minMax.max && (
-              <div className="flex items-center">
-                <svg
-                  className="w-4 h-4 transform transition-transform duration-300 rotate-360 text-gray-300"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
-                <span className="bg-gray-300 text-gray-500 inline-flex px-2 text-xs font-semibold leading-5 border-b border-gray-500 rounded-full">
-                  A{minMax.max}
-                </span>
-              </div>
-            )}
+    <article className="accounting-month overflow-hidden">
+      <div className="accounting-month-header flex flex-col lg:flex-row lg:items-center lg:justify-between">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+          className="accounting-month-trigger flex min-h-[68px] flex-1 items-center justify-between gap-4 px-4 py-3.5 text-left transition hover:bg-stone-50 sm:px-5"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2.5">
+              <span
+                aria-hidden="true"
+                className={`accounting-month-toggle ${expanded ? "accounting-month-toggle--open" : ""}`}
+              >
+                {expanded ? "−" : "+"}
+              </span>
+              <h2 className="truncate text-lg text-stone-950 sm:text-xl">
+                {formatMonthName(monthKey)}
+              </h2>
+            </div>
+            <p className="ml-9 mt-1 text-xs text-stone-400 sm:text-sm">
+              {verifications.length} {verifications.length === 1 ? "verifikation" : "verifikationer"}
+              <span aria-hidden="true"> · </span>
+              {rangeLabel}
+            </p>
           </div>
 
-          {!vatReportVerification && isPastMonth(monthKey) && (
+          {vatDone ? (
+            <span className="accounting-vat-done">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="10" cy="10" r="7" />
+                <path d="m6.8 10.1 2.1 2.1 4.5-4.6" />
+              </svg>
+              Moms klar
+            </span>
+          ) : null}
+        </button>
+
+        {isPastMonth && (!vatReportVerification || registerVat) ? (
+          <div className="border-t border-stone-200 px-4 py-2 lg:border-l lg:border-t-0 lg:px-5 lg:py-3">
+            {!vatReportVerification ? (
               <Link
-              to={`/admin/verifications/vat-report?month=${monthKey}`}
-              prefetch="intent"
-              className="bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
-              onClick={(e) => {
-                e.stopPropagation()
-              }}
-            >
-         
-              Skapa momsrapport ({formatMonthName(monthKey)})
-
-            </Link>
-          )}
-
-          {vatReportVerification && registerVat && isPastMonth(monthKey) && (
-             <Link
-             to={`/admin/verifications/vat-report-payed?month=${monthKey}`}
-             prefetch="intent"
-             className="bg-slate-800 text-white px-3 py-1 rounded-lg text-sm"
-             onClick={(e) => {
-              e.stopPropagation()
-            }}
-             >       
-              Registrera/Skattemyndigheten ({formatMonthName(monthKey)})
-         
-            </Link>
-          )}
-        </div>
+                to={`/admin/verifications/vat-report?month=${monthKey}`}
+                prefetch="intent"
+                className="accounting-inline-action"
+              >
+                Registrera momsdeklaration <span aria-hidden="true">→</span>
+              </Link>
+            ) : registerVat ? (
+              <Link
+                to={`/admin/verifications/vat-report-payed?month=${monthKey}`}
+                prefetch="intent"
+                className="accounting-inline-action"
+              >
+                Registrera momsbetalning <span aria-hidden="true">→</span>
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
-      {expanded ? (
-        <div className="w-full overflow-x-auto">
-          <table className="min-w-full w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th
-                  scope="col"
-                  className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Verifikationsnummer
-                </th>
-                <th
-                  scope="col"
-                  className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Datum
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Konto
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Debit
-                </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-                >
-                  Kredit
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white">
-              {groupedVerifications[monthKey].map((verification, index) => (
-                <ListItemVerification key={index} verification={verification} />
-              ))}
-            </tbody>
-          </table>
+      {expanded && verifications.length === 0 ? (
+        <p className="border-t border-stone-200 px-5 py-6 text-sm leading-6 text-stone-500">
+          {!vatReportVerification ? (
+            <>
+              Inga verifikationer är bokförda i månaden. Momsdeklarationen kan
+              ändå registreras som en nollrapport.
+            </>
+          ) : registerVat ? (
+            <>
+              Momsdeklarationen är registrerad. Momsbetalningen återstår och kan
+              registreras ovan.
+            </>
+          ) : (
+            <>
+              Momsdeklarationen är redan registrerad
+              {isZeroVatReport ? " som nollrapport" : ""}. Det finns inga andra
+              bokföringshändelser i månaden.
+            </>
+          )}
+        </p>
+      ) : expanded ? (
+        <div>
+          <div className="divide-y divide-stone-100 md:hidden">
+            {verifications.map((verification) => (
+              <MobileVerificationCard
+                key={verification.verificationNumber}
+                verification={verification}
+              />
+            ))}
+          </div>
+
+          <div className="hidden md:block">
+            <table className="w-full table-fixed">
+              <thead className="bg-stone-50/80">
+                <tr className="text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  <th className="w-[11%] px-5 py-3">Nr</th>
+                  <th className="w-[14%] px-3 py-3">Datum</th>
+                  <th className="px-3 py-3">Beskrivning</th>
+                  <th className="w-[15%] px-3 py-3">Bilagor</th>
+                  <th className="w-[18%] px-3 py-3 text-right">Debet</th>
+                  <th className="w-12 px-3 py-3"><span className="sr-only">Visa</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {verifications.map((verification) => (
+                  <ListItemVerification
+                    key={verification.verificationNumber}
+                    verification={verification}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : null}
-    </div>
+    </article>
   );
 }

@@ -1,0 +1,322 @@
+{
+  "source": {
+    "width": 1928,
+    "height": 140,
+    "file": "/brand/banner/source/background3-original.jpg"
+  },
+  "master": "/brand/banner/master/banner-master.svg",
+  "elements": [
+    {
+      "id": "bee-01",
+      "label": "Bi 1",
+      "kind": "bee",
+      "viewBox": [
+        98,
+        23,
+        42,
+        42
+      ],
+      "file": "/brand/banner/animation-svg/bee-01.svg",
+      "anchor": "center"
+    },
+    {
+      "id": "bee-02",
+      "label": "Bi 2",
+      "kind": "bee",
+      "viewBox": [
+        416,
+        25,
+        39,
+        38
+      ],
+      "file": "/brand/banner/animation-svg/bee-02.svg",
+      "anchor": "center"
+    },
+    {
+      "id": "bee-03",
+      "label": "Bi 3",
+      "kind": "bee",
+      "viewBox": [
+        1183,
+        25,
+        39,
+        38
+      ],
+      "file": "/brand/banner/animation-svg/bee-03.svg",
+      "anchor": "center"
+    },
+    {
+      "id": "bee-04",
+      "label": "Bi 4",
+      "kind": "bee",
+      "viewBox": [
+        1497,
+        26,
+        44,
+        43
+      ],
+      "file": "/brand/banner/animation-svg/bee-04.svg",
+      "anchor": "center"
+    },
+    {
+      "id": "bee-05",
+      "label": "Bi 5",
+      "kind": "bee",
+      "viewBox": [
+        1811,
+        25,
+        39,
+        38
+      ],
+      "file": "/brand/banner/animation-svg/bee-05.svg",
+      "anchor": "center"
+    },
+    {
+      "id": "sun-01",
+      "label": "Pricksol 1",
+      "kind": "sun",
+      "viewBox": [
+        776,
+        1,
+        91,
+        98
+      ],
+      "file": "/brand/banner/animation-svg/sun-01.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "sun-02",
+      "label": "Pricksol 2",
+      "kind": "sun",
+      "viewBox": [
+        1298,
+        0,
+        87,
+        94
+      ],
+      "file": "/brand/banner/animation-svg/sun-02.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "snails-01",
+      "label": "Snigeltrio 1",
+      "kind": "snails",
+      "viewBox": [
+        827,
+        90,
+        52,
+        47
+      ],
+      "file": "/brand/banner/animation-svg/snails-01.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "snails-02",
+      "label": "Snigeltrio 2",
+      "kind": "snails",
+      "viewBox": [
+        1244,
+        64,
+        69,
+        66
+      ],
+      "file": "/brand/banner/animation-svg/snails-02.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "garden-01",
+      "label": "Växtlager 1",
+      "kind": "garden",
+      "viewBox": [
+        0,
+        28,
+        115,
+        112
+      ],
+      "file": "/brand/banner/animation-svg/garden-01.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "garden-02",
+      "label": "Växtlager 2",
+      "kind": "garden",
+      "viewBox": [
+        110,
+        78,
+        78,
+        62
+      ],
+      "file": "/brand/banner/animation-svg/garden-02.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "garden-03",
+      "label": "Växtlager 3",
+      "kind": "garden",
+      "viewBox": [
+        180,
+        65,
+        132,
+        75
+      ],
+      "file": "/brand/banner/animation-svg/garden-03.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "garden-04",
+      "label": "Växtlager 4",
+      "kind": "garden",
+      "viewBox": [
+        424,
+        72,
+        101,
+        68
+      ],
+      "file": "/brand/banner/animation-svg/garden-04.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "garden-05",
+      "label": "Växtlager 5",
+      "kind": "garden",
+      "viewBox": [
+        516,
+        55,
+        123,
+        85
+      ],
+      "file": "/brand/banner/animation-svg/garden-05.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "garden-06",
+      "label": "Växtlager 6",
+      "kind": "garden",
+      "viewBox": [
+        705,
+        48,
+        135,
+        92
+      ],
+      "file": "/brand/banner/animation-svg/garden-06.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "garden-07",
+      "label": "Växtlager 7",
+      "kind": "garden",
+      "viewBox": [
+        830,
+        52,
+        140,
+        88
+      ],
+      "file": "/brand/banner/animation-svg/garden-07.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "garden-08",
+      "label": "Växtlager 8",
+      "kind": "garden",
+      "viewBox": [
+        960,
+        48,
+        160,
+        92
+      ],
+      "file": "/brand/banner/animation-svg/garden-08.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "garden-09",
+      "label": "Växtlager 9",
+      "kind": "garden",
+      "viewBox": [
+        1110,
+        72,
+        130,
+        68
+      ],
+      "file": "/brand/banner/animation-svg/garden-09.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "garden-10",
+      "label": "Växtlager 10",
+      "kind": "garden",
+      "viewBox": [
+        1230,
+        45,
+        165,
+        95
+      ],
+      "file": "/brand/banner/animation-svg/garden-10.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "garden-11",
+      "label": "Växtlager 11",
+      "kind": "garden",
+      "viewBox": [
+        1385,
+        27,
+        130,
+        113
+      ],
+      "file": "/brand/banner/animation-svg/garden-11.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "garden-12",
+      "label": "Växtlager 12",
+      "kind": "garden",
+      "viewBox": [
+        1505,
+        62,
+        130,
+        78
+      ],
+      "file": "/brand/banner/animation-svg/garden-12.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "garden-13",
+      "label": "Växtlager 13",
+      "kind": "garden",
+      "viewBox": [
+        1625,
+        60,
+        150,
+        80
+      ],
+      "file": "/brand/banner/animation-svg/garden-13.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "garden-14",
+      "label": "Växtlager 14",
+      "kind": "garden",
+      "viewBox": [
+        1765,
+        42,
+        90,
+        98
+      ],
+      "file": "/brand/banner/animation-svg/garden-14.svg",
+      "anchor": "bottom"
+    },
+    {
+      "id": "garden-15",
+      "label": "Växtlager 15",
+      "kind": "garden",
+      "viewBox": [
+        1845,
+        68,
+        83,
+        72
+      ],
+      "file": "/brand/banner/animation-svg/garden-15.svg",
+      "anchor": "bottom"
+    }
+  ]
+}

@@ -1,211 +1,735 @@
-import { useState, useRef, useEffect } from "react";
-import { useFetcher, useNavigate } from "@remix-run/react";
-import { useLoaderData } from "@remix-run/react";
-import { ActionFunction, json, LoaderFunction } from "@remix-run/node";
+import type { ChangeEvent, DragEvent } from "react";
+import { useRef, useState } from "react";
+import { data as json, Link, useFetcher, useLoaderData } from "react-router";
+import type { ActionFunction, LoaderFunction } from "react-router";
 import { Verifications } from "~/schemas/verifications";
-import { s3Client } from "~/services/s3.server";
-import { Upload } from "@aws-sdk/lib-storage";
 import { getDomain } from "~/utils/domain";
+import { auth } from "~/services/auth.server";
+import {
+  deleteUploadedVerificationFile,
+  MAX_VERIFICATION_REQUEST_SIZE,
+  readVerifiedVerificationFile,
+  uploadVerificationFile,
+  validateVerificationFile,
+} from "~/services/verification-files.server";
+import {
+  fallbackVerificationFileLabel,
+  sanitizeVerificationFileLabel,
+} from "~/utils/verificationFiles";
+import { toLoaderData } from "~/utils/loaderData";
+import {
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
-export const loader: LoaderFunction = async ({ params, request }) => {
-  const { verificationNumber } = params;
-  if (!verificationNumber)
-    throw new Error(`Could not find param verificationNumber`);
-  const domain = getDomain(request);
-  const verification = await Verifications.findOne({
-    domain: domain?.domain,
-    verificationNumber: parseInt(verificationNumber),
-  });
+type VerificationFile = { name: string; path: string };
 
-  if (!verification) {
-    throw new Response("Not Found", { status: 404 });
+type FilesLoaderData = {
+  verification: {
+    verificationNumber: number;
+    description: string;
+    verificationDate: string;
+    files: VerificationFile[];
+  };
+};
+
+type FilesActionData =
+  | { success: true; name: string; path: string }
+  | { success?: false; error: string };
+
+type FileLabelSuggestion = {
+  label: string;
+  documentType:
+    | "receipt"
+    | "supplier_invoice"
+    | "sales_invoice"
+    | "tax_account_statement"
+    | "vat_return"
+    | "bank_statement"
+    | "payment_confirmation"
+    | "other";
+  summary: string;
+  confidence: number;
+  warnings: string[];
+};
+
+type LabelAnalysisData =
+  | {
+      requestId: string;
+      analysisKey: string;
+      status: "success" | "fallback";
+      suggestion: FileLabelSuggestion;
+    }
+  | {
+      requestId: string;
+      analysisKey: string;
+      status: "failed";
+      error: string;
+    };
+
+type LabelOrigin = "manual" | "suggestion" | null;
+type AnalysisStatus = "idle" | "loading" | "success" | "fallback" | "failed";
+type VerificationFilesState = {
+  activeAnalysisKey: string | null;
+  analysisStatus: AnalysisStatus;
+  appliedAnalysisData: LabelAnalysisData | undefined;
+  appliedUploadData: FilesActionData | undefined;
+  appliedVerification: FilesLoaderData["verification"];
+  files: VerificationFile[];
+  label: string;
+  labelOrigin: LabelOrigin;
+  localError: string | null;
+  selectedFile: File | null;
+  suggestion: FileLabelSuggestion | null;
+  uploadError: string | null;
+};
+const MAX_CLIENT_FILE_SIZE = 20 * 1024 * 1024;
+
+const documentTypeLabels: Record<FileLabelSuggestion["documentType"], string> = {
+  receipt: "Kvitto",
+  supplier_invoice: "Leverantörsfaktura",
+  sales_invoice: "Kundfaktura",
+  tax_account_statement: "Skattekontoutdrag",
+  vat_return: "Momsdeklaration",
+  bank_statement: "Kontoutdrag",
+  payment_confirmation: "Betalningsbekräftelse",
+  other: "Dokument",
+};
+
+const formatDate = (date: string) =>
+  new Intl.DateTimeFormat("sv-SE", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "Europe/Stockholm",
+  }).format(new Date(date));
+
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} kB`;
+  return `${(bytes / (1024 * 1024)).toLocaleString("sv-SE", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })} MB`;
+};
+
+const fileType = (file: VerificationFile) => {
+  const source = file.path || file.name;
+  const extension = source.split("?")[0].split(".").pop();
+  return extension && extension !== source
+    ? extension.toLocaleUpperCase("sv-SE")
+    : "FIL";
+};
+
+const resetSelectedFile = (
+  current: VerificationFilesState
+): VerificationFilesState => ({
+  ...current,
+  activeAnalysisKey: null,
+  analysisStatus: "idle",
+  label: "",
+  labelOrigin: null,
+  localError: null,
+  selectedFile: null,
+  suggestion: null,
+  uploadError: null,
+});
+
+const synchronizeVerificationFiles = ({
+  analysisData,
+  current,
+  uploadData,
+  verification,
+}: {
+  analysisData: LabelAnalysisData | undefined;
+  current: VerificationFilesState;
+  uploadData: FilesActionData | undefined;
+  verification: FilesLoaderData["verification"];
+}): VerificationFilesState => {
+  let next = current;
+
+  if (next.appliedVerification !== verification) {
+    const changesVerification =
+      next.appliedVerification.verificationNumber !==
+      verification.verificationNumber;
+    next = {
+      ...(changesVerification ? resetSelectedFile(next) : next),
+      appliedAnalysisData: changesVerification
+        ? analysisData
+        : next.appliedAnalysisData,
+      appliedUploadData: changesVerification
+        ? uploadData
+        : next.appliedUploadData,
+      appliedVerification: verification,
+      files: verification.files || [],
+    };
   }
 
-  return json({ verification });
+  if (next.appliedUploadData !== uploadData) {
+    next = { ...next, appliedUploadData: uploadData };
+    if (uploadData && "success" in uploadData && uploadData.success) {
+      const uploadedFile = { name: uploadData.name, path: uploadData.path };
+      const files = next.files.some((file) => file.path === uploadedFile.path)
+        ? next.files
+        : [...next.files, uploadedFile];
+      next = { ...resetSelectedFile(next), files };
+    } else if (uploadData && "error" in uploadData) {
+      next = { ...next, uploadError: uploadData.error };
+    }
+  }
+
+  if (next.appliedAnalysisData !== analysisData) {
+    next = { ...next, appliedAnalysisData: analysisData };
+    if (analysisData?.analysisKey === next.activeAnalysisKey) {
+      if (analysisData.status === "failed") {
+        next = {
+          ...next,
+          analysisStatus: "failed",
+          localError: analysisData.error,
+        };
+      } else {
+        const usesSuggestion = !next.label.trim();
+        next = {
+          ...next,
+          analysisStatus: analysisData.status,
+          label: usesSuggestion ? analysisData.suggestion.label : next.label,
+          labelOrigin: usesSuggestion ? "suggestion" : next.labelOrigin,
+          suggestion: analysisData.suggestion,
+        };
+      }
+    }
+  }
+
+  return next;
+};
+
+export const loader: LoaderFunction = async ({ params, request }) => {
+  await auth.isAuthenticated(request, { failureRedirect: "/login" });
+  const verificationNumber = Number(params.verificationNumber);
+  if (!Number.isInteger(verificationNumber)) {
+    throw new Response("Ogiltigt verifikationsnummer", { status: 400 });
+  }
+
+  const domain = getDomain(request);
+  const verification = (await Verifications.findOne({
+    domain: domain?.domain,
+    verificationNumber,
+  })
+    .select("verificationNumber description verificationDate files")
+    .lean()) as unknown as {
+      verificationNumber: number;
+      description: string;
+      verificationDate: Date;
+      files: VerificationFile[];
+    } | null;
+
+  if (!verification) throw new Response("Not Found", { status: 404 });
+
+  return json(toLoaderData({
+    verification: {
+      verificationNumber: verification.verificationNumber,
+      description: verification.description,
+      verificationDate: verification.verificationDate,
+      files: verification.files || [],
+    },
+  }));
 };
 
 export const action: ActionFunction = async ({ request, params }) => {
-  const formData = await request.formData();
+  await auth.isAuthenticated(request, { failureRedirect: "/login" });
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(
+      request,
+      MAX_VERIFICATION_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json({ error: "Filen är större än 20 MB" }, { status: 413 });
+    }
+    throw error;
+  }
   const domain = getDomain(request);
   const file = formData.get("file");
-  const label = formData.get("label") || `${Date.now()}-${file.name}`;
-  const verificationNumber = params.verificationNumber;
-  const awsVerificationsPath = process.env.AWS_VERIFICATIONS_PATH;
+  const verificationNumber = Number(params.verificationNumber);
 
-  if (!awsVerificationsPath) {
-    throw new Error(
-      "AWS configuration is not complete. Please check your environment variables."
-    );
+  if (!(file instanceof File) || !Number.isInteger(verificationNumber)) {
+    return json({ error: "Filen eller verifikationsnumret saknas" }, { status: 400 });
   }
 
-  if (!file || !label || !verificationNumber) {
-    return json({ error: "Missing required fields" }, { status: 400 });
-  }
-
+  let verifiedFile: Awaited<ReturnType<typeof readVerifiedVerificationFile>>;
   try {
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
-    const fileName = `${awsVerificationsPath}/${verificationNumber}/${Date.now()}-${file.name
-      }`;
+    validateVerificationFile(file);
+    verifiedFile = await readVerifiedVerificationFile(file);
+  } catch (error) {
+    return json(
+      { error: error instanceof Error ? error.message : "Ogiltig fil" },
+      { status: 400 }
+    );
+  }
 
-    const upload = new Upload({
-      client: s3Client,
-      params: {
-        Bucket: process.env.AWS_S3_BUCKET_NAME,
-        Key: fileName,
-        Body: fileBuffer,
-        ContentType: file.type, // Sätt rätt content type
-      },
-    });
+  const requestedLabel = formData.get("label");
+  const label = sanitizeVerificationFileLabel(
+    typeof requestedLabel === "string" && requestedLabel.trim()
+      ? requestedLabel
+      : fallbackVerificationFileLabel(file.name)
+  );
 
-    const uploadResult = await upload.done();
-
-    await Verifications.updateOne(
-      {
-        verificationNumber: parseInt(verificationNumber),
-        domain: domain?.domain,
-      },
-      {
-        $push: {
-          files: {
-            name: label,
-            path: uploadResult.Location,
-          },
-        },
-      }
+  let uploadedFile: Awaited<ReturnType<typeof uploadVerificationFile>> | null = null;
+  try {
+    uploadedFile = await uploadVerificationFile(
+      file,
+      String(verificationNumber),
+      verifiedFile
+    );
+    const updateResult = await Verifications.updateOne(
+      { verificationNumber, domain: domain?.domain },
+      { $push: { files: { name: label, path: uploadedFile.path } } }
     );
 
-    return json({ success: true, name: label, path: uploadResult.Location });
+    if (updateResult.modifiedCount !== 1) {
+      throw new Error("Verifikationen kunde inte uppdateras");
+    }
+
+    return json({ success: true, name: label, path: uploadedFile.path });
   } catch (error) {
-    return json({ error: "File upload failed" }, { status: 500 });
+    if (uploadedFile) {
+      await deleteUploadedVerificationFile(uploadedFile.key).catch((cleanupError) =>
+        console.error("Kunde inte rensa filen efter misslyckad uppdatering", cleanupError)
+      );
+    }
+    console.error("Verification file upload failed", error);
+    return json({ error: "Bilagan kunde inte sparas. Försök igen." }, { status: 500 });
   }
 };
 
-export default function Files() {
-  const { verification } = useLoaderData(); // Hämta verifieringen och filerna
-  const fetcher = useFetcher();
-  const fileInputRef = useRef(null);
-  const [files, setFiles] = useState(verification.files || []);
-  const [label, setLabel] = useState("");
-  const navigate = useNavigate();
+export default function VerificationFiles() {
+  const { verification } = useLoaderData<FilesLoaderData>();
+  const uploadFetcher = useFetcher<FilesActionData>();
+  const analysisFetcher = useFetcher<LabelAnalysisData>();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [fileState, setFileState] = useState<VerificationFilesState>(() => ({
+    activeAnalysisKey: null,
+    analysisStatus: "idle",
+    appliedAnalysisData: undefined,
+    appliedUploadData: undefined,
+    appliedVerification: verification,
+    files: verification.files || [],
+    label: "",
+    labelOrigin: null,
+    localError: null,
+    selectedFile: null,
+    suggestion: null,
+    uploadError: null,
+  }));
+  const [isDragging, setIsDragging] = useState(false);
 
-  const handleFileInputClick = () => {
-    fileInputRef.current.click();
+  const synchronizedFileState = synchronizeVerificationFiles({
+    analysisData: analysisFetcher.data,
+    current: fileState,
+    uploadData: uploadFetcher.data,
+    verification,
+  });
+  if (synchronizedFileState !== fileState) {
+    setFileState(synchronizedFileState);
+  }
+
+  const {
+    analysisStatus,
+    files,
+    label,
+    labelOrigin,
+    localError,
+    selectedFile,
+    suggestion,
+    uploadError,
+  } = fileState;
+
+  const updateLabel = (value: string, origin: LabelOrigin) => {
+    setFileState((current) => ({
+      ...current,
+      label: value,
+      labelOrigin: origin,
+    }));
   };
 
-  useEffect(() => {
-    if (fetcher.data && fetcher.data.success) {
-      setFiles((prevFiles) => [
-        ...prevFiles,
-        { name: fetcher.data.name, path: fetcher.data.path },
-      ]);
-      setLabel(""); // Töm label efter uppladdning
-    }
-  }, [fetcher.data, label]);
-
-  const handleFileChange = async (event) => {
-    if (event.target.files && event.target.files.length > 0) {
-      const file = event.target.files[0];
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("label", label);
-      formData.append("verificationNumber", verification.verificationNumber);
-      fetcher.submit(formData, {
-        method: "post",
-        action: `/admin/verifications/${verification.verificationNumber}/files`,
-        encType: "multipart/form-data",
-      });
-    }
+  const resetSelection = () => {
+    setFileState((current) => resetSelectedFile(current));
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
+  const analyzeFile = (file: File) => {
+    if (
+      file.type !== "application/pdf" &&
+      !file.type.startsWith("image/")
+    ) {
+      setFileState((current) => ({
+        ...current,
+        localError: "Välj en PDF eller bildfil.",
+        uploadError: null,
+      }));
+      return;
+    }
+    if (file.size <= 0 || file.size > MAX_CLIENT_FILE_SIZE) {
+      setFileState((current) => ({
+        ...current,
+        localError: "Filen är tom eller större än 20 MB.",
+        uploadError: null,
+      }));
+      return;
+    }
+
+    const formData = new FormData();
+    const analysisKey = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setFileState((current) => ({
+      ...current,
+      activeAnalysisKey: analysisKey,
+      analysisStatus: "loading",
+      label: current.labelOrigin === "manual" ? current.label : "",
+      labelOrigin: current.labelOrigin === "manual" ? "manual" : null,
+      localError: null,
+      selectedFile: file,
+      suggestion: null,
+      uploadError: null,
+    }));
+    formData.append("file", file);
+    formData.append("analysisKey", analysisKey);
+    analysisFetcher.submit(formData, {
+      method: "post",
+      action: "/admin/verifications/files/label",
+      encType: "multipart/form-data",
+    });
+  };
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) analyzeFile(file);
+    event.target.value = "";
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) analyzeFile(file);
+  };
+
+  const saveFile = () => {
+    if (!selectedFile || !label.trim()) return;
+    setFileState((current) => ({ ...current, uploadError: null }));
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    formData.append("label", label);
+    uploadFetcher.submit(formData, {
+      method: "post",
+      action: `/admin/verifications/${verification.verificationNumber}/files`,
+      encType: "multipart/form-data",
+    });
+  };
+
+  const isUploading = uploadFetcher.state !== "idle";
+  const isAnalyzing = analysisStatus === "loading";
+  const suggestionMatchesLabel =
+    Boolean(suggestion) && suggestion?.label.trim() === label.trim();
 
   return (
-    <div
-      className="fixed z-10 inset-0 overflow-y-auto"
-      aria-labelledby="modal-title"
-      role="dialog"
-      aria-modal="true"
-    >
-      <div className="flex items-end justify-center text-center sm:block sm:p-0">
-        <div className="fixed inset-0 bg-black bg-opacity-70 transition-opacity"></div>
-        <span
-          className="hidden sm:inline-block sm:align-middle sm:h-screen"
-          aria-hidden="true"
+    <section aria-labelledby="files-title" className="pb-20">
+      <header className="border-b border-stone-200 pb-5 sm:pb-7">
+        <Link
+          to="/admin/verifications"
+          className="inline-flex h-10 items-center rounded-lg px-1 text-xs font-bold text-stone-500 transition hover:text-stone-950"
         >
-          &#8203;
-        </span>
-        <div className="inline-block align-bottom text-left bg-white rounded-lg shadow-xl overflow-hidden transform transition-all sm:align-middle sm:my-8 sm:w-full sm:max-w-6xl">
-          <div className="bg-white px-6 py-5 sm:p-6 sm:pb-4">
-            <div className="sm:flex sm:items-start ">
-              <div className="text-center sm:ml-4 sm:text-left w-full">
-                <h3
-                  className="text-xl leading-6 font-bold text-gray-900"
-                  id="modal-title"
-                >
-                  Filer för verifikation {verification.verificationNumber}
-                </h3>
-
-                <div className="mt-6">
-                  <div className="mb-6">
-                    <label
-                      htmlFor="label"
-                      className="block text-sm font-medium text-gray-700 mb-2"
-                    >
-                      Filbeskrivning/Label:
-                    </label>
-                    <input
-                      type="text"
-                      id="label"
-                      value={label}
-                      onChange={(e) => setLabel(e.target.value)}
-                      className="border border-gray-300 rounded-md w-full p-2 mb-2"
-                      placeholder="Ex. Kvitto från Bauhaus"
-                    />
-
-                    <button
-                      onClick={handleFileInputClick}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md"
-                    >
-                      Ladda upp fil
-                    </button>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      className="hidden"
-                      accept="application/pdf,image/*"
-                    />
-                  </div>
-
-                  {/* List uploaded files */}
-                  <ul className="divide-y divide-gray-200">
-                    {files.map((file, index) => (
-                      <li key={index} className="py-2 flex justify-between">
-                        <span>{file.name}</span>
-                        <a
-                          href={file.path}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-500"
-                        >
-                          Visa
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-gray-50 px-6 py-3 sm:flex sm:flex-row-reverse">
-            <button
-              type="button"
-              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
-              onClick={() => navigate(-1)}
-            >
-              Stäng
-            </button>
-          </div>
+          <span aria-hidden="true" className="mr-2">←</span>
+          Till bokföringen
+        </Link>
+        <div className="mt-3 max-w-3xl">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#985744]">
+            Underlag · A{verification.verificationNumber}
+          </p>
+          <h2
+            id="files-title"
+            className="mt-2 font-serif text-3xl leading-tight text-stone-950 sm:text-5xl"
+          >
+            Bilagor till verifikationen
+          </h2>
+          <p className="mt-3 text-sm leading-6 text-stone-600 sm:text-base">
+            {verification.description}
+            <span aria-hidden="true"> · </span>
+            {formatDate(verification.verificationDate)}
+          </p>
         </div>
+      </header>
+
+      <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start lg:gap-7">
+        <section
+          aria-labelledby="existing-files-title"
+          className="order-2 overflow-hidden rounded-[1.4rem] border border-stone-200 bg-white shadow-[0_1px_0_rgba(41,37,36,0.04)] lg:order-1"
+        >
+          <header className="flex items-start justify-between gap-4 border-b border-stone-200 bg-[#fbf8f4] px-4 py-4 sm:px-6 sm:py-5">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#985744]">
+                Sparade underlag
+              </p>
+              <h3 id="existing-files-title" className="mt-1 font-serif text-2xl text-stone-950">
+                {files.length
+                  ? `${files.length} ${files.length === 1 ? "bilaga" : "bilagor"}`
+                  : "Inga bilagor ännu"}
+              </h3>
+            </div>
+            {files.length ? (
+              <span className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-semibold text-stone-500">
+                A{verification.verificationNumber}
+              </span>
+            ) : null}
+          </header>
+
+          {files.length ? (
+            <ul className="divide-y divide-stone-100">
+              {files.map((file) => (
+                <li key={file.path}>
+                  <a
+                    href={file.path}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-center gap-3 px-4 py-4 transition hover:bg-[#fdf8f5] sm:px-6"
+                  >
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#e4cec6] bg-[#fbf1ed] text-[#985744]">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-5 w-5">
+                        <path d="M7 3.5h7l4 4V20H7z" />
+                        <path d="M14 3.5V8h4M9.5 12h6M9.5 15.5h6" />
+                      </svg>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block break-words text-sm font-semibold leading-5 text-stone-800 group-hover:text-[#985744] sm:truncate">
+                        {fallbackVerificationFileLabel(file.name)}
+                      </span>
+                      <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.13em] text-stone-400">
+                        {fileType(file)} · öppnas i ny flik
+                      </span>
+                    </span>
+                    <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-stone-400 transition group-hover:bg-[#f3e4de] group-hover:text-[#985744]">
+                      ↗
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="px-5 py-10 text-center sm:px-8 sm:py-14">
+              <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#e4cec6] bg-[#fbf1ed] text-2xl text-[#985744]" aria-hidden="true">
+                +
+              </span>
+              <p className="mx-auto mt-4 max-w-sm text-sm leading-6 text-stone-500">
+                Lägg till kvitto, faktura, kontoutdrag eller Skatteverkets kvittens som underlag.
+              </p>
+            </div>
+          )}
+        </section>
+
+        <aside className="order-1 lg:order-2 lg:sticky lg:top-24">
+          <section className="overflow-hidden rounded-[1.4rem] border border-[#dfc8bf] bg-[#fffdf9] shadow-[0_12px_35px_rgba(86,52,40,0.08)]">
+            <div className="border-b border-[#eadbd4] bg-[#fbf3ef] px-4 py-4 sm:px-5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.17em] text-[#985744]">
+                Ny bilaga
+              </p>
+              <h3 className="mt-1 font-serif text-2xl text-stone-950">
+                Låt dokumentet föreslå namn
+              </h3>
+              <p className="mt-2 text-xs leading-5 text-stone-600">
+                Innehållet läses av, men det du själv skriver ersätts aldrig automatiskt.
+              </p>
+            </div>
+
+            <div className="space-y-4 p-4 sm:p-5">
+              {selectedFile ? (
+                <div className="rounded-2xl border border-stone-200 bg-white p-3.5">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-stone-500">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-5 w-5">
+                        <path d="M7 3.5h7l4 4V20H7z" />
+                        <path d="M14 3.5V8h4" />
+                      </svg>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-stone-800">
+                        {selectedFile.name}
+                      </span>
+                      <span className="mt-0.5 block text-[11px] text-stone-400">
+                        {formatFileSize(selectedFile.size)}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={resetSelection}
+                      aria-label="Ta bort vald fil"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg text-stone-400 transition hover:bg-stone-100 hover:text-stone-800"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onDragEnter={() => setIsDragging(true)}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={handleDrop}
+                  className={`rounded-2xl border border-dashed p-5 text-center transition sm:p-6 ${
+                    isDragging
+                      ? "border-[#b86e59] bg-[#fbf1ed]"
+                      : "border-stone-300 bg-white hover:border-[#c58a79]"
+                  }`}
+                >
+                  <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#fbf1ed] text-[#985744]" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                      <path d="M12 16V5M8 9l4-4 4 4" />
+                      <path d="M5 14v5h14v-5" />
+                    </svg>
+                  </span>
+                  <p className="mt-3 text-sm font-semibold text-stone-800">
+                    Släpp filen här
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-stone-500">
+                    PDF eller bild, högst 20 MB
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="relative mt-4 inline-flex h-12 min-w-[13rem] items-center justify-center rounded-2xl border border-[#a85f4b] bg-[#a85f4b] px-12 text-sm font-bold text-white shadow-[0_7px_18px_rgba(126,67,51,0.14)] transition hover:-translate-y-px hover:border-[#8f4f3e] hover:bg-[#8f4f3e] focus:outline-none focus:ring-2 focus:ring-[#d7b0a3] focus:ring-offset-2"
+                  >
+                    Välj från enheten
+                    <span
+                      aria-hidden="true"
+                      className="absolute right-2.5 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white/15 text-base"
+                    >
+                      →
+                    </span>
+                  </button>
+                </div>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf,image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+
+              {selectedFile ? (
+                <div>
+                  <label htmlFor="file-label" className="mb-1.5 block text-xs font-bold text-stone-700">
+                    Namn i bokföringen
+                  </label>
+                  <input
+                    id="file-label"
+                    type="text"
+                    value={label}
+                    maxLength={120}
+                    autoComplete="off"
+                    onChange={(event) => updateLabel(event.target.value, "manual")}
+                    placeholder="Exempel: Skattekontoutdrag april 2026"
+                    className="h-12 w-full rounded-xl border border-stone-300 bg-white px-4 text-base text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-[#ad644f] focus:ring-2 focus:ring-[#efd8d0] sm:text-sm"
+                  />
+                  {labelOrigin === "manual" ? (
+                    <p className="mt-1.5 text-[11px] leading-4 text-stone-500">
+                      Din text ligger kvar även när dokumentanalysen är klar.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {isAnalyzing ? (
+                <div className="rounded-2xl border border-[#dfc8bf] bg-[#fbf3ef] p-4" aria-live="polite">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-[#eadbd4]">
+                    <div className="h-full w-full animate-stripe bg-[repeating-linear-gradient(45deg,_#a85f4b_0px,_#a85f4b_9px,_#cf8e79_9px,_#cf8e79_18px)] bg-[length:120%_100%]" />
+                  </div>
+                  <p className="mt-3 text-xs font-bold text-[#7d493a]">
+                    Läser dokumentet…
+                  </p>
+                  <p className="mt-1 text-[11px] leading-4 text-stone-500">
+                    Identifierar dokumenttyp, avsändare och period.
+                  </p>
+                </div>
+              ) : null}
+
+              {suggestion && !isAnalyzing ? (
+                <div className="rounded-2xl border border-[#dfc1b7] bg-[#fbf3ef] p-4" aria-live="polite">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#985744]">
+                        {analysisStatus === "fallback" ? "Förslag från filnamnet" : "Förslag från dokumentet"}
+                      </p>
+                      <p className="mt-1.5 text-sm font-bold leading-5 text-stone-900">
+                        {suggestion.label}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-[#985744] ring-1 ring-[#e6cec5]">
+                      {documentTypeLabels[suggestion.documentType]}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-stone-600">
+                    {suggestion.summary}
+                  </p>
+                  {suggestion.warnings.length ? (
+                    <p className="mt-2 text-[11px] leading-4 text-amber-800">
+                      {suggestion.warnings.join(" · ")}
+                    </p>
+                  ) : null}
+                  {suggestionMatchesLabel ? (
+                    <p className="mt-3 text-[11px] font-bold text-[#985744]">
+                      Förslaget används som namn.
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => updateLabel(suggestion.label, "suggestion")}
+                      className="mt-3 inline-flex h-10 items-center rounded-xl border border-[#d7b0a3] bg-white px-4 text-xs font-bold text-[#8b4f3e] transition hover:border-[#b86e59] hover:bg-[#fffaf7]"
+                    >
+                      Använd förslaget
+                    </button>
+                  )}
+                </div>
+              ) : null}
+
+              {localError || uploadError ? (
+                <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-5 text-red-800" role="alert">
+                  {localError || uploadError}
+                </p>
+              ) : null}
+
+              {selectedFile ? (
+                <div className="grid gap-3 border-t border-stone-200 pt-4">
+                  <button
+                    type="button"
+                    onClick={saveFile}
+                    disabled={!label.trim() || isAnalyzing || isUploading}
+                    className="relative order-1 inline-flex h-14 w-full items-center justify-center rounded-2xl border border-[#a85f4b] bg-[#a85f4b] px-14 text-sm font-bold text-white shadow-[0_8px_22px_rgba(126,67,51,0.16)] transition hover:-translate-y-px hover:border-[#8f4f3e] hover:bg-[#8f4f3e] focus:outline-none focus:ring-2 focus:ring-[#d7b0a3] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0"
+                  >
+                    {isUploading ? "Sparar bilagan…" : "Lägg till bilaga"}
+                    {!isUploading ? (
+                      <span
+                        aria-hidden="true"
+                        className="absolute right-3 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 text-lg"
+                      >
+                        →
+                      </span>
+                    ) : null}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="order-2 inline-flex h-12 w-full items-center justify-center rounded-2xl border border-stone-300 bg-[#fffdf9] px-5 text-sm font-bold text-stone-700 transition hover:-translate-y-px hover:border-[#c58a79] hover:bg-white hover:text-[#985744] focus:outline-none focus:ring-2 focus:ring-[#e7c8be] focus:ring-offset-2 disabled:opacity-50"
+                  >
+                    <span aria-hidden="true" className="mr-2 text-base">↻</span>
+                    Byt fil
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        </aside>
       </div>
-    </div>
+    </section>
   );
 }

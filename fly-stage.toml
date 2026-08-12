@@ -1,4 +1,4 @@
-app = "moaclayco-dev"
+app = "moaclayco-stage"
 primary_region = "fra"
 
 [build]

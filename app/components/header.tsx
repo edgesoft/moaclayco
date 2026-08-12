@@ -1,347 +1,914 @@
-import { useNavigate } from "react-router-dom";
-import { Link, useLoaderData } from "@remix-run/react";
+import {
+  Link,
+  useLoaderData,
+  useLocation,
+  useNavigate,
+} from "react-router";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from "react";
 import { useCart } from "react-use-cart";
-import { AnimatePresence, motion } from "framer-motion";
-import React, { useMemo, useRef } from "react";
 import { CollectionProps, User } from "~/types";
-import useOnClickOutside from "~/hooks/useClickOutside";
 import ClientOnly from "./ClientOnly";
-import { disableBodyScroll, enableBodyScroll } from "~/utils/scroll";
-import { classNames } from "~/utils/classnames";
-import { useTheme } from "./Theme";
+import LoginModal from "./LoginModal";
 
 type IndexLoadingType = {
-  user: User;
-  ENV: string;
+  user?: User;
+  ENV: { STRIPE_PUBLIC_KEY?: string };
   collections: CollectionProps[];
+  googleAuthenticationConfigured: boolean;
 };
 
-function Hamburger() {
-  const [menu, setMenu] = React.useState(false);
-  const ref = useRef(null);
-  let data: IndexLoadingType = useLoaderData();
-  useOnClickOutside(ref, () => {
-    enableBodyScroll();
-    setMenu(false);
+type BannerContext = {
+  direction: 1 | -1;
+  eyebrow: string;
+  href: string;
+  kind: "collection" | "item" | "section";
+  key: string;
+  next?: BannerNeighbor;
+  previous?: BannerNeighbor;
+  title: string;
+};
+
+type BannerNeighbor = {
+  href: string;
+  title: string;
+};
+
+type BannerContextElement = Omit<
+  BannerContext,
+  "direction" | "key" | "next" | "previous"
+> & {
+  element: HTMLElement;
+};
+
+type BannerContextStore = {
+  getSnapshot: () => BannerContext | null;
+  subscribe: (onStoreChange: () => void) => () => void;
+};
+
+const getServerBannerContext = () => null;
+
+function collectBannerContexts(): BannerContextElement[] {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>("[data-banner-context-title]")
+  ).flatMap((element) => {
+    const title = element.dataset.bannerContextTitle;
+    const eyebrow = element.dataset.bannerContextEyebrow;
+    const href = element.dataset.bannerContextHref;
+
+    if (!title || !eyebrow || !href) return [];
+
+    return [
+      {
+        element,
+        eyebrow,
+        href,
+        kind:
+          element.dataset.bannerContextKind === "collection"
+            ? ("collection" as const)
+            : element.dataset.bannerContextKind === "item"
+              ? ("item" as const)
+              : ("section" as const),
+        title,
+      },
+    ];
   });
+}
 
-  const history = useNavigate();
-  const x = typeof window !== "undefined" ? window.innerWidth : 0;
+function createBannerContextStore(supported: boolean): BannerContextStore {
+  let snapshot: BannerContext | null = null;
 
-  return menu ? (
-    <>
-      <AnimatePresence>
-        {menu && (
-          <>
-            <motion.div
-              exit={{ x: x, opacity: 0 }}
-              initial={{ x: x, opacity: 0 }}
-              animate={{ x: x - 280, opacity: 1 }}
-              transition={{ ease: "easeInOut", duration: 0.3 }}
-              className="fixed z-20 top-0 opacity-95 bg-white  w-full border-l -right-0 sm:right-2 overflow-y-scroll"
-            >
-              <div
-                style={{ width: 280 }}
-                ref={ref}
-                className="font-sans text-base md:text-sm bg-white h-screen"
-              >
-                <div
-                  className="relative flex items-stretch cursor-pointer"
-                  style={{ width: 280 }}
-                  onClick={() => {
-                    enableBodyScroll();
-                    setMenu(false);
-                  }}
-                >
-                  <div className="absolute right-3 top-2">
-                    {" "}
-                    <svg
-                      className="w-5 h-5"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </div>
-                </div>
-                <div
-                  className="flex m-2 w-full cursor-pointer"
-                  onClick={() => {
-                    history(`/`);
-                    enableBodyScroll();
-                    setMenu(false);
-                  }}
-                >
-                  <div className="flex-shrink-0 w-12 h-12 md:w-18 md:h-18">
-                    <svg
-                      className="h-10 w-10"
-                      viewBox="0 0 20 20"
-                      fill="#F4B9A4"
-                    >
-                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
-                    </svg>
-                  </div>
-                  <span className="m-3 md:my-3">Startsida</span>
-                </div>
-                <div
-                  className="flex m-2 w-full cursor-pointer"
-                  onClick={() => {
-                    setMenu(false);
-                    enableBodyScroll();
-                    history(data.user ? `/logout` : `/login`);
-                  }}
-                >
-                  <div className="flex-shrink-0 w-12 h-12 md:w-18 md:h-18 text-green-800">
-                    <svg
-                      className="h-10 w-105"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path>
-                    </svg>
-                  </div>
-                  <span className="m-3 md:my-3">
-                    {data.user ? "Logga ut" : "Logga in"}
-                  </span>
-                </div>
-                {data.user ? (
-                  <>
-                    <div
-                      className="flex m-2 w-full cursor-pointer"
-                      onClick={() => {
-                        setMenu(false);
-                        enableBodyScroll();
-                        history("/admin/orders");
-                      }}
-                    >
-                      <div className="flex-shrink-0 w-12 h-12 md:w-18 md:h-18 text-violet-500">
-                        <svg
-                          className="h-10 w-10"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                        >
-                          <path d="M11 17a1 1 0 001.447.894l4-2A1 1 0 0017 15V9.236a1 1 0 00-1.447-.894l-4 2a1 1 0 00-.553.894V17zM15.211 6.276a1 1 0 000-1.788l-4.764-2.382a1 1 0 00-.894 0L4.789 4.488a1 1 0 000 1.788l4.764 2.382a1 1 0 00.894 0l4.764-2.382zM4.447 8.342A1 1 0 003 9.236V15a1 1 0 00.553.894l4 2A1 1 0 009 17v-5.764a1 1 0 00-.553-.894l-4-2z"></path>
-                        </svg>
-                      </div>
-                      <span className="m-3 md:my-3">Ordrar</span>
-                    </div>
-                    <div
-                      className="flex m-2 w-full cursor-pointer"
-                      onClick={() => {
-                        setMenu(false);
-                        enableBodyScroll();
-                        history("/admin/verifications");
-                      }}
-                    >
-                      <div className="flex-shrink-0 w-12 h-12 md:w-18 md:h-18 ">
-                        <svg
-                          className="h-10 w-10"
-                          viewBox="0 0 16 16"
-                          fill="#CFF09E"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M5 10H3V9h10v1h-3v2h3v1h-3v2H9v-2H6v2H5v-2H3v-1h2v-2zm1 0v2h3v-2H6z"
-                          />
-                          <path d="M4 0h5.5v1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h1V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2z" />
-                          <path d="M9.5 3V0L14 4.5h-3A1.5 1.5 0 0 1 9.5 3z" />
-                        </svg>
-                      </div>
-                      <span className="m-3 md:my-3">Bokföring</span>
-                    </div>
+  return {
+    getSnapshot: () => snapshot,
+    subscribe: (onStoreChange) => {
+      if (!supported) return () => undefined;
 
-                    <div
-                      className="flex m-2 w-full cursor-pointer"
-                      onClick={() => {
-                        setMenu(false);
-                        sessionStorage.setItem("scrollPosition", "0");
-                        enableBodyScroll();
-                        history("/admin/discounts");
-                      }}
-                    >
-                      <div className="flex-shrink-0 w-12 h-12 md:w-18 md:h-18 text-violet-500">
-                        <svg
-                          className="h-10 w-10"
-                          viewBox="0 0 512 512"
-                          fill="currentColor"
-                        >
-                          <path
-                            style={{ fill: "#CFF09E" }}
-                            d="M324.116,58.401h-136.23l-81.34,113.107v82.433h298.909v-82.433L324.116,58.401z M256,205.182
-	c-26.704,0-48.353-21.649-48.353-48.353s21.649-48.353,48.353-48.353s48.353,21.649,48.353,48.353S282.706,205.182,256,205.182z"
-                          />
-                          <g>
-                            <path
-                              style={{ fill: "#507C5C" }}
-                              d="M405.454,269.271c8.466,0,15.329-6.863,15.329-15.329v-82.433c0-3.211-1.009-6.341-2.883-8.949
-		L336.561,49.452c-2.88-4.005-7.511-6.38-12.445-6.38h-52.787V15.329C271.329,6.863,264.466,0,256,0
-		c-8.466,0-15.329,6.863-15.329,15.329v27.743h-52.787c-4.933,0-9.565,2.374-12.445,6.38L94.1,162.56
-		c-1.875,2.607-2.883,5.738-2.883,8.949v325.162c0,8.466,6.863,15.329,15.329,15.329h298.909c8.466,0,15.329-6.863,15.329-15.329
-		V341.299c0-8.466-6.863-15.329-15.329-15.329s-15.329,6.863-15.329,15.329v140.044H121.874V269.271L405.454,269.271
-		L405.454,269.271z M121.874,176.448l73.867-102.719h44.93v21.295c-27.733,6.881-48.353,31.974-48.353,61.805
-		c0,35.113,28.568,63.681,63.681,63.681s63.681-28.568,63.681-63.681c0-29.83-20.62-54.924-48.353-61.805V73.729h44.93
-		l73.867,102.719v62.165H121.874L121.874,176.448L121.874,176.448z M256,123.805c18.209,0,33.024,14.815,33.024,33.024
-		S274.209,189.853,256,189.853s-33.024-14.815-33.024-33.024C222.976,138.619,237.791,123.805,256,123.805z"
-                            />
-                            <path
-                              style={{ fill: "#507C5C" }}
-                              d="M301.48,356.141c-18.537,0-28.746,9.301-28.746,26.189v24.202c0,16.889,10.209,26.189,28.746,26.189
-		c18.269,0,28.746-9.545,28.746-26.189V382.33C330.226,365.686,319.749,356.141,301.48,356.141z M296.307,382.329
-		c0-3.647,1.403-5.002,5.172-5.002c4.435,0,5.344,1.999,5.344,5.002v24.202c0,3.003-0.909,5.002-5.344,5.002
-		c-3.771,0-5.172-1.355-5.172-5.002V382.329z"
-                            />
-                            <path
-                              style={{ fill: "#507C5C" }}
-                              d="M284.891,294.269c-4.491,0-8.242,2.275-10.017,6.049l-59.812,122.861
-		c-0.766,1.533-1.188,3.188-1.188,4.66c0,5.898,5.112,12.212,12.724,12.212c4.609,0,8.851-2.45,10.528-6.046l59.984-122.864
-		c0.84-1.683,1.018-3.463,1.018-4.66C298.126,299.175,291.284,294.269,284.891,294.269z"
-                            />
-                            <path
-                              style={{ fill: "#507C5C" }}
-                              d="M210.521,301.257c-18.537,0-28.746,9.301-28.746,26.189v24.202
-		c0,16.888,10.209,26.189,28.746,26.189c18.269,0,28.746-9.545,28.746-26.189v-24.202
-		C239.267,310.802,228.789,301.257,210.521,301.257z M205.348,327.446c0-3.647,1.403-5.002,5.173-5.002
-		c4.435,0,5.344,1.999,5.344,5.002v24.202c0,3.003-0.909,5.002-5.344,5.002c-3.771,0-5.173-1.355-5.173-5.002L205.348,327.446
-		L205.348,327.446z"
-                            />
-                          </g>
-                        </svg>
-                      </div>
-                      <span className="m-3 md:my-3">Rabatter</span>
-                    </div>
-                  </>
-                ) : null}
+      const contexts = collectBannerContexts();
+      const siblingContexts = {
+        collection: contexts.filter((context) => context.kind === "collection"),
+        item: contexts.filter((context) => context.kind === "item"),
+      };
+      let lastScrollPosition = window.scrollY;
 
-                <div className="flex m-2 w-full">
-                  <div
-                    style={{ width: 255 }}
-                    className="flex border-gray-600 border-b-2 px-2"
-                  ></div>
-                </div>
-                {data &&
-                  data.collections.map((d: CollectionProps, i: number) => {
-                    return (
-                      <div
-                        key={d._id}
-                        className="flex m-2 w-full"
-                        onClick={() => {
-                          enableBodyScroll();
-                          history(`/collections/${d.shortUrl}`);
-                          setMenu(false);
-                        }}
-                      >
-                        <div
-                          className={classNames(
-                            "flex-shrink-0 w-12 h-12 md:w-18 md:h-18",
-                            i === data.collections.length - 1 ? "mb-20" : ""
-                          )}
-                        >
-                          <img
-                            className="w-full h-full rounded-full  object-cover object-center"
-                            src={d.image}
-                            alt=""
-                          />
-                        </div>
-                        <span className="m-3 md:my-3">{d.headline}</span>
-                      </div>
-                    );
-                  })}
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-    </>
-  ) : (
-    <div
-      className="absolute right-1 md:right-1 w-10 h-10 flex md:py-3"
-      onClick={(e) => {
-        disableBodyScroll();
-        setMenu(true);
-      }}
-    >
-      <div className="flex justify-center text-gray-600 w-10 h-10 items-center">
-        <svg className="h-8 w-10" viewBox="0 0 20 20" fill="currentColor">
-          <path
-            fillRule="evenodd"
-            d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"
-            clipRule="evenodd"
-          />
-        </svg>
+      const updateBrandPosition = () => {
+        const direction: 1 | -1 =
+          window.scrollY >= lastScrollPosition ? 1 : -1;
+        const triggerLine = Math.min(window.innerHeight * 0.38, 360);
+        let nextContext: BannerContext | null = null;
+
+        for (const context of contexts) {
+          if (context.element.getBoundingClientRect().top > triggerLine) break;
+
+          if (context.kind !== "section") {
+            const siblings = siblingContexts[context.kind];
+            const contextIndex = siblings.indexOf(context);
+            const previous = siblings[contextIndex - 1];
+            const next = siblings[contextIndex + 1];
+
+            nextContext = {
+              direction,
+              eyebrow: context.eyebrow,
+              href: context.href,
+              key: `${context.eyebrow}-${context.title}-${context.href}`,
+              kind: context.kind,
+              next: next ? { href: next.href, title: next.title } : undefined,
+              previous: previous
+                ? { href: previous.href, title: previous.title }
+                : undefined,
+              title: context.title,
+            };
+          } else {
+            nextContext = {
+              direction,
+              eyebrow: context.eyebrow,
+              href: context.href,
+              key: `${context.eyebrow}-${context.title}-${context.href}`,
+              kind: context.kind,
+              title: context.title,
+            };
+          }
+        }
+
+        const contextChanged = snapshot?.key !== nextContext?.key;
+        if (contextChanged) {
+          snapshot = nextContext;
+          onStoreChange();
+        }
+        lastScrollPosition = window.scrollY;
+      };
+
+      updateBrandPosition();
+      window.addEventListener("scroll", updateBrandPosition, { passive: true });
+      return () => window.removeEventListener("scroll", updateBrandPosition);
+    },
+  };
+}
+
+function useBannerContext(pathname: string): BannerContext | null {
+  const store = useMemo(
+    () =>
+      createBannerContextStore(
+        pathname === "/" || pathname.startsWith("/collections/")
+      ),
+    [pathname]
+  );
+
+  return useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    getServerBannerContext
+  );
+}
+
+function OriginalBannerArtwork() {
+  return (
+    <div aria-hidden="true" className="mcc-original-banner">
+      <div className="mcc-original-banner__canvas">
+        <div className="mcc-original-banner__exact" />
       </div>
+      <div className="mcc-original-banner__icon-safe-zone" />
     </div>
   );
 }
 
-const CartComponent = (): JSX.Element => {
-  const { items } = useCart();
-  const totalItems = useMemo(() => {
-    return items.reduce(
-      (count, item) =>
-        item.parentId == null ? count + (item.quantity || 0) : count,
-      0
-    );
-  }, [items]);
-  const history = useNavigate();
+type IconName =
+  | "account"
+  | "arrow"
+  | "cart"
+  | "close"
+  | "discount"
+  | "home"
+  | "ledger"
+  | "menu"
+  | "orders";
+
+function Icon({ name }: { name: IconName }) {
+  const paths: Record<IconName, React.ReactNode> = {
+    account: (
+      <>
+        <circle cx="9" cy="8" r="3" />
+        <path d="M3.8 18.2c.7-3.1 2.4-4.7 5.2-4.7 1.5 0 2.7.4 3.6 1.2" />
+        <path d="M14 9.5h6M17.5 6l3.5 3.5-3.5 3.5" />
+      </>
+    ),
+    arrow: <path d="M5 12h14M14 7l5 5-5 5" />,
+    cart: (
+      <>
+        <path d="M5.5 8.5h13l-1 11h-11l-1-11Z" />
+        <path d="M9 9V6.5a3 3 0 0 1 6 0V9" />
+      </>
+    ),
+    close: <path d="m6 6 12 12M18 6 6 18" />,
+    discount: (
+      <>
+        <path d="m4 5.5 7-2 9.5 9.5-7.5 7.5L3.5 11l.5-5.5Z" />
+        <circle cx="8" cy="8" r="1" />
+        <path d="m10 15 5-5" />
+      </>
+    ),
+    home: (
+      <>
+        <path d="m3.5 11 8.5-7 8.5 7" />
+        <path d="M5.5 10v10h13V10M10 20v-6h4v6" />
+      </>
+    ),
+    ledger: (
+      <>
+        <path d="M5 3.5h11.5A2.5 2.5 0 0 1 19 6v14H5a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2Z" />
+        <path d="M7.5 3.5V20M11 8h5M11 12h5M11 16h3" />
+      </>
+    ),
+    menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+    orders: (
+      <>
+        <path d="M5 4h14v16H5zM8 4V2M16 4V2" />
+        <path d="M8.5 9h7M8.5 13h7M8.5 17h4" />
+      </>
+    ),
+  };
+
+  return (
+    <svg
+      aria-hidden="true"
+      className="mcc-nav-icon"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <g
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.6"
+      >
+        {paths[name]}
+      </g>
+    </svg>
+  );
+}
+
+function NavigationWordmark() {
   return (
     <div
-      onClick={(e) => {
-        e.preventDefault();
-        if (totalItems > 0) {
-          history("/cart");
-        }
-      }}
-      className="absolute py-0 md:py-3 right-12"
+      aria-label="Moa Clay Co"
+      className="mcc-navigation-wordmark"
+      role="img"
     >
-      {totalItems > 0 ? (
-        <div className="absolute z-10 right-0 top-1 flex items-center justify-center w-5 h-5 text-gray-700 font-sans text-sm font-semibold bg-rosa rounded-full ring-1 ring-pink-200">
-          {totalItems}
-        </div>
-      ) : null}
-      <svg
-        className="h-15 w-10 text-gray-600 fill-current"
-        viewBox="0 0 490.057 490.057"
-      >
-        <g>
-          <path
-            d="M489.194,464l-36.4-293.4c-1-10.4-9.4-17.7-19.8-17.7h-23.9v-16.6c0-74.9-61.4-136.3-136.3-136.3c-12.6,0-24.6,1.7-35.9,5
-          c-11.3-3.3-23.3-5-35.9-5c-74.9,0-136.3,61.4-136.3,136.3v16.6h-10.4c-9.4,0-18.7,7.3-19.8,17.7l-34.3,296.5
-          c0,18,14.4,23.6,20.8,22.9c0,0,448.9,0,449.4,0C481.894,490.1,492.694,478.9,489.194,464z M367.394,136.3v16.6h-40.6v-16.6
-          c0-36.3-11.2-67.9-30.3-91.6C337.194,55.3,367.394,92.5,367.394,136.3z M187.494,136.3c0-40.7,19.3-73,49.6-87
-          c30.1,13.9,49.3,45.6,49.3,87v16.6h-98.8L187.494,136.3z M106.294,136.3c0-43.8,30.3-81,70.9-91.6c-19.1,23.7-30.3,55.3-30.3,91.6
-          v16.6h-40.6V136.3z M43.894,449.4l30.2-255.9h342.3l30.2,255.9H43.894z"
-          />
-        </g>
-      </svg>
+      <span className="mcc-navigation-wordmark__name" aria-hidden="true">
+        Moa Clay
+      </span>
+      <span className="mcc-navigation-wordmark__co" aria-hidden="true">
+        Co
+      </span>
     </div>
+  );
+}
+
+function Hamburger({ onLogin }: { onLogin: () => void }) {
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const [mobileMenuCompact, setMobileMenuCompact] = React.useState(false);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const data = useLoaderData<IndexLoadingType>();
+  const navigate = useNavigate();
+
+  const closeMenu = (restoreFocus = false) => {
+    setMenuOpen(false);
+    setMobileMenuCompact(false);
+    if (restoreFocus) {
+      window.setTimeout(() => menuButtonRef.current?.focus(), 0);
+    }
+  };
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.body.classList.add("mcc-menu-open");
+    const closeButton = window.matchMedia("(max-width: 899px)").matches
+      ? mobileCloseButtonRef.current
+      : closeButtonRef.current;
+    closeButton?.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeMenu(true);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      document.body.classList.remove("mcc-menu-open");
+    };
+  }, [menuOpen]);
+
+  const onAccount = () => {
+    closeMenu();
+    if (data.user) navigate("/logout");
+    else onLogin();
+  };
+
+  const closeAfterNavigation = () => closeMenu();
+
+  return (
+    <>
+      <button
+        aria-expanded={menuOpen}
+        aria-haspopup="dialog"
+        aria-label="Öppna meny"
+        className="mcc-header-action mcc-header-action--menu"
+        onClick={() => setMenuOpen(true)}
+        ref={menuButtonRef}
+        type="button"
+      >
+        <Icon name="menu" />
+      </button>
+
+      <AnimatePresence>
+        {menuOpen ? (
+          <motion.div
+            animate={{ opacity: 1 }}
+            className="mcc-navigation-layer"
+            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }}
+            transition={{ duration: 0.22 }}
+          >
+            <button
+              aria-label="Stäng meny"
+              className="mcc-navigation-backdrop"
+              onClick={() => closeMenu(true)}
+              type="button"
+            />
+
+            <div
+              aria-label="Huvudmeny"
+              aria-modal="true"
+              className={`mcc-navigation-shell${
+                mobileMenuCompact ? " mcc-navigation-shell--compact" : ""
+              }`}
+              onScroll={(event) => {
+                const compact = event.currentTarget.scrollTop > 190;
+                setMobileMenuCompact((current) =>
+                  current === compact ? current : compact
+                );
+              }}
+              role="dialog"
+            >
+              <motion.div
+                animate={{ x: 0 }}
+                className="mcc-navigation-heading mcc-navigation-mobile-heading"
+                exit={{ x: "100%" }}
+                initial={{ x: "100%" }}
+                transition={{
+                  duration: 0.42,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+              >
+                <div className="mcc-navigation-mobile-title">
+                  <NavigationWordmark />
+                </div>
+
+                <nav
+                  aria-label="Snabbval"
+                  className="mcc-navigation-mobile-shortcuts"
+                >
+                  <Link
+                    aria-label="Startsida"
+                    className="mcc-navigation-shortcut"
+                    onClick={closeAfterNavigation}
+                    prefetch="intent"
+                    to="/"
+                  >
+                    <Icon name="home" />
+                  </Link>
+                  <button
+                    aria-label={data.user ? "Logga ut" : "Logga in"}
+                    className="mcc-navigation-shortcut"
+                    onClick={onAccount}
+                    type="button"
+                  >
+                    <Icon name="account" />
+                  </button>
+                  {data.user ? (
+                    <>
+                      <Link
+                        aria-label="Ordrar"
+                        className="mcc-navigation-shortcut"
+                        onClick={closeAfterNavigation}
+                        prefetch="intent"
+                        to="/admin/orders"
+                      >
+                        <Icon name="orders" />
+                      </Link>
+                      <Link
+                        aria-label="Bokföring"
+                        className="mcc-navigation-shortcut"
+                        onClick={closeAfterNavigation}
+                        prefetch="intent"
+                        to="/admin/verifications"
+                      >
+                        <Icon name="ledger" />
+                      </Link>
+                      <Link
+                        aria-label="Rabatter"
+                        className="mcc-navigation-shortcut"
+                        onClick={() => {
+                          sessionStorage.setItem("scrollPosition", "0");
+                          closeAfterNavigation();
+                        }}
+                        prefetch="intent"
+                        to="/admin/discounts"
+                      >
+                        <Icon name="discount" />
+                      </Link>
+                    </>
+                  ) : null}
+                </nav>
+
+                <button
+                  aria-label="Stäng meny"
+                  className="mcc-navigation-close"
+                  onClick={() => closeMenu(true)}
+                  ref={mobileCloseButtonRef}
+                  type="button"
+                >
+                  <Icon name="close" />
+                </button>
+              </motion.div>
+
+              <motion.aside
+                animate={{ x: 0 }}
+                className="mcc-navigation-rail"
+                exit={{ x: "100%" }}
+                initial={{ x: "100%" }}
+                transition={{
+                  duration: 0.5,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+              >
+                <div className="mcc-navigation-heading">
+                  <NavigationWordmark />
+                  <button
+                    aria-label="Stäng meny"
+                    className="mcc-navigation-close"
+                    onClick={() => closeMenu(true)}
+                    ref={closeButtonRef}
+                    type="button"
+                  >
+                    <Icon name="close" />
+                  </button>
+                </div>
+
+                <nav aria-label="Sidor" className="mcc-navigation-actions">
+                  <Link
+                    className="mcc-navigation-action"
+                    onClick={closeAfterNavigation}
+                    prefetch="intent"
+                    to="/"
+                  >
+                    <span className="mcc-navigation-action-icon">
+                      <Icon name="home" />
+                    </span>
+                    <span>
+                      <small>Butiken</small>
+                      Startsida
+                    </span>
+                    <Icon name="arrow" />
+                  </Link>
+
+                  <button
+                    className="mcc-navigation-action"
+                    onClick={onAccount}
+                    type="button"
+                  >
+                    <span className="mcc-navigation-action-icon">
+                      <Icon name="account" />
+                    </span>
+                    <span>
+                      <small>Konto</small>
+                      {data.user ? "Logga ut" : "Logga in"}
+                    </span>
+                    <Icon name="arrow" />
+                  </button>
+
+                  {data.user ? (
+                    <>
+                      <Link
+                        className="mcc-navigation-action"
+                        onClick={closeAfterNavigation}
+                        prefetch="intent"
+                        to="/admin/orders"
+                      >
+                        <span className="mcc-navigation-action-icon">
+                          <Icon name="orders" />
+                        </span>
+                        <span>
+                          <small>Admin</small>
+                          Ordrar
+                        </span>
+                        <Icon name="arrow" />
+                      </Link>
+                      <Link
+                        className="mcc-navigation-action"
+                        onClick={closeAfterNavigation}
+                        prefetch="intent"
+                        to="/admin/verifications"
+                      >
+                        <span className="mcc-navigation-action-icon">
+                          <Icon name="ledger" />
+                        </span>
+                        <span>
+                          <small>Admin</small>
+                          Bokföring
+                        </span>
+                        <Icon name="arrow" />
+                      </Link>
+                      <Link
+                        className="mcc-navigation-action"
+                        onClick={() => {
+                          sessionStorage.setItem("scrollPosition", "0");
+                          closeAfterNavigation();
+                        }}
+                        prefetch="intent"
+                        to="/admin/discounts"
+                      >
+                        <span className="mcc-navigation-action-icon">
+                          <Icon name="discount" />
+                        </span>
+                        <span>
+                          <small>Admin</small>
+                          Rabatter
+                        </span>
+                        <Icon name="arrow" />
+                      </Link>
+                    </>
+                  ) : null}
+                </nav>
+
+                <p className="mcc-navigation-rail-note">
+                  Handgjorda smycken, formade och målade för hand.
+                </p>
+              </motion.aside>
+
+              <motion.section
+                animate={{ opacity: 1, y: 0 }}
+                aria-labelledby="mcc-collections-heading"
+                className="mcc-navigation-collections"
+                exit={{ opacity: 0, y: 36 }}
+                initial={{ opacity: 0, y: 36 }}
+                transition={{
+                  delay: 0.08,
+                  duration: 0.55,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+              >
+                <div className="mcc-navigation-collections-heading">
+                  <div>
+                    <span className="mcc-navigation-kicker">
+                      Utforska kollektionerna
+                    </span>
+                    <h2 id="mcc-collections-heading">Collections</h2>
+                  </div>
+                  <span className="mcc-navigation-count">
+                    {String(data.collections.length).padStart(2, "0")}
+                  </span>
+                </div>
+
+                <div className="mcc-navigation-collection-grid">
+                  {data.collections.map((collection, index) => (
+                    <motion.div
+                      animate={{ opacity: 1, y: 0 }}
+                      initial={{ opacity: 0, y: 14 }}
+                      key={collection._id ?? collection.shortUrl}
+                      transition={{
+                        delay: 0.14 + Math.min(index, 10) * 0.035,
+                        duration: 0.4,
+                      }}
+                    >
+                      <Link
+                        aria-label={`Öppna ${collection.headline}`}
+                        className="mcc-navigation-collection"
+                        onClick={closeAfterNavigation}
+                        prefetch="intent"
+                        to={`/collections/${collection.shortUrl}`}
+                      >
+                        <span className="mcc-navigation-collection-media">
+                          <img
+                            alt=""
+                            loading={index > 3 ? "lazy" : "eager"}
+                            src={collection.image}
+                          />
+                        </span>
+                        <span className="mcc-navigation-collection-copy">
+                          <small>
+                            Collection {String(index + 1).padStart(2, "0")}
+                          </small>
+                          <strong>{collection.headline}</strong>
+                        </span>
+                        <span className="mcc-navigation-collection-arrow">
+                          <Icon name="arrow" />
+                        </span>
+                      </Link>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.section>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </>
+  );
+}
+
+const CartComponent = (): React.ReactElement | null => {
+  const { items } = useCart();
+  const totalItems = useMemo(
+    () =>
+      items.reduce(
+        (count, item) =>
+          item.parentId == null ? count + (item.quantity || 0) : count,
+        0
+      ),
+    [items]
+  );
+  const navigate = useNavigate();
+
+  if (totalItems <= 0) return null;
+
+  return (
+    <motion.button
+      animate={{ opacity: 1, scale: 1 }}
+      aria-label={`Öppna varukorgen, ${totalItems} varor`}
+      className="mcc-header-action mcc-header-action--cart"
+      initial={{ opacity: 0, scale: 0.82 }}
+      onClick={() => navigate("/cart")}
+      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+      type="button"
+    >
+      <Icon name="cart" />
+      <span className="mcc-cart-count">{totalItems}</span>
+    </motion.button>
   );
 };
 
-const Header = (): JSX.Element | null => {
-  const theme = useTheme();
+const Header = (): React.ReactElement | null => {
+  const data = useLoaderData<IndexLoadingType>();
+  const location = useLocation();
+  const reduceMotion = useReducedMotion();
+  const [loginOpen, setLoginOpen] = React.useState(false);
+  const showCompactBrand = true;
+  const bannerContext = useBannerContext(location.pathname);
+  const isHomePage = location.pathname === "/";
+  const compactBrandVisible = !isHomePage || showCompactBrand;
+  const bannerContextHasNavigation =
+    bannerContext?.kind === "section" ||
+    Boolean(bannerContext?.previous || bannerContext?.next);
+
   return (
-    <div
-      style={{
-        backgroundImage: `url(${theme?.backgroundImage})`,
-        backgroundPosition: "center left",
-        backgroundRepeat: "no-repeat",
-      }}
-      className="space-between fixed z-10 left-0 top-0 flex p-4 min-w-full h-20 text-gray-600 font-note text-3xl bg-white border-b-2 border-gray-600 md:p-2 md:text-5xl"
-    >
-      <Link to="/" prefetch="intent">
-        <div
-          className="flex-grow relative"
+    <>
+      <header className="mcc-site-header">
+        <OriginalBannerArtwork />
+        <Link
+          aria-label="Moa Clay Co – startsida"
+          className={`mcc-site-home-link${bannerContext ? " mcc-site-home-link--context" : ""}`}
+          prefetch="intent"
+          to="/"
         >
-         {theme?.logo}
+          <span className="mcc-visually-hidden">Moa Clay Co</span>
+          <AnimatePresence initial={!reduceMotion}>
+            {compactBrandVisible ? (
+              <motion.span
+                animate={{
+                  clipPath: "inset(0 0% 0 0 round 999px)",
+                  filter: "blur(0px)",
+                  opacity: 1,
+                  y: 0,
+                }}
+                className="mcc-scroll-brand"
+                exit={
+                  reduceMotion
+                    ? undefined
+                    : {
+                        clipPath: "inset(0 100% 0 0 round 999px)",
+                        opacity: 0,
+                        y: -5,
+                      }
+                }
+                initial={
+                  reduceMotion
+                    ? false
+                    : {
+                        clipPath: "inset(0 100% 0 0 round 999px)",
+                        filter: "blur(4px)",
+                        opacity: 0,
+                        y: 8,
+                      }
+                }
+                transition={{
+                  delay: reduceMotion ? 0 : 0.16,
+                  duration: reduceMotion ? 0 : 0.58,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+              >
+                <span className="mcc-scroll-brand__name">Moa Clay</span>
+                <span className="mcc-scroll-brand__collection">Co</span>
+              </motion.span>
+            ) : null}
+          </AnimatePresence>
+        </Link>
+        <AnimatePresence initial={false} mode="wait">
+          {compactBrandVisible &&
+          bannerContext &&
+          bannerContextHasNavigation ? (
+            <motion.div
+              animate={{ opacity: 1, scaleX: 1, x: 0 }}
+              className={`mcc-scroll-context-wrap${
+                bannerContext.kind !== "section"
+                  ? " mcc-scroll-context-wrap--navigator"
+                  : ""
+              }`}
+              exit={
+                reduceMotion
+                  ? undefined
+                  : bannerContext.kind !== "section"
+                    ? { opacity: 0 }
+                    : { opacity: 0, scaleX: 0.96, x: -12 }
+              }
+              initial={
+                reduceMotion
+                  ? false
+                  : bannerContext.kind !== "section"
+                    ? { opacity: 0 }
+                    : { opacity: 0, scaleX: 0.94, x: -22 }
+              }
+              key={
+                bannerContext.kind === "section"
+                  ? bannerContext.key
+                  : bannerContext.kind
+              }
+              transition={{
+                duration: reduceMotion ? 0 : 0.34,
+                ease: [0.22, 1, 0.36, 1],
+              }}
+            >
+              {bannerContext.kind !== "section" ? (
+                <nav
+                  aria-label={`Närliggande ${
+                    bannerContext.kind === "item" ? "produkter" : "Collections"
+                  } runt ${bannerContext.title}`}
+                  className="mcc-scroll-collection-nav"
+                >
+                  {bannerContext.previous ? (
+                    <span className="mcc-scroll-collection-nav__item">
+                      <Link
+                        aria-label={`Föregående ${
+                          bannerContext.kind === "item"
+                            ? "produkt"
+                            : "Collection"
+                        }: ${bannerContext.previous.title}`}
+                        className="mcc-scroll-collection-nav__link mcc-scroll-collection-nav__link--previous"
+                        prefetch="intent"
+                        to={bannerContext.previous.href}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="mcc-scroll-collection-nav__arrow"
+                        >
+                          ←
+                        </span>
+                        <span className="mcc-scroll-collection-nav__copy">
+                          <small>Föregående</small>
+                          <AnimatePresence
+                            initial={!reduceMotion}
+                            mode="popLayout"
+                          >
+                            <motion.strong
+                              animate={{
+                                filter: "blur(0px)",
+                                opacity: 1,
+                                x: 0,
+                              }}
+                              exit={
+                                reduceMotion
+                                  ? undefined
+                                  : {
+                                      filter: "blur(2px)",
+                                      opacity: 0,
+                                      x: bannerContext.direction * -14,
+                                    }
+                              }
+                              initial={
+                                reduceMotion
+                                  ? false
+                                  : {
+                                      filter: "blur(3px)",
+                                      opacity: 0,
+                                      x: bannerContext.direction * 14,
+                                    }
+                              }
+                              key={`previous-${bannerContext.previous.href}`}
+                              transition={{
+                                duration: reduceMotion ? 0 : 0.34,
+                                ease: [0.22, 1, 0.36, 1],
+                              }}
+                            >
+                              {bannerContext.previous.title}
+                            </motion.strong>
+                          </AnimatePresence>
+                        </span>
+                      </Link>
+                    </span>
+                  ) : null}
+
+                  {bannerContext.next ? (
+                    <span className="mcc-scroll-collection-nav__item">
+                      <Link
+                        aria-label={`Nästa ${
+                          bannerContext.kind === "item" ? "produkt" : "Collection"
+                        }: ${bannerContext.next.title}`}
+                        className="mcc-scroll-collection-nav__link mcc-scroll-collection-nav__link--next"
+                        prefetch="intent"
+                        to={bannerContext.next.href}
+                      >
+                        <span className="mcc-scroll-collection-nav__copy">
+                          <small>Nästa</small>
+                          <AnimatePresence initial={!reduceMotion} mode="popLayout">
+                            <motion.strong
+                              animate={{ filter: "blur(0px)", opacity: 1, x: 0 }}
+                              exit={
+                                reduceMotion
+                                  ? undefined
+                                  : {
+                                      filter: "blur(2px)",
+                                      opacity: 0,
+                                      x: bannerContext.direction * -14,
+                                    }
+                              }
+                              initial={
+                                reduceMotion
+                                  ? false
+                                  : {
+                                      filter: "blur(3px)",
+                                      opacity: 0,
+                                      x: bannerContext.direction * 14,
+                                    }
+                              }
+                              key={`next-${bannerContext.next.href}`}
+                              transition={{
+                                delay: reduceMotion ? 0 : 0.035,
+                                duration: reduceMotion ? 0 : 0.34,
+                                ease: [0.22, 1, 0.36, 1],
+                              }}
+                            >
+                              {bannerContext.next.title}
+                            </motion.strong>
+                          </AnimatePresence>
+                        </span>
+                        <span aria-hidden="true" className="mcc-scroll-collection-nav__arrow">
+                          →
+                        </span>
+                      </Link>
+                    </span>
+                  ) : null}
+                </nav>
+              ) : (
+                <Link
+                  aria-label={`${bannerContext.eyebrow}: ${bannerContext.title}`}
+                  className="mcc-scroll-context"
+                  prefetch="intent"
+                  to={bannerContext.href}
+                >
+                  <span className="mcc-scroll-context__eyebrow">
+                    {bannerContext.eyebrow}
+                  </span>
+                  <strong>{bannerContext.title}</strong>
+                  <span aria-hidden="true" className="mcc-scroll-context__arrow">
+                    ↗
+                  </span>
+                </Link>
+              )}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+        <div className="mcc-site-header-actions">
+          <ClientOnly fallback={null}>{() => <CartComponent />}</ClientOnly>
+          <Hamburger onLogin={() => setLoginOpen(true)} />
         </div>
-      </Link>
-      <ClientOnly fallback={null}>{() => <CartComponent />}</ClientOnly>
-      <Hamburger />
-    </div>
+      </header>
+      {loginOpen ? (
+        <LoginModal
+          configured={data.googleAuthenticationConfigured}
+          onClose={() => setLoginOpen(false)}
+        />
+      ) : null}
+    </>
   );
 };
 

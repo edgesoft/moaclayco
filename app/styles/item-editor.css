@@ -1,0 +1,727 @@
+.mcc-editor-page {
+  --editor-accent: #b86e59;
+  --editor-accent-dark: #965542;
+  --editor-ink: #1d1c1a;
+  --editor-line: rgba(58, 52, 47, 0.18);
+  --editor-muted: #716b65;
+  --editor-paper: #f3efe7;
+  --editor-light: #faf8f3;
+  background-color: var(--editor-paper);
+  background-image: radial-gradient(rgba(87, 71, 61, 0.045) 0.65px, transparent 0.65px);
+  background-size: 6px 6px;
+  color: var(--editor-ink);
+  min-height: 100vh;
+  padding-top: 5rem;
+}
+
+.mcc-editor-page,
+.mcc-editor-page * { box-sizing: border-box; }
+.mcc-editor-page button,
+.mcc-editor-page input,
+.mcc-editor-page textarea { font: inherit; }
+.mcc-editor-page button:focus-visible,
+.mcc-editor-page input:focus-visible,
+.mcc-editor-page textarea:focus-visible,
+.mcc-editor-page a:focus-visible { outline: 2px solid #9d5743; outline-offset: 3px; }
+.mcc-editor-form { margin: 0 auto; max-width: 1600px; }
+
+.mcc-editor-header {
+  padding: clamp(2.5rem, 5vw, 5.2rem) clamp(1.25rem, 5vw, 5.5rem) clamp(2.8rem, 5vw, 5rem);
+}
+.mcc-editor-header__topline { align-items: center; display: flex; justify-content: space-between; }
+.mcc-editor-header__topline a {
+  align-items: center; color: inherit; display: inline-flex; font-size: .62rem;
+  font-weight: 740; gap: .75rem; letter-spacing: .12em; text-decoration: none;
+  text-transform: uppercase; transition: color 180ms ease, gap 180ms ease;
+}
+.mcc-editor-header__topline a:hover { color: var(--editor-accent); gap: .95rem; }
+.mcc-editor-header__topline .mcc-editor-preview-link {
+  border-bottom: 1px solid currentColor; color: var(--editor-muted); padding: .4rem 0;
+}
+.mcc-editor-header__title {
+  margin-top: clamp(3.5rem, 7vw, 7rem);
+}
+.mcc-editor-header .mcc-kicker { --mcc-accent: var(--editor-accent); color: #665f59; margin: 0 0 1rem; }
+.mcc-editor-header h1,
+.mcc-editor-section h2 {
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Baskerville, Georgia, serif;
+  font-weight: 400; letter-spacing: -.052em;
+}
+.mcc-editor-header h1 {
+  font-size: clamp(3.8rem, 7vw, 7.6rem); line-height: .88; margin: 0; max-width: 11ch;
+  overflow-wrap: normal; word-break: normal;
+}
+.mcc-editor-error-summary {
+  background: rgba(184, 110, 89, .1); border-block: 1px solid rgba(151, 76, 57, .28);
+  margin: 0 clamp(1.25rem, 5vw, 5.5rem) 2rem; padding: 1rem 1.1rem;
+}
+.mcc-editor-error-summary strong { font: 400 1.08rem "Iowan Old Style", Georgia, serif; }
+.mcc-editor-error-summary ul {
+  color: #794536; font-size: .76rem; line-height: 1.55; list-style: none; margin: .4rem 0 0; padding: 0;
+}
+.mcc-editor-error-summary li::before { content: "— "; }
+
+.mcc-editor-workspace {
+  background: var(--editor-light); border-block: 1px solid var(--editor-line); display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(25rem, .92fr);
+}
+.mcc-editor-section { min-width: 0; padding: clamp(1.5rem, 3vw, 3rem); }
+.mcc-editor-copy-column { border-left: 1px solid var(--editor-line); min-width: 0; }
+.mcc-editor-copy-column .mcc-editor-section + .mcc-editor-section { border-top: 1px solid var(--editor-line); }
+.mcc-editor-section__heading {
+  align-items: start; border-bottom: 1px solid var(--editor-line); display: flex; gap: 1rem;
+  justify-content: space-between; margin-bottom: 1.4rem; padding-bottom: 1rem;
+}
+.mcc-editor-eyebrow {
+  color: var(--editor-accent-dark); font-size: .56rem; font-weight: 760; letter-spacing: .15em;
+  margin: 0 0 .3rem; text-transform: uppercase;
+}
+.mcc-editor-section h2 { font-size: clamp(2rem, 3.2vw, 3.25rem); line-height: .94; margin: 0; }
+.mcc-editor-section__heading > span {
+  color: #817870; font: italic .78rem "Iowan Old Style", Georgia, serif; padding-top: .35rem;
+}
+
+.mcc-editor-fields { display: grid; gap: 1.25rem 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mcc-editor-field { display: block; min-width: 0; }
+.mcc-editor-field--wide { grid-column: 1 / -1; }
+.mcc-editor-field > span:first-child,
+.mcc-editor-inline-fields label > span:first-child {
+  color: #5f5953; display: block; font-size: .59rem; font-weight: 760; letter-spacing: .1em;
+  margin-bottom: .48rem; text-transform: uppercase;
+}
+.mcc-editor-field > span b { color: var(--editor-accent); font-weight: inherit; }
+.mcc-editor-field > input,
+.mcc-editor-field > textarea,
+.mcc-editor-inline-fields input,
+.mcc-editor-input-suffix {
+  background: rgba(255, 255, 255, .56); border: 1px solid rgba(75, 66, 60, .22);
+  border-radius: .35rem; color: var(--editor-ink); display: block; font-size: .88rem;
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease; width: 100%;
+}
+.mcc-editor-field > input,
+.mcc-editor-inline-fields input { min-height: 3.15rem; padding: .75rem .85rem; }
+.mcc-editor-field > textarea { line-height: 1.65; min-height: 11.5rem; padding: .85rem; resize: vertical; }
+.mcc-editor-field > input:hover,
+.mcc-editor-field > textarea:hover,
+.mcc-editor-inline-fields input:hover,
+.mcc-editor-input-suffix:hover { border-color: rgba(75, 66, 60, .42); }
+.mcc-editor-field > input:focus,
+.mcc-editor-field > textarea:focus,
+.mcc-editor-inline-fields input:focus,
+.mcc-editor-input-suffix:focus-within {
+  background: #fffefa; border-color: var(--editor-accent); box-shadow: 0 0 0 3px rgba(184, 110, 89, .11); outline: 0;
+}
+.mcc-editor-field input[aria-invalid="true"],
+.mcc-editor-field textarea[aria-invalid="true"] { border-color: #9e513d; }
+.mcc-editor-field > small { color: #8c4a39; display: block; font-size: .66rem; line-height: 1.4; margin-top: .38rem; }
+.mcc-editor-field > .mcc-editor-field__hint { color: var(--editor-muted); }
+.mcc-editor-input-suffix {
+  align-items: center; display: grid; grid-template-columns: minmax(0, 1fr) auto; overflow: hidden;
+}
+.mcc-editor-input-suffix input {
+  background: transparent; border: 0; border-radius: 0; box-shadow: none !important;
+  min-height: 3.15rem; min-width: 0; outline: 0 !important; padding: .75rem .85rem;
+}
+.mcc-editor-input-suffix > span {
+  border-left: 1px solid var(--editor-line); color: var(--editor-muted); font-size: .58rem;
+  font-weight: 760; letter-spacing: .1em; padding: .45rem .72rem;
+}
+
+.mcc-editor-dropzone {
+  align-items: center; background: rgba(243, 239, 231, .58); border: 1px dashed rgba(81, 67, 59, .38);
+  display: grid; gap: 1rem; grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 7.4rem; padding: 1.1rem; transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+.mcc-editor-dropzone.is-dragging {
+  background: rgba(184, 110, 89, .1); border-color: var(--editor-accent); transform: translateY(-2px);
+}
+.mcc-editor-dropzone__icon {
+  align-items: center; border: 1px solid var(--editor-line); border-radius: 999px; color: var(--editor-accent-dark);
+  display: flex; height: 3rem; justify-content: center; width: 3rem;
+}
+.mcc-editor-dropzone__icon svg {
+  fill: none; height: 1.1rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; width: 1.1rem;
+}
+.mcc-editor-dropzone strong,
+.mcc-editor-dropzone small { display: block; }
+.mcc-editor-dropzone strong { font: 400 1rem "Iowan Old Style", Georgia, serif; }
+.mcc-editor-dropzone small { color: var(--editor-muted); font-size: .62rem; line-height: 1.4; margin-top: .25rem; }
+.mcc-editor-dropzone > button,
+.mcc-editor-add-row {
+  align-items: center; background: transparent; border: 1px solid var(--editor-line); border-radius: 999px;
+  color: var(--editor-ink); cursor: pointer; display: inline-flex; font-size: .58rem; font-weight: 760;
+  gap: 1rem; justify-content: center; letter-spacing: .09em; min-height: 2.8rem; padding: .7rem .9rem;
+  text-transform: uppercase; transition: background 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+.mcc-editor-dropzone > button:hover,
+.mcc-editor-add-row:hover:not(:disabled) {
+  background: var(--editor-accent); border-color: var(--editor-accent); color: white; transform: translateY(-1px);
+}
+.mcc-editor-visually-hidden {
+  clip: rect(0 0 0 0); clip-path: inset(50%); height: 1px; overflow: hidden;
+  position: absolute; white-space: nowrap; width: 1px;
+}
+.mcc-editor-upload-notice {
+  background: rgba(184, 110, 89, .08); color: #77493c; font-size: .7rem;
+  line-height: 1.5; margin: .7rem 0 0; padding: .65rem .75rem;
+}
+
+.mcc-editor-image-grid {
+  display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr));
+  list-style: none; margin: 1rem 0 0; padding: 0;
+}
+.mcc-editor-image { background: var(--editor-paper); border: 1px solid var(--editor-line); min-width: 0; }
+.mcc-editor-image:first-child { grid-column: 1 / -1; }
+.mcc-editor-image__preview {
+  aspect-ratio: 4 / 3; background-color: #ded6cb;
+  background-image: linear-gradient(135deg, rgba(255,255,255,.3) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.3) 50%, rgba(255,255,255,.3) 75%, transparent 75%, transparent);
+  background-size: 18px 18px; overflow: hidden; position: relative;
+}
+.mcc-editor-image:first-child .mcc-editor-image__preview { aspect-ratio: 4 / 2.7; }
+.mcc-editor-image__preview > img { display: block; height: 100%; object-fit: cover; width: 100%; }
+.mcc-editor-image__preview > span:not(.mcc-editor-image__ready) {
+  align-items: center; color: var(--editor-muted); display: flex; font-size: .62rem;
+  inset: 0; justify-content: center; position: absolute;
+}
+.mcc-editor-image__ready {
+  align-items: center; backdrop-filter: blur(8px); background: rgba(250,248,243,.92);
+  border-radius: 999px; color: #68725e; display: flex; font-size: .7rem; height: 1.8rem;
+  justify-content: center; position: absolute; right: .65rem; top: .65rem; width: 1.8rem;
+}
+.mcc-editor-image__progress {
+  align-content: end; background: linear-gradient(180deg, rgba(35,31,28,.08), rgba(35,31,28,.78));
+  color: white; display: grid; gap: .32rem; grid-template-columns: minmax(0,1fr) auto;
+  inset: 0; padding: .85rem; position: absolute;
+}
+.mcc-editor-image__progress span,
+.mcc-editor-image__progress strong { font-size: .59rem; font-weight: 720; letter-spacing: .08em; text-transform: uppercase; }
+.mcc-editor-image__progress i {
+  background: rgba(255,255,255,.3); grid-column: 1 / -1; height: 2px; overflow: hidden; position: relative;
+}
+.mcc-editor-image__progress i::after {
+  background: #efd5ca; content: ""; inset: 0 auto 0 0; position: absolute;
+  transition: width 180ms ease; width: var(--upload-progress, 0%);
+}
+.mcc-editor-image__meta {
+  align-items: center; display: flex; gap: .75rem; justify-content: space-between; min-height: 4.4rem; padding: .65rem .7rem;
+}
+.mcc-editor-image__meta > div:first-child { min-width: 0; }
+.mcc-editor-image__meta span,
+.mcc-editor-image__meta strong,
+.mcc-editor-image__meta small { display: block; }
+.mcc-editor-image__meta span {
+  color: var(--editor-accent-dark); font-size: .5rem; font-weight: 760; letter-spacing: .11em; text-transform: uppercase;
+}
+.mcc-editor-image__meta strong {
+  font: 400 .9rem "Iowan Old Style", Georgia, serif; margin-top: .1rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mcc-editor-image__meta small { color: var(--editor-muted); font-size: .52rem; margin-top: .12rem; }
+.mcc-editor-image__actions { display: flex; flex: 0 0 auto; }
+.mcc-editor-image__actions button,
+.mcc-editor-rows button {
+  align-items: center; background: transparent; border: 0; color: #6e6660; cursor: pointer;
+  display: flex; height: 2.2rem; justify-content: center; padding: 0;
+  transition: color 160ms ease, background 160ms ease; width: 2.2rem;
+}
+.mcc-editor-image__actions button:hover:not(:disabled),
+.mcc-editor-rows button:hover { background: rgba(184,110,89,.1); color: var(--editor-accent-dark); }
+.mcc-editor-image__actions button:disabled { cursor: default; opacity: .25; }
+.mcc-editor-image__actions svg,
+.mcc-editor-rows svg {
+  fill: none; height: 1rem; stroke: currentColor; stroke-linecap: round;
+  stroke-linejoin: round; stroke-width: 1.4; width: 1rem;
+}
+.mcc-editor-image__error {
+  align-items: start; background: rgba(158,81,61,.09); border-top: 1px solid rgba(158,81,61,.2);
+  color: #804334; display: flex; font-size: .62rem; gap: .6rem; justify-content: space-between;
+  line-height: 1.45; padding: .65rem .7rem;
+}
+.mcc-editor-image__error button {
+  background: transparent; border: 0; border-bottom: 1px solid currentColor; color: inherit;
+  cursor: pointer; flex: 0 0 auto; font-size: .56rem; font-weight: 760; padding: .05rem 0; text-transform: uppercase;
+}
+.mcc-editor-media-empty {
+  align-items: end; border-bottom: 1px solid var(--editor-line); display: grid; gap: 1rem;
+  grid-template-columns: auto minmax(0,1fr); min-height: 9rem; padding: 1.5rem 0;
+}
+.mcc-editor-media-empty > span { color: var(--editor-accent); font: 400 2rem "Iowan Old Style", Georgia, serif; }
+.mcc-editor-media-empty p {
+  color: var(--editor-muted); font-size: .72rem; line-height: 1.55; margin: 0; max-width: 28rem;
+}
+.mcc-editor-upload-status { color: var(--editor-muted); font-size: .62rem; line-height: 1.5; margin: .8rem 0 0; }
+
+.mcc-editor-secondary-grid {
+  background: var(--editor-paper); border-bottom: 1px solid var(--editor-line);
+  display: grid; grid-template-columns: repeat(2, minmax(0,1fr));
+}
+.mcc-editor-secondary-grid > .mcc-editor-section + .mcc-editor-section { border-left: 1px solid var(--editor-line); }
+.mcc-editor-suggestions { display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: 1.15rem; }
+.mcc-editor-suggestions button {
+  background: transparent; border: 1px solid var(--editor-line); border-radius: 999px;
+  color: #645e58; cursor: pointer; font-size: .62rem; min-height: 2rem; padding: .38rem .68rem;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.mcc-editor-suggestions button:hover,
+.mcc-editor-suggestions button.is-selected {
+  background: rgba(184,110,89,.1); border-color: rgba(151,85,66,.55); color: #824b3c;
+}
+.mcc-editor-inline-fields {
+  align-items: end; display: grid; gap: .75rem;
+  grid-template-columns: minmax(0,1fr) minmax(0,.75fr) auto;
+}
+.mcc-editor-add-row { border-radius: .35rem; min-height: 3.15rem; }
+.mcc-editor-add-row:disabled { cursor: default; opacity: .38; }
+.mcc-editor-rows { border-top: 1px solid var(--editor-line); list-style: none; margin: 1.4rem 0 0; padding: 0; }
+.mcc-editor-rows li {
+  align-items: center; border-bottom: 1px solid var(--editor-line); display: grid; gap: .75rem;
+  grid-template-columns: minmax(5rem,.55fr) minmax(0,1fr) auto auto; min-height: 3.45rem;
+}
+.mcc-editor-rows li > span {
+  color: var(--editor-muted); font-size: .55rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase;
+}
+.mcc-editor-rows li > strong { font: 400 .9rem "Iowan Old Style", Georgia, serif; }
+.mcc-editor-rows li > em { color: var(--editor-muted); font-size: .65rem; font-style: normal; }
+.mcc-editor-empty-row {
+  border-block: 1px solid var(--editor-line); color: var(--editor-muted);
+  font: italic .82rem "Iowan Old Style", Georgia, serif; margin: 1.4rem 0 0; padding: 1rem 0;
+}
+
+.mcc-editor-savebar {
+  align-items: center; backdrop-filter: blur(18px); background: rgba(250,248,243,.94);
+  border-top: 1px solid var(--editor-line); bottom: 0; display: flex; gap: 2rem;
+  justify-content: space-between; padding: .85rem clamp(1.25rem,5vw,5.5rem); position: sticky; z-index: 20;
+}
+.mcc-editor-savebar > div { align-items: center; display: flex; gap: .65rem; }
+.mcc-editor-savebar > div > span { background: #8b9480; border-radius: 999px; height: .45rem; width: .45rem; }
+.mcc-editor-savebar > div > span.is-dirty { background: var(--editor-accent); }
+.mcc-editor-savebar p,
+.mcc-editor-savebar strong,
+.mcc-editor-savebar small { display: block; margin: 0; }
+.mcc-editor-savebar strong { font-size: .66rem; font-weight: 740; }
+.mcc-editor-savebar small { color: var(--editor-muted); font-size: .57rem; margin-top: .08rem; }
+.mcc-editor-savebar > button {
+  align-items: center; background: var(--editor-accent); border: 1px solid var(--editor-accent);
+  border-radius: 999px; color: white; cursor: pointer; display: inline-flex; font-size: .62rem;
+  font-weight: 760; gap: 2rem; justify-content: space-between; letter-spacing: .09em;
+  min-height: 3rem; padding: .7rem .9rem .72rem 1.1rem; text-transform: uppercase;
+  transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+.mcc-editor-savebar > button:hover:not(:disabled) {
+  background: var(--editor-accent-dark); border-color: var(--editor-accent-dark); transform: translateY(-1px);
+}
+.mcc-editor-savebar > button:disabled { background: #c3bbb1; border-color: #c3bbb1; cursor: not-allowed; }
+.mcc-editor-savebar > button span:last-child { font-size: .9rem; font-weight: 400; }
+
+.mcc-collection-editor-workspace {
+  grid-template-columns: minmax(0, 1.02fr) minmax(27rem, .98fr);
+}
+.mcc-collection-editor-figure {
+  background: var(--editor-paper); border: 1px solid var(--editor-line); margin: 1rem 0 0;
+}
+.mcc-collection-editor-image {
+  aspect-ratio: 4 / 5; background-color: #ded6cb;
+  background-image: linear-gradient(135deg, rgba(255,255,255,.3) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.3) 50%, rgba(255,255,255,.3) 75%, transparent 75%, transparent);
+  background-size: 18px 18px; max-height: 44rem; overflow: hidden; position: relative;
+}
+.mcc-collection-editor-image > img { display: block; height: 100%; object-fit: cover; width: 100%; }
+.mcc-collection-editor-image > span:not(.mcc-editor-image__ready) {
+  align-items: center; color: var(--editor-muted); display: flex; font-size: .66rem;
+  inset: 0; justify-content: center; position: absolute;
+}
+.mcc-collection-editor-figure figcaption {
+  align-items: center; display: flex; gap: 1rem; justify-content: space-between;
+  min-height: 4.8rem; padding: .75rem .85rem;
+}
+.mcc-collection-editor-figure figcaption span,
+.mcc-collection-editor-figure figcaption strong,
+.mcc-collection-editor-figure figcaption small { display: block; }
+.mcc-collection-editor-figure figcaption span {
+  color: var(--editor-accent-dark); font-size: .51rem; font-weight: 760;
+  letter-spacing: .11em; text-transform: uppercase;
+}
+.mcc-collection-editor-figure figcaption strong {
+  font: 400 .95rem "Iowan Old Style", Georgia, serif; margin-top: .12rem;
+}
+.mcc-collection-editor-figure figcaption small { color: var(--editor-muted); font-size: .53rem; margin-top: .12rem; }
+.mcc-collection-editor-figure figcaption > button {
+  background: transparent; border: 0; border-bottom: 1px solid currentColor;
+  color: #756b64; cursor: pointer; font-size: .56rem; font-weight: 760;
+  letter-spacing: .08em; padding: .25rem 0; text-transform: uppercase;
+}
+.mcc-collection-editor-figure figcaption > button:hover:not(:disabled) { color: var(--editor-accent-dark); }
+.mcc-collection-editor-figure figcaption > button:disabled { cursor: default; opacity: .35; }
+.mcc-collection-editor-placeholder {
+  align-items: end; border-bottom: 1px solid var(--editor-line); display: grid; gap: 1rem;
+  grid-template-columns: auto minmax(0,1fr); min-height: 11rem; padding: 1.5rem 0;
+}
+.mcc-collection-editor-placeholder > span { color: var(--editor-accent); font: 400 2rem "Iowan Old Style", Georgia, serif; }
+.mcc-collection-editor-placeholder p {
+  color: var(--editor-muted); font-size: .72rem; line-height: 1.55; margin: 0; max-width: 29rem;
+}
+.mcc-collection-editor-slug {
+  align-items: center; background: rgba(255,255,255,.56); border: 1px solid rgba(75,66,60,.22);
+  border-radius: .35rem; display: grid; grid-template-columns: auto minmax(0,1fr); overflow: hidden;
+}
+.mcc-collection-editor-slug:focus-within {
+  background: #fffefa; border-color: var(--editor-accent); box-shadow: 0 0 0 3px rgba(184,110,89,.11);
+}
+.mcc-collection-editor-slug > span {
+  border-right: 1px solid var(--editor-line); color: var(--editor-muted); font-size: .7rem; padding: .72rem .8rem;
+}
+.mcc-collection-editor-slug input {
+  background: transparent; border: 0; box-shadow: none !important; min-height: 3.15rem;
+  min-width: 0; outline: 0 !important; padding: .75rem .85rem; width: 100%;
+}
+.mcc-collection-editor-page textarea[name="shortDescription"] { min-height: 7rem; }
+.mcc-collection-danger {
+  align-items: center; background: #eee7de; border-bottom: 1px solid var(--editor-line);
+  display: flex; gap: 2rem; justify-content: space-between; padding: clamp(2rem,4vw,4rem) clamp(1.25rem,5vw,5.5rem);
+}
+.mcc-collection-danger h2 {
+  font: 400 clamp(2rem,3vw,3rem) "Iowan Old Style", Georgia, serif;
+  letter-spacing: -.04em; margin: 0;
+}
+.mcc-collection-danger > div > p:last-child { color: var(--editor-muted); font-size: .75rem; line-height: 1.55; margin: .65rem 0 0; }
+.mcc-collection-danger > button,
+.mcc-collection-danger__confirmation button {
+  background: transparent; border: 1px solid rgba(130,67,52,.5); border-radius: 999px;
+  color: #824334; cursor: pointer; flex: 0 0 auto; font-size: .58rem; font-weight: 760;
+  letter-spacing: .09em; min-height: 2.8rem; padding: .7rem 1rem; text-transform: uppercase;
+  transition: background 160ms ease, color 160ms ease;
+}
+.mcc-collection-danger > button:hover { background: #8f4d3c; color: white; }
+.mcc-collection-danger__confirmation {
+  border-left: 1px solid rgba(130,67,52,.3); min-width: min(100%,22rem); padding-left: 1.25rem;
+}
+.mcc-collection-danger__confirmation > strong,
+.mcc-collection-danger__confirmation > span { display: block; }
+.mcc-collection-danger__confirmation > strong { font: 400 1.05rem "Iowan Old Style", Georgia, serif; }
+.mcc-collection-danger__confirmation > span { color: var(--editor-muted); font-size: .62rem; margin-top: .15rem; }
+.mcc-collection-danger__confirmation > div { display: flex; gap: .55rem; margin-top: .8rem; }
+.mcc-collection-danger__confirmation button:first-child { border-color: var(--editor-line); color: var(--editor-ink); }
+.mcc-collection-danger__confirmation button:last-child { background: #8f4d3c; border-color: #8f4d3c; color: white; }
+
+@media (max-width: 1100px) {
+  .mcc-editor-workspace { grid-template-columns: minmax(0,1fr) minmax(22rem,.9fr); }
+  .mcc-collection-editor-workspace { grid-template-columns: minmax(0,1fr) minmax(23rem,.9fr); }
+  .mcc-editor-dropzone { align-items: start; grid-template-columns: auto minmax(0,1fr); }
+  .mcc-editor-dropzone > button { grid-column: 2; justify-self: start; }
+  .mcc-editor-inline-fields { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .mcc-editor-add-row { grid-column: 1 / -1; justify-self: start; }
+}
+
+@media (max-width: 899px) {
+  .mcc-editor-page { padding-top: 4.5rem; }
+  .mcc-editor-header { padding: 2.2rem 1rem 3rem; }
+  .mcc-editor-header__title {
+    margin-top: 3.6rem;
+  }
+  .mcc-editor-header h1 { font-size: clamp(3.5rem,13vw,6rem); }
+  .mcc-editor-error-summary { margin-inline: 1rem; }
+  .mcc-editor-workspace { display: flex; flex-direction: column; }
+  .mcc-editor-copy-column { border-left: 0; border-top: 1px solid var(--editor-line); }
+  .mcc-editor-section { padding: 1.35rem 1rem 1.75rem; }
+  .mcc-editor-media { padding-top: 1.5rem; }
+  .mcc-editor-secondary-grid { display: block; }
+  .mcc-editor-secondary-grid > .mcc-editor-section + .mcc-editor-section {
+    border-left: 0; border-top: 1px solid var(--editor-line);
+  }
+  .mcc-editor-savebar { padding: .7rem 1rem; }
+  .mcc-collection-danger { align-items: flex-start; flex-direction: column; padding: 2rem 1rem; }
+  .mcc-collection-danger__confirmation { border-left: 0; border-top: 1px solid rgba(130,67,52,.3); padding: 1rem 0 0; width: 100%; }
+}
+
+@media (max-width: 600px) {
+  .mcc-editor-header__topline .mcc-editor-preview-link { font-size: 0; gap: 0; }
+  .mcc-editor-header__topline .mcc-editor-preview-link span { font-size: .75rem; }
+  .mcc-editor-dropzone { grid-template-columns: auto minmax(0,1fr); padding: .85rem; }
+  .mcc-editor-dropzone__icon { height: 2.6rem; width: 2.6rem; }
+  .mcc-editor-dropzone > button { grid-column: 1 / -1; justify-self: stretch; }
+  .mcc-editor-image-grid { gap: .65rem; }
+  .mcc-editor-image__meta { align-items: start; flex-direction: column; min-height: 6.2rem; }
+  .mcc-editor-image__actions {
+    border-top: 1px solid var(--editor-line); justify-content: space-between;
+    margin-top: .4rem; padding-top: .25rem; width: 100%;
+  }
+  .mcc-editor-fields,
+  .mcc-editor-inline-fields { grid-template-columns: minmax(0,1fr); }
+  .mcc-editor-add-row { grid-column: auto; justify-self: stretch; }
+  .mcc-editor-rows li {
+    gap: .3rem .75rem; grid-template-columns: minmax(0,1fr) auto; padding: .7rem 0;
+  }
+  .mcc-editor-rows li > span,
+  .mcc-editor-rows li > strong,
+  .mcc-editor-rows li > em { grid-column: 1; }
+  .mcc-editor-rows li > button { grid-column: 2; grid-row: 1 / span 3; }
+  .mcc-editor-savebar { gap: .7rem; }
+  .mcc-editor-savebar small { display: none; }
+  .mcc-editor-savebar > button { flex: 0 0 auto; gap: 1rem; min-height: 2.85rem; padding-inline: .9rem; }
+  .mcc-collection-editor-slug { grid-template-columns: minmax(0,1fr); }
+  .mcc-collection-editor-slug > span { border-bottom: 1px solid var(--editor-line); border-right: 0; padding: .55rem .8rem; }
+  .mcc-collection-danger__confirmation > div { align-items: stretch; flex-direction: column; }
+  .mcc-collection-danger__confirmation button { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mcc-editor-page *,
+  .mcc-editor-page *::before,
+  .mcc-editor-page *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
+
+/* Discounts — the same editorial studio language as item and Collection. */
+.mcc-discount-list-title {
+  align-items: end; display: flex; gap: 2rem; justify-content: space-between;
+}
+.mcc-discount-list-title h1 { max-width: none; }
+.mcc-discount-list-intro {
+  color: var(--editor-muted); font: italic clamp(.82rem, 1.2vw, 1rem) "Iowan Old Style", Georgia, serif;
+  line-height: 1.5; margin: 1.3rem 0 0; max-width: 34rem;
+}
+.mcc-discount-create {
+  align-items: center; background: var(--editor-accent); border: 1px solid var(--editor-accent);
+  border-radius: 999px; color: white; display: inline-flex; flex: 0 0 auto; font-size: .61rem;
+  font-weight: 760; gap: 1.6rem; letter-spacing: .1em; min-height: 3rem; padding: .75rem .85rem .75rem 1.05rem;
+  text-decoration: none; text-transform: uppercase; transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+.mcc-discount-create:hover { background: var(--editor-accent-dark); border-color: var(--editor-accent-dark); transform: translateY(-1px); }
+.mcc-discount-create span:last-child { font-size: 1rem; font-weight: 400; }
+.mcc-discount-mobile-sticky { display: none; }
+
+.mcc-discount-index {
+  background: var(--editor-light); border-block: 1px solid var(--editor-line);
+  margin: 0; padding: clamp(1.5rem, 3vw, 3rem) clamp(1.25rem, 5vw, 5.5rem) clamp(4rem, 8vw, 8rem);
+}
+.mcc-discount-index__heading {
+  align-items: start; border-bottom: 1px solid var(--editor-line); display: flex; gap: 1rem;
+  justify-content: space-between; padding-bottom: 1.1rem;
+}
+.mcc-discount-index__heading h2 {
+  font: 400 clamp(2.3rem, 4vw, 4.2rem)/.96 "Iowan Old Style", Georgia, serif;
+  letter-spacing: -.052em; margin: 0;
+}
+.mcc-discount-index__heading > span {
+  color: var(--editor-accent); font: 400 1rem "Iowan Old Style", Georgia, serif;
+}
+.mcc-discount-list { width: 100%; }
+.mcc-discount-list__labels,
+.mcc-discount-row {
+  align-items: center; display: grid; gap: clamp(.7rem, 1.7vw, 2rem);
+  grid-template-columns: minmax(8rem, 1.25fr) minmax(4rem, .52fr) minmax(6rem, .7fr) minmax(9rem, 1fr) minmax(5rem, .62fr) 1.5rem;
+}
+.mcc-discount-list__labels {
+  color: var(--editor-muted); font-size: .5rem; font-weight: 760; letter-spacing: .13em;
+  min-height: 3.1rem; text-transform: uppercase;
+}
+.mcc-discount-row {
+  border-top: 1px solid var(--editor-line); color: var(--editor-ink); min-height: 6.4rem;
+  text-decoration: none; transition: background 160ms ease, padding 160ms ease;
+}
+.mcc-discount-row:hover { background: rgba(184, 110, 89, .065); padding-inline: .75rem; }
+.mcc-discount-row__code {
+  font: 400 clamp(1.1rem, 1.6vw, 1.45rem) "Iowan Old Style", Georgia, serif;
+  letter-spacing: .015em; overflow-wrap: anywhere;
+}
+.mcc-discount-row__percentage { align-items: baseline; display: flex; gap: .14rem; }
+.mcc-discount-row__percentage strong {
+  font: 400 clamp(1.7rem, 2.8vw, 2.65rem)/1 "Iowan Old Style", Georgia, serif;
+  letter-spacing: -.045em;
+}
+.mcc-discount-row__percentage small { color: var(--editor-accent-dark); font-size: .68rem; font-weight: 760; }
+.mcc-discount-row__balance,
+.mcc-discount-row__validity,
+.mcc-discount-row__state { color: #5f5a55; font-size: .66rem; line-height: 1.45; }
+.mcc-discount-row__validity { font-family: "Iowan Old Style", Georgia, serif; font-size: .74rem; }
+.mcc-discount-row__state { align-items: center; display: flex; gap: .45rem; }
+.mcc-discount-row__state i { background: #718065; border-radius: 999px; height: .42rem; width: .42rem; }
+.mcc-discount-row__state.is-empty i { background: #a66d5c; }
+.mcc-discount-row__state.is-expired i { background: #8e8881; }
+.mcc-discount-row__arrow { color: var(--editor-accent-dark); font-size: .85rem; transition: transform 160ms ease; }
+.mcc-discount-row:hover .mcc-discount-row__arrow { transform: translateX(.2rem); }
+
+.mcc-discount-empty {
+  align-items: end; display: grid; gap: clamp(1.5rem, 4vw, 4rem); grid-template-columns: auto minmax(0, 34rem);
+  justify-content: start; min-height: 22rem; padding: clamp(3rem, 8vw, 8rem) 0;
+}
+.mcc-discount-empty > span { color: var(--editor-accent); font: 400 3.5rem "Iowan Old Style", Georgia, serif; }
+.mcc-discount-empty h3 { font: 400 clamp(2rem, 4vw, 3.8rem)/1 "Iowan Old Style", Georgia, serif; letter-spacing: -.045em; margin: 0; }
+.mcc-discount-empty p { color: var(--editor-muted); font-size: .76rem; line-height: 1.65; margin: 1rem 0 1.4rem; }
+.mcc-discount-empty a {
+  border-bottom: 1px solid currentColor; color: var(--editor-accent-dark); display: inline-flex;
+  font-size: .59rem; font-weight: 760; gap: 1rem; letter-spacing: .1em; padding: .35rem 0;
+  text-decoration: none; text-transform: uppercase;
+}
+
+.mcc-discount-editor-workspace { grid-template-columns: minmax(22rem, .82fr) minmax(28rem, 1.18fr); }
+.mcc-discount-preview { background: #eee8df; }
+.mcc-discount-ticket {
+  background: #ead8cc; border: 1px solid rgba(91, 68, 55, .2); margin: clamp(2rem, 5vw, 5rem) auto 0;
+  max-width: 31rem; overflow: hidden; padding: clamp(2rem, 5vw, 4rem); position: relative;
+}
+.mcc-discount-ticket::before,
+.mcc-discount-ticket::after {
+  background: #eee8df; border: 1px solid rgba(91, 68, 55, .2); border-radius: 999px;
+  content: ""; height: 2.2rem; position: absolute; top: calc(50% - 1.1rem); width: 2.2rem;
+}
+.mcc-discount-ticket::before { left: -1.2rem; }
+.mcc-discount-ticket::after { right: -1.2rem; }
+.mcc-discount-ticket__percentage { align-items: start; display: flex; justify-content: center; }
+.mcc-discount-ticket__percentage strong {
+  font: 400 clamp(6rem, 12vw, 10rem)/.78 "Iowan Old Style", Georgia, serif; letter-spacing: -.09em;
+}
+.mcc-discount-ticket__percentage > span { color: var(--editor-accent-dark); font: 400 1.3rem "Iowan Old Style", Georgia, serif; margin: .2rem 0 0 .35rem; }
+.mcc-discount-ticket > p {
+  border-bottom: 1px solid rgba(91, 68, 55, .2); color: #685c54; font-size: .56rem;
+  font-weight: 760; letter-spacing: .13em; margin: 1.4rem 0 0; padding: 0 0 1.5rem;
+  text-align: center; text-transform: uppercase;
+}
+.mcc-discount-ticket__code { padding-top: 1.4rem; text-align: center; }
+.mcc-discount-ticket__code span { color: #756860; display: block; font-size: .51rem; font-weight: 760; letter-spacing: .14em; text-transform: uppercase; }
+.mcc-discount-ticket__code strong {
+  display: block; font: 400 clamp(1.35rem, 3vw, 2rem) "Iowan Old Style", Georgia, serif;
+  letter-spacing: .08em; margin-top: .35rem; overflow-wrap: anywhere;
+}
+.mcc-discount-preview__summary {
+  align-items: center; border-block: 1px solid var(--editor-line); display: flex; gap: .75rem;
+  margin: clamp(2rem, 5vw, 4rem) auto 0; max-width: 31rem; padding: .9rem 0;
+}
+.mcc-discount-preview__summary > span { background: #718065; border-radius: 999px; flex: 0 0 auto; height: .5rem; width: .5rem; }
+.mcc-discount-preview__summary > span.is-inactive { background: #a66d5c; }
+.mcc-discount-preview__summary strong,
+.mcc-discount-preview__summary small { display: block; }
+.mcc-discount-preview__summary strong { font-size: .66rem; }
+.mcc-discount-preview__summary small { color: var(--editor-muted); font-size: .57rem; margin-top: .15rem; }
+
+.mcc-discount-period { position: relative; }
+.mcc-discount-quick-periods { display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: 1.2rem; }
+.mcc-discount-quick-periods button,
+.mcc-discount-time-picker button {
+  background: transparent; border: 1px solid var(--editor-line); border-radius: 999px; color: #645e58;
+  cursor: pointer; font-size: .6rem; min-height: 2.15rem; padding: .42rem .72rem;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.mcc-discount-quick-periods button:hover,
+.mcc-discount-quick-periods button.is-selected,
+.mcc-discount-time-picker button:hover:not(:disabled),
+.mcc-discount-time-picker button.is-selected {
+  background: rgba(184, 110, 89, .1); border-color: rgba(151, 85, 66, .55); color: #824b3c;
+}
+.mcc-discount-date-row { align-items: end; display: grid; gap: .8rem; grid-template-columns: minmax(0, 1fr) auto; }
+.mcc-discount-control-label {
+  color: #504a45; display: block; font-size: .58rem; font-weight: 730; letter-spacing: .08em;
+  margin-bottom: .42rem; text-transform: uppercase;
+}
+.mcc-discount-date-picker { min-width: 0; position: relative; }
+.mcc-discount-date-picker > button {
+  align-items: center; background: rgba(255,255,255,.56); border: 1px solid rgba(75,66,60,.22);
+  border-radius: .35rem; color: var(--editor-ink); cursor: pointer; display: flex; font-size: .82rem;
+  gap: 1rem; justify-content: space-between; min-height: 3.15rem; padding: .75rem .85rem; text-align: left; width: 100%;
+}
+.mcc-discount-date-picker > button:hover { border-color: rgba(75,66,60,.42); }
+.mcc-discount-date-picker > button[aria-expanded="true"] {
+  background: #fffefa; border-color: var(--editor-accent); box-shadow: 0 0 0 3px rgba(184,110,89,.11);
+}
+.mcc-discount-date-picker > button.has-error { border-color: #9e513d; }
+.mcc-discount-time-picker > div { display: flex; gap: .35rem; }
+.mcc-discount-time-picker button { border-radius: .35rem; min-height: 3.15rem; }
+.mcc-discount-time-picker button:disabled { cursor: default; opacity: .34; }
+.mcc-discount-calendar {
+  background: #fffefa; border: 1px solid var(--editor-line); box-shadow: 0 1.2rem 3rem rgba(49,39,33,.15);
+  left: 0; padding: .85rem; position: absolute; top: calc(100% + .5rem); width: min(22rem, 92vw); z-index: 40;
+}
+.mcc-discount-calendar__header { align-items: center; display: flex; justify-content: space-between; }
+.mcc-discount-calendar__header strong { font: 400 1rem "Iowan Old Style", Georgia, serif; text-transform: capitalize; }
+.mcc-discount-calendar__header button {
+  align-items: center; background: transparent; border: 0; border-radius: 999px; color: var(--editor-ink);
+  cursor: pointer; display: flex; height: 2.2rem; justify-content: center; width: 2.2rem;
+}
+.mcc-discount-calendar__header button:hover { background: rgba(184,110,89,.1); color: var(--editor-accent-dark); }
+.mcc-discount-calendar__weekdays,
+.mcc-discount-calendar__days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.mcc-discount-calendar__weekdays { color: var(--editor-muted); margin-top: .7rem; }
+.mcc-discount-calendar__weekdays span { font-size: .45rem; font-weight: 760; letter-spacing: .08em; padding: .35rem 0; text-align: center; text-transform: uppercase; }
+.mcc-discount-calendar__days button {
+  aspect-ratio: 1; background: transparent; border: 0; border-radius: 999px; color: var(--editor-ink);
+  cursor: pointer; font-size: .62rem; margin: .08rem; padding: 0;
+}
+.mcc-discount-calendar__days button:hover { background: rgba(184,110,89,.12); }
+.mcc-discount-calendar__days button.is-outside { color: #b0a9a2; }
+.mcc-discount-calendar__days button.is-today { box-shadow: inset 0 0 0 1px rgba(151,85,66,.5); }
+.mcc-discount-calendar__days button.is-selected { background: var(--editor-accent); box-shadow: none; color: white; }
+.mcc-discount-calendar__clear {
+  background: transparent; border: 0; border-top: 1px solid var(--editor-line); color: var(--editor-accent-dark);
+  cursor: pointer; font-size: .55rem; font-weight: 760; letter-spacing: .09em; margin-top: .7rem;
+  padding: .75rem 0 .2rem; text-transform: uppercase; width: 100%;
+}
+.mcc-discount-period__error { color: #8c4a39; display: block; font-size: .66rem; margin-top: .45rem; }
+.mcc-discount-period-note {
+  border-top: 1px solid var(--editor-line); color: var(--editor-muted); font: italic .72rem/1.55 "Iowan Old Style", Georgia, serif;
+  margin: 1.4rem 0 0; padding-top: 1rem;
+}
+.mcc-discount-danger > div > p:last-child { max-width: 37rem; }
+
+@media (max-width: 1040px) {
+  .mcc-discount-list__labels,
+  .mcc-discount-row {
+    grid-template-columns: minmax(7rem, 1fr) minmax(4rem, .45fr) minmax(5.5rem, .65fr) minmax(8rem, .9fr) 1.5rem;
+  }
+  .mcc-discount-list__labels span:nth-child(5),
+  .mcc-discount-row__state { display: none; }
+}
+
+@media (max-width: 899px) {
+  .mcc-discount-list-title { align-items: flex-start; }
+  .mcc-discount-index { padding-inline: 1rem; }
+  .mcc-discount-list__labels { display: none; }
+  .mcc-discount-row {
+    align-items: start; gap: .5rem 1rem; grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 0; padding: 1.2rem 0;
+  }
+  .mcc-discount-row:hover { padding-inline: .55rem; }
+  .mcc-discount-row__code { grid-column: 1; grid-row: 1; }
+  .mcc-discount-row__percentage { grid-column: 2; grid-row: 1 / span 2; justify-self: end; }
+  .mcc-discount-row__balance,
+  .mcc-discount-row__validity { grid-column: 1; }
+  .mcc-discount-row__balance::before { content: "Kvar · "; color: var(--editor-muted); }
+  .mcc-discount-row__validity::before { content: "Gäller · "; color: var(--editor-muted); }
+  .mcc-discount-row__state { display: flex; grid-column: 1; }
+  .mcc-discount-row__arrow { align-self: end; grid-column: 2; grid-row: 3 / span 2; justify-self: end; }
+  .mcc-discount-editor-workspace { display: flex; }
+  .mcc-discount-ticket__percentage strong { font-size: clamp(6rem, 24vw, 9rem); }
+}
+
+@media (max-width: 600px) {
+  .mcc-discount-list-title { gap: 1.5rem; }
+  .mcc-discount-list-title .mcc-discount-create {
+    border-radius: 50%; flex: 0 0 3.5rem; gap: 0; height: 3.5rem;
+    justify-content: center; min-height: 3.5rem; padding: 0; width: 3.5rem;
+  }
+  .mcc-discount-list-title .mcc-discount-create span:first-child { clip: rect(0 0 0 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
+  .mcc-discount-list-title .mcc-discount-create span:last-child { font-size: 1.15rem; line-height: 1; }
+  .mcc-discount-mobile-sticky {
+    align-items: center; backdrop-filter: blur(18px); background: rgba(243,239,231,.96);
+    border-bottom: 1px solid var(--editor-line); display: flex; height: 4.5rem;
+    justify-content: space-between; left: 0; opacity: 0; padding: .5rem 1rem;
+    pointer-events: none; position: fixed; right: 0; top: var(--mcc-site-header-height, 5rem);
+    transform: translateY(-.55rem); transition: opacity 160ms ease, transform 160ms ease; z-index: 18;
+  }
+  .mcc-discount-mobile-sticky.is-visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+  .mcc-discount-mobile-sticky > strong {
+    font: 400 1.9rem/1 "Iowan Old Style", Georgia, serif; letter-spacing: -.045em;
+  }
+  .mcc-discount-mobile-sticky > a {
+    align-items: center; background: var(--editor-accent); border-radius: 50%; color: white;
+    display: flex; flex: 0 0 3.5rem; height: 3.5rem; justify-content: center;
+    text-decoration: none; width: 3.5rem;
+  }
+  .mcc-discount-mobile-sticky > a span { font-size: 1.15rem; line-height: 1; }
+  .mcc-discount-list-intro { max-width: 18rem; }
+  .mcc-discount-index { padding-bottom: 5rem; }
+  .mcc-discount-empty { align-items: start; gap: 1rem; grid-template-columns: 1fr; min-height: 20rem; }
+  .mcc-discount-empty > span { font-size: 2.4rem; }
+  .mcc-discount-date-row { align-items: stretch; grid-template-columns: minmax(0, 1fr); }
+  .mcc-discount-time-picker > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mcc-discount-calendar { width: min(22rem, calc(100vw - 2rem)); }
+  .mcc-discount-ticket { padding-inline: 1.5rem; }
+  .mcc-discount-danger { padding-bottom: 5rem; }
+}

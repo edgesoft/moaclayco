@@ -1,16 +1,43 @@
 name: Fly Stage
+
 on:
-  push:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
     branches:
       - next
-      - 'next-**'
+      - "next-**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fly-stage-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
 jobs:
   deploy:
     name: Deploy app Stage
+    if: >-
+      ${{ github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v3
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy -a moaclayco-stage --remote-only --config fly-stage.toml --dockerfile Dockerfile-stage
+      - name: Check out the commit approved by CI
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set up Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1
+
+      - name: Deploy stage
+        run: flyctl deploy -a moaclayco-stage --remote-only --config fly-stage.toml --dockerfile Dockerfile-stage
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Smoke test stage
+        run: node tools/smoke-check.mjs --url=https://moaclayco-stage.fly.dev --timeout=30000

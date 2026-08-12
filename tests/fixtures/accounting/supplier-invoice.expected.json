@@ -1,0 +1,14 @@
+{
+  "documentType": "supplier_invoice",
+  "entries": [
+    {
+      "date": "2026-07-15",
+      "total": 1250,
+      "accounts": {
+        "1930": { "debit": 0, "credit": 1250 },
+        "2640": { "debit": 250, "credit": 0 },
+        "4000": { "debit": 1000, "credit": 0 }
+      }
+    }
+  ]
+}

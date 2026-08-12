@@ -19,9 +19,13 @@ const OrderSchema = new Schema({
     updatedAt: Date,
     webhookAt: Date,
     manualOrderAt: Date,
+    orderConfirmationEmailAt: Date,
+    shippingEmailAt: Date,
+    checkoutToken: String,
+    checkoutFingerprint: String,
     status: {
         type: String,
-        enum: ['OPENED', 'PENDING', 'FAILED', 'CANCELED', 'SUCCESS', 'MANUAL_PROCESSING',  'SHIPPED']
+        enum: ['OPENED', 'PENDING', 'FAILED', 'CANCELED', 'SUCCESS', 'PAID_REVIEW', 'MANUAL_PROCESSING',  'SHIPPED']
     },
     items: [{
         itemRef: String,
@@ -43,6 +47,8 @@ const OrderSchema = new Schema({
         id: String,
         client_secret: String
     },
+    paymentIntentAliases: [String],
+    paidReviewReason: String,
     discount: {
         code: String,
         percentage: Number,
@@ -51,5 +57,10 @@ const OrderSchema = new Schema({
 
 },
 { collection: 'orders' });
+
+OrderSchema.index({ "paymentIntent.id": 1 }, { unique: true, sparse: true });
+OrderSchema.index({ domain: 1, checkoutToken: 1 }, { unique: true, sparse: true });
+OrderSchema.index({ domain: 1, status: 1, createdAt: -1 });
+OrderSchema.index({ domain: 1, createdAt: -1, _id: -1 });
 
 export const Orders = mongoose.models.Orders || mongoose.model('Orders', OrderSchema);

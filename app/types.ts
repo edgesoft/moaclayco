@@ -5,29 +5,36 @@ export type OrderItem = {
   image: string;
   quantity: number;
   price: number;
-  additionalItems: [
-    {
-      name: string;
-      price: number;
-      packinfo: string;
-    }
-  ];
+  additionalItems: Array<{
+    _id?: string;
+    name: string;
+    price: number;
+    packinfo: string;
+  }>;
 };
 
 export type Order = {
   domain: string,
   _id: string;
-  webhookAt?: Date,
-  manualOrderAt?: Date,
+  webhookAt?: Date | string,
+  manualOrderAt?: Date | string,
+  orderConfirmationEmailAt?: Date | string,
+  shippingEmailAt?: Date | string,
+  status?: "OPENED" | "PENDING" | "FAILED" | "CANCELED" | "SUCCESS" | "PAID_REVIEW" | "MANUAL_PROCESSING" | "SHIPPED";
   totalSum: number;
   paymentIntent?: {
     id: string;
     client_secret: string;
   };
+  paymentIntentAliases?: string[];
+  paidReviewReason?: string;
   customer: {
     firstname: string;
     lastname: string;
     email: string;
+    postaddress: string;
+    zipcode: string;
+    city: string;
   };
   discount: {
     amount: number;
@@ -35,7 +42,7 @@ export type Order = {
     code: string | undefined;
   };
   freightCost: number;
-  items: [OrderItem];
+  items: OrderItem[];
 };
 
 export type CollectionProps = {
@@ -51,6 +58,7 @@ export type CollectionProps = {
 };
 
 export type AdditionalItem = {
+  _id?: string;
   price: number;
   name: string;
 };
@@ -74,6 +82,8 @@ export type User = {
   lastname: string;
   email: string;
   fiscalYear: number;
+  googleSubject?: string;
+  authProvider?: "google";
 };
 
 export type AdditionalItemProps = {
@@ -97,7 +107,7 @@ export type DiscountType = {
   percentage: number;
   code: string;
   balance: number;
-  expireAt: Date | null;
+  expireAt: Date | string | null;
 };
 
 
@@ -110,28 +120,24 @@ export enum ReportType  {
 }
 
 export type VerificationProps = {
-  journalEntries: [
-    {
-      debit: number;
-      credit: number;
-      account: number;
-    }
-  ];
+  recordType?: "journal" | "vatReport" | "incomingBalance";
+  journalEntries: Array<{
+    _id?: string;
+    debit: number;
+    credit: number;
+    account: number;
+  }>;
   verificationNumber: number;
   verificationDate: string;
   description: string;
-  files: [
-    {
-      name: string;
-      path: string;
-    }
-  ];
-  metadata: [
-    {
-      key: string;
-      value: string;
-    }
-  ]
+  files: Array<{
+    name: string;
+    path: string;
+  }>;
+  metadata: Array<{
+    key: string;
+    value: string;
+  }>;
 };
 
 export type VerificationDomain = {
