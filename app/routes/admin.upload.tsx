@@ -1,13 +1,13 @@
 import { Upload } from "@aws-sdk/lib-storage";
 import { data as json } from "react-router";
 import type { ActionFunction, LoaderFunction } from "react-router";
-import sharp from "sharp";
 import { Readable } from "stream";
 import { v4 as uuidv4 } from "uuid";
 import { Collections } from "~/schemas/collections";
 import { auth } from "~/services/auth.server";
 import { s3Client } from "~/services/s3.server";
 import { getDomain } from "~/utils/domain";
+import { optimizeImageBuffer } from "~/utils/imageProcessing.server";
 import {
   parseFormDataWithinLimit,
   RequestBodyTooLargeError,
@@ -35,11 +35,10 @@ function bufferToStream(buffer: Buffer) {
 
 async function uploadToS3(file: File, collectionRef: string) {
   const inputBuffer = Buffer.from(await file.arrayBuffer());
-  const { data: optimizedBuffer, info } = await sharp(inputBuffer)
-    .rotate()
-    .resize({ width: 1600, withoutEnlargement: true })
-    .webp({ effort: 4, quality: 88 })
-    .toBuffer({ resolveWithObject: true });
+  const { data: optimizedBuffer, info } = await optimizeImageBuffer(
+    inputBuffer,
+    1600
+  );
   const uniqueFileName = `${uuidv4()}.webp`;
   const key = `${awsItemPath}/${collectionRef}/${uniqueFileName}`;
 
