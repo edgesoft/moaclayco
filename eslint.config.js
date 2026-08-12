@@ -3,7 +3,7 @@ import eslintReact from "@eslint-react/eslint-plugin";
 import typescriptEslint from "@typescript-eslint/eslint-plugin";
 import typescriptParser from "@typescript-eslint/parser";
 import importPlugin from "eslint-plugin-import-x";
-import jsxA11y from "eslint-plugin-jsx-a11y";
+import jsxA11y from "eslint-plugin-jsx-a11y-x";
 import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 
@@ -30,7 +30,7 @@ export default [
       "@eslint-react": eslintReact,
       "@typescript-eslint": typescriptEslint,
       "import-x": importPlugin,
-      "jsx-a11y": jsxA11y,
+      "jsx-a11y-x": jsxA11y,
       "react-hooks": reactHooks,
     },
     settings: {
