@@ -1,4 +1,4 @@
-import React, { createContext, ReactNode, useContext, useMemo } from "react";
+import React, { createContext, ReactNode, use, useMemo } from "react";
 import { getDomain } from "~/utils/domain";
 
 type Theme = {
@@ -54,7 +54,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
 }) => {
   const theme = useMemo(() => getTheme(hostname), [hostname]);
 
-  return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
+  return <ThemeContext value={theme}>{children}</ThemeContext>;
 };
 
-export const useTheme = () => useContext(ThemeContext);
+export const useTheme = () => use(ThemeContext);
