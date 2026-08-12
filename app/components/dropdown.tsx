@@ -1,17 +1,16 @@
-import Select, { ActionMeta } from "react-select";
 import { Option, selectStyle } from "./selectStyle";
 import { useEffect, useRef, useState } from "react";
-import CreatableSelect from 'react-select/creatable';
+import CreatableSelect from "react-select/creatable";
 
 type DropDownProps = {
   label: string;
-  name: string;
+  name?: string;
   options: Option[];
   currentOptions: Option[];
   required: boolean;
   isMulti?: boolean;
   error?: string;
-  onChange?: (value: ReadonlyArray<Option> | Readonly<Option>) => void;
+  onChange?: (value: Option | null) => void;
 };
 
 export function DropDown({
@@ -19,53 +18,39 @@ export function DropDown({
   name,
   options,
   currentOptions,
-  required = false,
-  isMulti = false,
-  error = undefined,
   onChange = undefined,
 }: DropDownProps) {
-  const [selectedOptions, setSelectedOptions] =
-    useState<ReadonlyArray<Option>>(currentOptions);
+  const [selectedOption, setSelectedOption] = useState<Option | null>(
+    currentOptions[0] ?? null
+  );
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (ref.current) {
-      ref.current.value = currentOptions
-        .map((option) => option.value)
-        .join(", ");
+      ref.current.value = currentOptions[0]?.value ?? "";
     }
   }, []);
 
-  const handleChange = (
-    value: ReadonlyArray<Option>,
-    meta: ActionMeta<Option>
-  ) => {
+  const handleChange = (value: Option | null) => {
     if (ref && ref.current) {
-      if (isMulti) {
-        setSelectedOptions(value);
-        ref.current.value = value.map((option) => option.value).join(",");
-        onChange && onChange(value);
-      } else {
-        let option = (meta.option || []) as ReadonlyArray<Option>;
-        setSelectedOptions(option);
-        ref.current.value = meta.option?.value || "";
-        onChange && onChange(option);
-      }
+      setSelectedOption(value);
+      ref.current.value = value?.value ?? "";
+      onChange?.(value);
     }
   };
 
   return (
-   <div className="w-full">
+    <div className="w-full">
       <CreatableSelect
         placeholder={label}
         options={options}
-        value={selectedOptions}
+        value={selectedOption}
         onChange={handleChange}
-        isMulti
-        styles={selectStyle}
+        isMulti={false}
+        styles={selectStyle as any}
         isClearable={true}
       ></CreatableSelect>
-      <input type="hidden" name={name} id="name" ref={ref} />
-      </div>
+      <input type="hidden" name={name} ref={ref} />
+    </div>
   );
 }
