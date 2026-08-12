@@ -1,0 +1,582 @@
+{
+  "source": "/brand/banner/reference/chatgpt-element-reference.png",
+  "generatedReference": true,
+  "elements": [
+    {
+      "id": "reference-bee-01",
+      "kind": "bee",
+      "sourceBox": {
+        "left": 20,
+        "top": 15,
+        "width": 150,
+        "height": 185
+      },
+      "file": "/brand/banner/reference-elements-png/reference-bee-01.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-bee-01.svg"
+    },
+    {
+      "id": "reference-bee-02",
+      "kind": "bee",
+      "sourceBox": {
+        "left": 170,
+        "top": 10,
+        "width": 165,
+        "height": 190
+      },
+      "file": "/brand/banner/reference-elements-png/reference-bee-02.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-bee-02.svg"
+    },
+    {
+      "id": "reference-bee-03",
+      "kind": "bee",
+      "sourceBox": {
+        "left": 325,
+        "top": 5,
+        "width": 165,
+        "height": 200
+      },
+      "file": "/brand/banner/reference-elements-png/reference-bee-03.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-bee-03.svg"
+    },
+    {
+      "id": "reference-snail-01",
+      "kind": "snail",
+      "sourceBox": {
+        "left": 455,
+        "top": 25,
+        "width": 150,
+        "height": 180
+      },
+      "file": "/brand/banner/reference-elements-png/reference-snail-01.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-snail-01.svg"
+    },
+    {
+      "id": "reference-snail-02",
+      "kind": "snail",
+      "sourceBox": {
+        "left": 585,
+        "top": 50,
+        "width": 160,
+        "height": 155
+      },
+      "file": "/brand/banner/reference-elements-png/reference-snail-02.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-snail-02.svg"
+    },
+    {
+      "id": "reference-snails-03",
+      "kind": "snail",
+      "sourceBox": {
+        "left": 705,
+        "top": 5,
+        "width": 190,
+        "height": 205
+      },
+      "file": "/brand/banner/reference-elements-png/reference-snails-03.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-snails-03.svg"
+    },
+    {
+      "id": "reference-sun-01",
+      "kind": "sun",
+      "sourceBox": {
+        "left": 875,
+        "top": 0,
+        "width": 205,
+        "height": 225
+      },
+      "file": "/brand/banner/reference-elements-png/reference-sun-01.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-sun-01.svg"
+    },
+    {
+      "id": "reference-sun-02",
+      "kind": "sun",
+      "sourceBox": {
+        "left": 1080,
+        "top": 35,
+        "width": 174,
+        "height": 195
+      },
+      "file": "/brand/banner/reference-elements-png/reference-sun-02.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-sun-02.svg"
+    },
+    {
+      "id": "reference-flower-01",
+      "kind": "flower",
+      "sourceBox": {
+        "left": 0,
+        "top": 205,
+        "width": 100,
+        "height": 295
+      },
+      "file": "/brand/banner/reference-elements-png/reference-flower-01.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-flower-01.svg"
+    },
+    {
+      "id": "reference-flower-02",
+      "kind": "flower",
+      "sourceBox": {
+        "left": 80,
+        "top": 205,
+        "width": 120,
+        "height": 295
+      },
+      "file": "/brand/banner/reference-elements-png/reference-flower-02.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-flower-02.svg"
+    },
+    {
+      "id": "reference-flower-03",
+      "kind": "flower",
+      "sourceBox": {
+        "left": 175,
+        "top": 235,
+        "width": 175,
+        "height": 270
+      },
+      "file": "/brand/banner/reference-elements-png/reference-flower-03.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-flower-03.svg"
+    },
+    {
+      "id": "reference-flower-04",
+      "kind": "flower",
+      "sourceBox": {
+        "left": 335,
+        "top": 245,
+        "width": 125,
+        "height": 255
+      },
+      "file": "/brand/banner/reference-elements-png/reference-flower-04.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-flower-04.svg"
+    },
+    {
+      "id": "reference-flower-05",
+      "kind": "flower",
+      "sourceBox": {
+        "left": 430,
+        "top": 230,
+        "width": 150,
+        "height": 275
+      },
+      "file": "/brand/banner/reference-elements-png/reference-flower-05.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-flower-05.svg"
+    },
+    {
+      "id": "reference-flower-06",
+      "kind": "flower",
+      "sourceBox": {
+        "left": 550,
+        "top": 255,
+        "width": 135,
+        "height": 245
+      },
+      "file": "/brand/banner/reference-elements-png/reference-flower-06.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-flower-06.svg"
+    },
+    {
+      "id": "reference-flower-07",
+      "kind": "flower",
+      "sourceBox": {
+        "left": 665,
+        "top": 220,
+        "width": 175,
+        "height": 285
+      },
+      "file": "/brand/banner/reference-elements-png/reference-flower-07.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-flower-07.svg"
+    },
+    {
+      "id": "reference-flower-08",
+      "kind": "flower",
+      "sourceBox": {
+        "left": 805,
+        "top": 235,
+        "width": 150,
+        "height": 270
+      },
+      "file": "/brand/banner/reference-elements-png/reference-flower-08.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-flower-08.svg"
+    },
+    {
+      "id": "reference-flower-09",
+      "kind": "flower",
+      "sourceBox": {
+        "left": 925,
+        "top": 235,
+        "width": 155,
+        "height": 270
+      },
+      "file": "/brand/banner/reference-elements-png/reference-flower-09.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-flower-09.svg"
+    },
+    {
+      "id": "reference-flower-10",
+      "kind": "flower",
+      "sourceBox": {
+        "left": 1065,
+        "top": 210,
+        "width": 189,
+        "height": 300
+      },
+      "file": "/brand/banner/reference-elements-png/reference-flower-10.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-flower-10.svg"
+    },
+    {
+      "id": "reference-stem-01",
+      "kind": "stem",
+      "sourceBox": {
+        "left": 15,
+        "top": 490,
+        "width": 105,
+        "height": 230
+      },
+      "file": "/brand/banner/reference-elements-png/reference-stem-01.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-stem-01.svg"
+    },
+    {
+      "id": "reference-stem-02",
+      "kind": "stem",
+      "sourceBox": {
+        "left": 100,
+        "top": 500,
+        "width": 125,
+        "height": 220
+      },
+      "file": "/brand/banner/reference-elements-png/reference-stem-02.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-stem-02.svg"
+    },
+    {
+      "id": "reference-stem-03",
+      "kind": "stem",
+      "sourceBox": {
+        "left": 205,
+        "top": 485,
+        "width": 135,
+        "height": 235
+      },
+      "file": "/brand/banner/reference-elements-png/reference-stem-03.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-stem-03.svg"
+    },
+    {
+      "id": "reference-stem-04",
+      "kind": "stem",
+      "sourceBox": {
+        "left": 325,
+        "top": 475,
+        "width": 150,
+        "height": 250
+      },
+      "file": "/brand/banner/reference-elements-png/reference-stem-04.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-stem-04.svg"
+    },
+    {
+      "id": "reference-stem-05",
+      "kind": "stem",
+      "sourceBox": {
+        "left": 450,
+        "top": 475,
+        "width": 155,
+        "height": 250
+      },
+      "file": "/brand/banner/reference-elements-png/reference-stem-05.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-stem-05.svg"
+    },
+    {
+      "id": "reference-stem-06",
+      "kind": "stem",
+      "sourceBox": {
+        "left": 575,
+        "top": 470,
+        "width": 140,
+        "height": 255
+      },
+      "file": "/brand/banner/reference-elements-png/reference-stem-06.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-stem-06.svg"
+    },
+    {
+      "id": "reference-stem-07",
+      "kind": "stem",
+      "sourceBox": {
+        "left": 680,
+        "top": 475,
+        "width": 125,
+        "height": 250
+      },
+      "file": "/brand/banner/reference-elements-png/reference-stem-07.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-stem-07.svg"
+    },
+    {
+      "id": "reference-stem-08",
+      "kind": "stem",
+      "sourceBox": {
+        "left": 785,
+        "top": 475,
+        "width": 130,
+        "height": 250
+      },
+      "file": "/brand/banner/reference-elements-png/reference-stem-08.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-stem-08.svg"
+    },
+    {
+      "id": "reference-stem-09",
+      "kind": "stem",
+      "sourceBox": {
+        "left": 890,
+        "top": 490,
+        "width": 120,
+        "height": 230
+      },
+      "file": "/brand/banner/reference-elements-png/reference-stem-09.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-stem-09.svg"
+    },
+    {
+      "id": "reference-stem-10",
+      "kind": "stem",
+      "sourceBox": {
+        "left": 985,
+        "top": 480,
+        "width": 130,
+        "height": 240
+      },
+      "file": "/brand/banner/reference-elements-png/reference-stem-10.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-stem-10.svg"
+    },
+    {
+      "id": "reference-stem-11",
+      "kind": "stem",
+      "sourceBox": {
+        "left": 1090,
+        "top": 475,
+        "width": 164,
+        "height": 250
+      },
+      "file": "/brand/banner/reference-elements-png/reference-stem-11.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-stem-11.svg"
+    },
+    {
+      "id": "reference-leaf-01",
+      "kind": "leaf",
+      "sourceBox": {
+        "left": 15,
+        "top": 710,
+        "width": 140,
+        "height": 285
+      },
+      "file": "/brand/banner/reference-elements-png/reference-leaf-01.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-leaf-01.svg"
+    },
+    {
+      "id": "reference-leaf-02",
+      "kind": "leaf",
+      "sourceBox": {
+        "left": 130,
+        "top": 715,
+        "width": 140,
+        "height": 275
+      },
+      "file": "/brand/banner/reference-elements-png/reference-leaf-02.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-leaf-02.svg"
+    },
+    {
+      "id": "reference-leaf-03",
+      "kind": "leaf",
+      "sourceBox": {
+        "left": 255,
+        "top": 735,
+        "width": 145,
+        "height": 255
+      },
+      "file": "/brand/banner/reference-elements-png/reference-leaf-03.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-leaf-03.svg"
+    },
+    {
+      "id": "reference-leaf-04",
+      "kind": "leaf",
+      "sourceBox": {
+        "left": 385,
+        "top": 725,
+        "width": 155,
+        "height": 265
+      },
+      "file": "/brand/banner/reference-elements-png/reference-leaf-04.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-leaf-04.svg"
+    },
+    {
+      "id": "reference-leaf-05",
+      "kind": "leaf",
+      "sourceBox": {
+        "left": 515,
+        "top": 735,
+        "width": 155,
+        "height": 250
+      },
+      "file": "/brand/banner/reference-elements-png/reference-leaf-05.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-leaf-05.svg"
+    },
+    {
+      "id": "reference-leaf-06",
+      "kind": "leaf",
+      "sourceBox": {
+        "left": 660,
+        "top": 705,
+        "width": 155,
+        "height": 285
+      },
+      "file": "/brand/banner/reference-elements-png/reference-leaf-06.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-leaf-06.svg"
+    },
+    {
+      "id": "reference-leaf-07",
+      "kind": "leaf",
+      "sourceBox": {
+        "left": 800,
+        "top": 705,
+        "width": 175,
+        "height": 285
+      },
+      "file": "/brand/banner/reference-elements-png/reference-leaf-07.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-leaf-07.svg"
+    },
+    {
+      "id": "reference-leaf-08",
+      "kind": "leaf",
+      "sourceBox": {
+        "left": 945,
+        "top": 715,
+        "width": 170,
+        "height": 275
+      },
+      "file": "/brand/banner/reference-elements-png/reference-leaf-08.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-leaf-08.svg"
+    },
+    {
+      "id": "reference-leaf-09",
+      "kind": "leaf",
+      "sourceBox": {
+        "left": 1080,
+        "top": 710,
+        "width": 174,
+        "height": 280
+      },
+      "file": "/brand/banner/reference-elements-png/reference-leaf-09.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-leaf-09.svg"
+    },
+    {
+      "id": "reference-grass-01",
+      "kind": "grass",
+      "sourceBox": {
+        "left": 0,
+        "top": 980,
+        "width": 140,
+        "height": 274
+      },
+      "file": "/brand/banner/reference-elements-png/reference-grass-01.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-grass-01.svg"
+    },
+    {
+      "id": "reference-grass-02",
+      "kind": "grass",
+      "sourceBox": {
+        "left": 105,
+        "top": 975,
+        "width": 160,
+        "height": 279
+      },
+      "file": "/brand/banner/reference-elements-png/reference-grass-02.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-grass-02.svg"
+    },
+    {
+      "id": "reference-grass-03",
+      "kind": "grass",
+      "sourceBox": {
+        "left": 240,
+        "top": 990,
+        "width": 170,
+        "height": 264
+      },
+      "file": "/brand/banner/reference-elements-png/reference-grass-03.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-grass-03.svg"
+    },
+    {
+      "id": "reference-grass-04",
+      "kind": "grass",
+      "sourceBox": {
+        "left": 375,
+        "top": 980,
+        "width": 170,
+        "height": 274
+      },
+      "file": "/brand/banner/reference-elements-png/reference-grass-04.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-grass-04.svg"
+    },
+    {
+      "id": "reference-grass-05",
+      "kind": "grass",
+      "sourceBox": {
+        "left": 510,
+        "top": 1000,
+        "width": 175,
+        "height": 254
+      },
+      "file": "/brand/banner/reference-elements-png/reference-grass-05.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-grass-05.svg"
+    },
+    {
+      "id": "reference-grass-06",
+      "kind": "grass",
+      "sourceBox": {
+        "left": 650,
+        "top": 990,
+        "width": 180,
+        "height": 264
+      },
+      "file": "/brand/banner/reference-elements-png/reference-grass-06.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-grass-06.svg"
+    },
+    {
+      "id": "reference-grass-07",
+      "kind": "grass",
+      "sourceBox": {
+        "left": 790,
+        "top": 995,
+        "width": 160,
+        "height": 259
+      },
+      "file": "/brand/banner/reference-elements-png/reference-grass-07.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-grass-07.svg"
+    },
+    {
+      "id": "reference-grass-08",
+      "kind": "grass",
+      "sourceBox": {
+        "left": 910,
+        "top": 995,
+        "width": 160,
+        "height": 259
+      },
+      "file": "/brand/banner/reference-elements-png/reference-grass-08.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-grass-08.svg"
+    },
+    {
+      "id": "reference-grass-09",
+      "kind": "grass",
+      "sourceBox": {
+        "left": 1020,
+        "top": 985,
+        "width": 155,
+        "height": 269
+      },
+      "file": "/brand/banner/reference-elements-png/reference-grass-09.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-grass-09.svg"
+    },
+    {
+      "id": "reference-grass-10",
+      "kind": "grass",
+      "sourceBox": {
+        "left": 1120,
+        "top": 970,
+        "width": 134,
+        "height": 284
+      },
+      "file": "/brand/banner/reference-elements-png/reference-grass-10.png",
+      "svg": "/brand/banner/reference-elements-svg/reference-grass-10.svg"
+    }
+  ]
+}
