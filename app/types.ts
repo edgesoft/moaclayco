@@ -23,6 +23,8 @@ export type Order = {
     id: string;
     client_secret: string;
   };
+  paymentIntentAliases?: string[];
+  paidReviewReason?: string;
   customer: {
     firstname: string;
     lastname: string;

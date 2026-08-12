@@ -11,7 +11,7 @@
     "dev": "remix dev",
     "smoke": "node tools/smoke-check.mjs",
     "start": "remix-serve ./build/index.js",
-    "test": "tsx --test tests/accounting-balances.test.ts tests/accounting-document.test.ts tests/google-auth.test.ts tests/order-cookie.test.ts tests/order-email.test.tsx tests/verification-files.test.ts tests/verification-schema.test.ts tests/verification-validation.test.ts",
+    "test": "tsx --test tests/accounting-balances.test.ts tests/accounting-document.test.ts tests/checkout-payment.test.ts tests/google-auth.test.ts tests/order-cookie.test.ts tests/order-email.test.tsx tests/verification-files.test.ts tests/verification-schema.test.ts tests/verification-validation.test.ts",
     "test:e2e:accounting": "tsx --test tests/accounting-document.e2e.test.ts",
     "typecheck": "tsc"
   },

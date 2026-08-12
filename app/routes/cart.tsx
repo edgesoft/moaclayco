@@ -1,18 +1,25 @@
-import { MetaFunction } from "@remix-run/react";
+import type { MetaFunction } from "@remix-run/react";
 import { Items } from "../schemas/items";
 import { Orders } from "../schemas/orders";
 import { Discounts } from "~/schemas/discounts";
 import getFreightCost from "~/utils/getFreightCost";
-import { ActionFunction, json, redirect } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
+import type { ActionFunction, LoaderFunction } from "@remix-run/node";
 import ClientOnly from "~/components/ClientOnly";
 import { getDomain } from "~/utils/domain";
 import { z } from "zod";
 import mongoose from "mongoose";
 import stripeClient from "~/stripeClient";
 import { themes } from "~/components/Theme";
-import type Stripe from "stripe";
 import { orderCookie } from "~/services/order-cookie.server";
 import CartView from "~/components/cart/CartView";
+import {
+  buildCheckoutPaymentIntent,
+  checkoutAttemptCookie,
+  createCheckoutAttemptToken,
+  createCheckoutFingerprint,
+  isCheckoutAttemptToken,
+} from "~/services/checkout-payment.server";
 
 export let meta: MetaFunction = () => {
   return [
@@ -63,20 +70,78 @@ const customerSchema = z.object({
 const toCents = (amount: number) => Math.round(amount * 100);
 const fromCents = (amount: number) => amount / 100;
 
-const cartError = (message: string, items: true | ErrorItemVal = true) =>
+const cartError = (
+  message: string,
+  items: true | ErrorItemVal = true,
+  init: ResponseInit = {}
+) =>
   json(
     {
       key: Date.now(),
       errors: { items, message },
     },
-    { status: 400 }
+    { ...init, status: init.status ?? 400 }
   );
+
+const isDuplicateKeyError = (error: unknown) =>
+  Boolean(
+    error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === 11000
+  );
+
+export const loader: LoaderFunction = async ({ request }) => {
+  const checkoutToken = await checkoutAttemptCookie.parse(
+    request.headers.get("Cookie")
+  );
+  if (isCheckoutAttemptToken(checkoutToken)) return json({});
+
+  return json(
+    {},
+    {
+      headers: {
+        "Set-Cookie": await checkoutAttemptCookie.serialize(
+          createCheckoutAttemptToken()
+        ),
+      },
+    }
+  );
+};
+
+const redirectToCheckout = async (orderId: string) => {
+  const headers = new Headers();
+  headers.append("Set-Cookie", await orderCookie.serialize(orderId));
+  headers.append(
+    "Set-Cookie",
+    await checkoutAttemptCookie.serialize("", { maxAge: 0 })
+  );
+  return redirect(`/checkout?order=${orderId}`, { headers });
+};
 
 export let action: ActionFunction = async ({ request }) => {
   const formData = await request.formData();
   const resolvedDomain = getDomain(request);
   if (!resolvedDomain || !themes[resolvedDomain.domain]) {
     throw new Response("Okänd butik", { status: 404 });
+  }
+
+  const checkoutToken = await checkoutAttemptCookie.parse(
+    request.headers.get("Cookie")
+  );
+  if (!isCheckoutAttemptToken(checkoutToken)) {
+    return cartError(
+      "Betalningssessionen saknas. Försök igen.",
+      true,
+      {
+        status: 409,
+        headers: {
+          "Set-Cookie": await checkoutAttemptCookie.serialize(
+            createCheckoutAttemptToken()
+          ),
+        },
+      }
+    );
   }
 
   let untrustedItems: unknown;
@@ -260,57 +325,104 @@ export let action: ActionFunction = async ({ request }) => {
     discount: discountData,
   };
 
-  let order: any = null;
-  const cookieOrderId = await orderCookie.parse(request.headers.get("Cookie"));
-  if (mongoose.Types.ObjectId.isValid(String(cookieOrderId ?? ""))) {
+  const checkoutFingerprint = createCheckoutFingerprint(orderData);
+  let order: any;
+  try {
+    await Orders.init();
+    order = await Orders.findOneAndUpdate(
+      { domain: resolvedDomain.domain, checkoutToken },
+      {
+        $setOnInsert: {
+          ...orderData,
+          checkoutFingerprint,
+          checkoutToken,
+          createdAt: new Date(),
+        },
+      },
+      { new: true, setDefaultsOnInsert: true, upsert: true }
+    );
+  } catch (error) {
+    if (!isDuplicateKeyError(error)) throw error;
     order = await Orders.findOne({
-      _id: cookieOrderId,
       domain: resolvedDomain.domain,
-      status: "OPENED",
-      "paymentIntent.id": { $exists: false },
+      checkoutToken,
     });
-    if (order) {
-      order.set({ ...orderData, updatedAt: new Date() });
-      await order.save();
-    }
   }
-  if (!order) {
-    order = await Orders.create({
-      createdAt: new Date(),
-      ...orderData,
-    });
+
+  if (!order) throw new Error("Checkout order could not be created");
+  if (
+    order.checkoutFingerprint !== checkoutFingerprint ||
+    !["OPENED", "PENDING"].includes(order.status)
+  ) {
+    return cartError(
+      "Kundvagnen ändrades under betalningsförsöket. Kontrollera uppgifterna och försök igen.",
+      true,
+      {
+        status: 409,
+        headers: {
+          "Set-Cookie": await checkoutAttemptCookie.serialize(
+            createCheckoutAttemptToken()
+          ),
+        },
+      }
+    );
+  }
+
+  if (order.paymentIntent?.client_secret) {
+    return redirectToCheckout(String(order._id));
   }
 
   const theme = themes[resolvedDomain.domain];
-  const paymentIntentData: Stripe.PaymentIntentCreateParams = {
-    amount: orderTotalCents,
-    currency: "sek",
-    payment_method_types:
-      theme.paymentMethods as Stripe.PaymentIntentCreateParams["payment_method_types"],
-    metadata: {
-      domain: resolvedDomain.domain,
-      orderId: String(order._id),
-    },
-  };
-  const paymentIntent = await stripeClient.paymentIntents.create(paymentIntentData);
+  const paymentIntentRequest = buildCheckoutPaymentIntent({
+    checkoutToken,
+    order,
+    paymentMethods: theme.paymentMethods,
+  });
+  const paymentIntent = await stripeClient.paymentIntents.create(
+    paymentIntentRequest.params,
+    paymentIntentRequest.options
+  );
   if (!paymentIntent.client_secret) {
     throw new Response("Betalningen kunde inte startas", { status: 502 });
   }
-  order.set({
-    status: "PENDING",
-    updatedAt: new Date(),
-    paymentIntent: {
-      id: paymentIntent.id,
-      client_secret: paymentIntent.client_secret,
-    },
-  });
-  await order.save();
 
-  return redirect(`/checkout?order=${order._id}`, {
-    headers: {
-      "Set-Cookie": await orderCookie.serialize(String(order._id)),
+  const updatedOrder = await Orders.findOneAndUpdate(
+    {
+      _id: order._id,
+      checkoutFingerprint,
+      checkoutToken,
+      domain: resolvedDomain.domain,
+      status: "OPENED",
+      "paymentIntent.id": { $exists: false },
     },
-  });
+    {
+      $set: {
+        status: "PENDING",
+        updatedAt: new Date(),
+        paymentIntent: {
+          id: paymentIntent.id,
+          client_secret: paymentIntent.client_secret,
+        },
+      },
+    },
+    { new: true }
+  );
+  const persistedOrder =
+    updatedOrder ??
+    (await Orders.findOne({
+      _id: order._id,
+      checkoutToken,
+      domain: resolvedDomain.domain,
+    }));
+  if (persistedOrder?.paymentIntent?.id !== paymentIntent.id) {
+    throw new Error(
+      `PaymentIntent ${paymentIntent.id} could not be attached to order ${String(
+        order._id
+      )}`
+    );
+  }
+
+  return redirectToCheckout(String(order._id));
 };
 
 export default function Index() {
