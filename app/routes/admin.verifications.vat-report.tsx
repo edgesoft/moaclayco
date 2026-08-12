@@ -16,6 +16,7 @@ import { Controller, useForm } from "react-hook-form";
 import { Verifications } from "~/schemas/verifications"; // Din MongoDB schema
 import { formatMonthName } from "~/utils/formatMonthName";
 import { getDomain } from "~/utils/domain";
+import { toLoaderData } from "~/utils/loaderData";
 import { auth } from "~/services/auth.server";
 import { buildVatReportEntries } from "~/utils/vat";
 import { createVerification, ensureIncomingBalance } from "~/services/verification.server";
@@ -78,11 +79,11 @@ export const loader: LoaderFunction = async ({ request }) => {
     (v) => v.journalEntries.some((entry) => entry.account === 2640) // Ingående moms
   );
 
-  return json({
+  return json(toLoaderData({
     vatSales,
     outgoingVAT,
     ingoingVAT,
-  });
+  }));
 };
 
 export const action: ActionFunction = async ({ request }) => {

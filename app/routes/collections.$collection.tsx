@@ -18,6 +18,7 @@ import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
 import type { CollectionProps, ItemProps } from "~/types";
 import { getDomain } from "~/utils/domain";
+import { toLoaderData } from "~/utils/loaderData";
 
 type ItemLoaderProps = {
   collection: CollectionProps;
@@ -32,18 +33,20 @@ export const loader: LoaderFunction = async ({ params, request }) => {
   const collection = await Collections.findOne({
     shortUrl: params.collection,
     domain: domain?.domain,
-  });
+  }).lean();
 
   if (!collection) return redirect("/");
 
   return json(
-    {
+    toLoaderData({
       collection,
       items: await Items.find({
         collectionRef: params.collection,
         domain: domain?.domain,
-      }).sort({ _id: -1 }),
-    },
+      })
+        .sort({ _id: -1 })
+        .lean(),
+    }),
     {
       headers: {
         "Cache-Control": "public, max-age=300",

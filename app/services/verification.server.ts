@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { VerificationCounters } from "~/schemas/verification-counters";
 import { Verifications } from "~/schemas/verifications";
 import { normalizeJournalEntries } from "~/utils/verificationValidation";
-import { getIBJournalEntries } from "~/utils/accounts";
+import { getIBJournalEntries } from "~/utils/accounts.server";
 import { accountingYear } from "~/utils/accountingDates";
 
 type MetadataEntry = { key: string; value: string | number };

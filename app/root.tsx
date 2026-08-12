@@ -34,6 +34,7 @@ import { ToastContainer } from "react-toastify";
 import { CollectionProps, User } from "./types";
 import { ThemeProvider, useTheme } from "./components/Theme";
 import { getDomain } from "./utils/domain";
+import { toLoaderData } from "./utils/loaderData";
 import { isGoogleAuthenticationConfigured } from "./services/google-auth.server";
 
 export type IndexProps = {
@@ -60,7 +61,11 @@ export const headers: HeadersFunction = () => ({
 
 export const loader: LoaderFunction = async ({ request }) => {
   let domain = getDomain(request)
-  const collections = await Collections.find({domain: domain?.domain}).sort({ sortOrder: 1 });
+  const collections = toLoaderData(
+    await Collections.find({ domain: domain?.domain })
+      .sort({ sortOrder: 1 })
+      .lean()
+  );
   let url = new URL(request.url);
   let hostname = url.hostname;
   let proto = request.headers.get("X-Forwarded-Proto") ?? url.protocol;

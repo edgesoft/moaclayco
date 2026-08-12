@@ -18,6 +18,7 @@ import { formatMonthName } from "~/utils/formatMonthName";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { getDomain } from "~/utils/domain";
+import { toLoaderData } from "~/utils/loaderData";
 import { auth } from "~/services/auth.server";
 import { createVerification, ensureIncomingBalance } from "~/services/verification.server";
 import {
@@ -55,7 +56,7 @@ export const loader: LoaderFunction = async ({ request }) => {
   }).lean()) as unknown as VatReportVerification | null;
   if (!verification) throw new Response("Momsrapporten hittades inte", { status: 404 });
 
-  return json({ verification });
+  return json(toLoaderData({ verification }));
 };
 
 const formSchema = z.object({

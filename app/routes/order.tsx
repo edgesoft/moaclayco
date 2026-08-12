@@ -10,6 +10,7 @@ import { orderCookie } from "~/services/order-cookie.server";
 import stripeClient from "~/stripeClient";
 import { Order } from "~/types";
 import { getDomain } from "~/utils/domain";
+import { toLoaderData } from "~/utils/loaderData";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -48,13 +49,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 
   return json(
-    {
+    toLoaderData({
       ...serializedOrder,
       redirect_status: paymentSucceeded ? "succeeded" : paymentIntent.status,
       testMode:
         process.env.STRIPE_PUBLIC_KEY?.startsWith("pk_test_") === true &&
         process.env.STRIPE_SRV?.startsWith("sk_test_") === true,
-    },
+    }),
     {
       headers: paymentSucceeded
         ? { "Set-Cookie": await orderCookie.serialize("", { maxAge: 0 }) }

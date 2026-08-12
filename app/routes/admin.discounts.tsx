@@ -5,23 +5,30 @@ import { Discounts as DiscountEntity } from "../schemas/discounts";
 import { auth } from "~/services/auth.server";
 import type { DiscountType } from "~/types";
 import { getDomain } from "~/utils/domain";
+import { toLoaderData } from "~/utils/loaderData";
 
 export const loader: LoaderFunction = async ({ request }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
   const domain = getDomain(request);
 
-  return DiscountEntity.find({ domain: domain?.domain }).sort({ code: 1 });
+  return toLoaderData(
+    await DiscountEntity.find({ domain: domain?.domain })
+      .sort({ code: 1 })
+      .lean()
+  );
 };
 
 const listDate = new Intl.DateTimeFormat("sv-SE", {
   day: "numeric",
   month: "short",
   year: "numeric",
+  timeZone: "Europe/Stockholm",
 });
 
 const listTime = new Intl.DateTimeFormat("sv-SE", {
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: "Europe/Stockholm",
 });
 
 const formatValidity = (value: DiscountType["expireAt"]) => {

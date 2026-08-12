@@ -34,16 +34,19 @@ try {
   }
 
   const html = await response.text();
-  const buildAssetPaths = [
-    ...html.matchAll(/(?:src|href)="(\/build[^"?#]+(?:\?[^"#]*)?)"/g),
-  ].map((match) => match[1]);
+  const assetPaths = [...html.matchAll(/(?:src|href)="([^"]+)"/g)]
+    .map((match) => match[1])
+    .filter(
+      (path) =>
+        path.startsWith("/") && /\.(?:css|js|tsx)(?:[?#]|$)/.test(path)
+    );
   const representativeAssets = [
-    buildAssetPaths.find((path) => path.includes(".css")),
-    buildAssetPaths.find((path) => path.includes(".js")),
+    assetPaths.find((path) => path.includes(".css")),
+    assetPaths.find((path) => /\.(?:js|tsx)(?:[?#]|$)/.test(path)),
   ].filter((path, index, paths) => path && paths.indexOf(path) === index);
 
   if (representativeAssets.length === 0) {
-    throw new Error("HTML did not reference any CSS or JavaScript build assets.");
+    throw new Error("HTML did not reference any CSS or JavaScript assets.");
   }
 
   for (const assetPath of representativeAssets) {
@@ -55,13 +58,13 @@ try {
 
     if (!assetResponse.ok) {
       throw new Error(
-        `Build asset ${assetUrl.pathname} returned ${assetResponse.status}.`
+        `Asset ${assetUrl.pathname} returned ${assetResponse.status}.`
       );
     }
   }
 
   console.log(
-    `Smoke check passed: ${response.status} ${response.url} (${representativeAssets.length} build assets)`
+    `Smoke check passed: ${response.status} ${response.url} (${representativeAssets.length} assets)`
   );
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);

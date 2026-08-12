@@ -22,6 +22,7 @@ import { Orders } from "~/schemas/orders";
 import { orderCookie } from "~/services/order-cookie.server";
 import { Order } from "~/types";
 import { getDomain } from "~/utils/domain";
+import { toLoaderData } from "~/utils/loaderData";
 
 declare global {
   interface Window {
@@ -62,7 +63,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return redirect("/cart");
   }
 
-  return {
+  return toLoaderData({
     clientSecret: order.paymentIntent.client_secret,
     domain,
     order: {
@@ -82,7 +83,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     testMode:
       process.env.STRIPE_PUBLIC_KEY?.startsWith("pk_test_") === true &&
       process.env.STRIPE_SRV?.startsWith("sk_test_") === true,
-  };
+  });
 };
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {

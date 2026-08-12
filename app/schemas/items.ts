@@ -20,5 +20,6 @@ const ItemSchema = new Schema({
 { collection: 'items' });
 
 ItemSchema.index({ domain: 1, collectionRef: 1, _id: -1 });
+ItemSchema.index({ domain: 1, _id: -1 });
 
 export const Items = mongoose.models.Items || mongoose.model('Items', ItemSchema);

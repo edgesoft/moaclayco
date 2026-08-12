@@ -10,6 +10,7 @@ import { Order } from "~/types";
 import { Verifications } from "~/schemas/verifications";
 import { createVerification } from "~/services/verification.server";
 import { getDomain } from "~/utils/domain";
+import { toLoaderData } from "~/utils/loaderData";
 import type Stripe from "stripe";
 
 type OrderDetailLoaderData = {
@@ -61,18 +62,20 @@ export let loader: LoaderFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
   const domain = getDomain(request);
 
-  const order = await Orders.findOne({
+  const order = (await Orders.findOne({
     _id: params.id,
     domain: domain?.domain,
-  });
+  }).lean()) as unknown as Order | null;
 
   if (!order) throw new Response("Order not found", { status: 404 });
 
-  const verification = await Verifications.findOne({
+  const verification = (await Verifications.findOne({
     "metadata.key": "orderId",
     "metadata.value": params.id,
     domain: order.domain
-  });
+  })
+    .select("verificationNumber")
+    .lean()) as unknown as { verificationNumber: number } | null;
 
   let intent = null;
 
@@ -83,7 +86,11 @@ export let loader: LoaderFunction = async ({ request, params }) => {
           order.paymentIntent.id
         );
       }
-      return json({ order, intent, verification });
+      return json({
+        order: toLoaderData(order),
+        intent,
+        verification: toLoaderData(verification),
+      });
     } catch (error) {
       console.error("Stripe PaymentIntent could not be retrieved", {
         orderId: order._id,
@@ -91,7 +98,11 @@ export let loader: LoaderFunction = async ({ request, params }) => {
       });
     }
   }
-  return json({ order, intent: null, verification });
+  return json({
+    order: toLoaderData(order),
+    intent: null,
+    verification: toLoaderData(verification),
+  });
 };
 
 export let meta: MetaFunction = ({ loaderData }) => {

@@ -6,6 +6,7 @@ import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
 import { getDomain } from "~/utils/domain";
 import { auth } from "~/services/auth.server";
+import { toLoaderData } from "~/utils/loaderData";
 
  const loader: LoaderFunction = async ({ params, request }) => {
     await auth.isAuthenticated(request, { failureRedirect: "/login" });
@@ -31,7 +32,7 @@ import { auth } from "~/services/auth.server";
   
     }
   
-    return { collection, item };
+    return toLoaderData({ collection, item });
   };
 
 export const ItemLoader = loader

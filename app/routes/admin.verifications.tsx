@@ -11,6 +11,7 @@ import { useMemo, useState } from "react";
 import { ListVerification } from "~/components/admin/listVerification";
 import { Verifications } from "~/schemas/verifications";
 import { auth } from "~/services/auth.server";
+import { toLoaderData } from "~/utils/loaderData";
 import { VerificationProps } from "~/types";
 import {
   accountingMonthKey,
@@ -104,13 +105,13 @@ export const loader: LoaderFunction = async ({ request, url }) => {
     vatReportsPromise,
   ]);
 
-  return json({
+  return json(toLoaderData({
     verifications,
     year: user.fiscalYear,
     currentYearMonth,
     latestVerificationNumber: verificationNumberFrom(latestVerification),
     vatReports,
-  });
+  }));
 };
 
 export const shouldRevalidate: ShouldRevalidateFunction = ({

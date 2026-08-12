@@ -2,7 +2,7 @@ FROM node:24-bookworm-slim
 
 WORKDIR /app
 
-# Remix uses `ps` to find and stop the previous app-server process before
+# The development server uses `ps` to find and stop the previous app-server process before
 # starting a new one after a file change. The slim Node image does not include
 # it, which leaves the old process on port 3000 and eventually crashes HMR.
 RUN apt-get update \
@@ -20,4 +20,4 @@ COPY . .
 
 EXPOSE 3000 3001
 
-CMD ["sh", "docker/dev-entrypoint.sh", "npm", "run", "dev"]
+CMD ["sh", "docker/dev-entrypoint.sh", "npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]

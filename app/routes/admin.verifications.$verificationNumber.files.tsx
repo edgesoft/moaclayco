@@ -15,6 +15,7 @@ import {
   fallbackVerificationFileLabel,
   sanitizeVerificationFileLabel,
 } from "~/utils/verificationFiles";
+import { toLoaderData } from "~/utils/loaderData";
 
 type VerificationFile = { name: string; path: string };
 
@@ -122,14 +123,14 @@ export const loader: LoaderFunction = async ({ params, request }) => {
 
   if (!verification) throw new Response("Not Found", { status: 404 });
 
-  return json({
+  return json(toLoaderData({
     verification: {
       verificationNumber: verification.verificationNumber,
       description: verification.description,
       verificationDate: verification.verificationDate,
       files: verification.files || [],
     },
-  });
+  }));
 };
 
 export const action: ActionFunction = async ({ request, params }) => {

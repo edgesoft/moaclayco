@@ -23,7 +23,6 @@ import { Verifications } from "~/schemas/verifications";
 import { ActionFunction, data as json } from "react-router";
 import ClientOnly from "~/components/ClientOnly";
 import { getDomain } from "~/utils/domain";
-import { loader as rootLoader } from "~/root";
 import { auth } from "~/services/auth.server";
 import { createVerification, ensureIncomingBalance } from "~/services/verification.server";
 import {
@@ -102,8 +101,6 @@ type SuggestionProps = {
   document?: { type: string; warnings: string[] };
   uuid: string;
 };
-
-export const loader = rootLoader;
 
 const FileUpload = ({
   onSuggestionsReceived,

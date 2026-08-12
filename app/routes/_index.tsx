@@ -18,6 +18,7 @@ import { Items } from "~/schemas/items";
 import type { CollectionProps, ItemProps } from "~/types";
 import type { IndexProps } from "~/root";
 import { getDomain } from "~/utils/domain";
+import { toLoaderData } from "~/utils/loaderData";
 
 type LandingLoaderData = {
   latestItems: ItemProps[];
@@ -28,10 +29,12 @@ const imageWithWidth = (image: string, width: number) =>
 
 export const loader: LoaderFunction = async ({ request }) => {
   const domain = getDomain(request);
-  const latestItems = await Items.find({ domain: domain?.domain })
-    .sort({ _id: -1 })
-    .limit(6)
-    .lean();
+  const latestItems = toLoaderData(
+    await Items.find({ domain: domain?.domain })
+      .sort({ _id: -1 })
+      .limit(6)
+      .lean()
+  );
 
   return json(
     { latestItems },
