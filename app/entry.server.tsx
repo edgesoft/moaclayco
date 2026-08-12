@@ -5,9 +5,6 @@ import { ServerRouter } from "react-router";
 import { createReadableStreamFromReadable } from "@react-router/node";
 import isbot from "isbot";
 import { renderToPipeableStream } from "react-dom/server";
-import connector from '../connector'
-
-connector()
 
 const ABORT_DELAY = 5_000;
 

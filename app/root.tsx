@@ -3,6 +3,7 @@ import {
   data as json,
   LinksFunction,
   LoaderFunction,
+  MiddlewareFunction,
   redirect,
 } from "react-router";
 import {
@@ -36,6 +37,7 @@ import { ThemeProvider, useTheme } from "./components/Theme";
 import { getDomain } from "./utils/domain";
 import { toLoaderData } from "./utils/loaderData";
 import { isGoogleAuthenticationConfigured } from "./services/google-auth.server";
+import { connectToDatabase } from "./services/database.server";
 
 export type IndexProps = {
   hostname: string,
@@ -58,6 +60,13 @@ export const links: LinksFunction = () => [
 export const headers: HeadersFunction = () => ({
   "Cache-Control": "private, no-store",
 });
+
+export const middleware: MiddlewareFunction[] = [
+  async (_args, next) => {
+    await connectToDatabase();
+    return next();
+  },
+];
 
 export const loader: LoaderFunction = async ({ request }) => {
   let domain = getDomain(request)
