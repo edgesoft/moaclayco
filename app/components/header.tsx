@@ -5,7 +5,12 @@ import {
   useNavigate,
 } from "react-router";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import React, { useEffect, useMemo, useRef } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from "react";
 import { useCart } from "react-use-cart";
 import { CollectionProps, User } from "~/types";
 import ClientOnly from "./ClientOnly";
@@ -33,6 +38,132 @@ type BannerNeighbor = {
   href: string;
   title: string;
 };
+
+type BannerContextElement = Omit<
+  BannerContext,
+  "direction" | "key" | "next" | "previous"
+> & {
+  element: HTMLElement;
+};
+
+type BannerContextStore = {
+  getSnapshot: () => BannerContext | null;
+  subscribe: (onStoreChange: () => void) => () => void;
+};
+
+const getServerBannerContext = () => null;
+
+function collectBannerContexts(): BannerContextElement[] {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>("[data-banner-context-title]")
+  ).flatMap((element) => {
+    const title = element.dataset.bannerContextTitle;
+    const eyebrow = element.dataset.bannerContextEyebrow;
+    const href = element.dataset.bannerContextHref;
+
+    if (!title || !eyebrow || !href) return [];
+
+    return [
+      {
+        element,
+        eyebrow,
+        href,
+        kind:
+          element.dataset.bannerContextKind === "collection"
+            ? ("collection" as const)
+            : element.dataset.bannerContextKind === "item"
+              ? ("item" as const)
+              : ("section" as const),
+        title,
+      },
+    ];
+  });
+}
+
+function createBannerContextStore(supported: boolean): BannerContextStore {
+  let snapshot: BannerContext | null = null;
+
+  return {
+    getSnapshot: () => snapshot,
+    subscribe: (onStoreChange) => {
+      if (!supported) return () => undefined;
+
+      const contexts = collectBannerContexts();
+      const siblingContexts = {
+        collection: contexts.filter((context) => context.kind === "collection"),
+        item: contexts.filter((context) => context.kind === "item"),
+      };
+      let lastScrollPosition = window.scrollY;
+
+      const updateBrandPosition = () => {
+        const direction: 1 | -1 =
+          window.scrollY >= lastScrollPosition ? 1 : -1;
+        const triggerLine = Math.min(window.innerHeight * 0.38, 360);
+        let nextContext: BannerContext | null = null;
+
+        for (const context of contexts) {
+          if (context.element.getBoundingClientRect().top > triggerLine) break;
+
+          if (context.kind !== "section") {
+            const siblings = siblingContexts[context.kind];
+            const contextIndex = siblings.indexOf(context);
+            const previous = siblings[contextIndex - 1];
+            const next = siblings[contextIndex + 1];
+
+            nextContext = {
+              direction,
+              eyebrow: context.eyebrow,
+              href: context.href,
+              key: `${context.eyebrow}-${context.title}-${context.href}`,
+              kind: context.kind,
+              next: next ? { href: next.href, title: next.title } : undefined,
+              previous: previous
+                ? { href: previous.href, title: previous.title }
+                : undefined,
+              title: context.title,
+            };
+          } else {
+            nextContext = {
+              direction,
+              eyebrow: context.eyebrow,
+              href: context.href,
+              key: `${context.eyebrow}-${context.title}-${context.href}`,
+              kind: context.kind,
+              title: context.title,
+            };
+          }
+        }
+
+        const contextChanged = snapshot?.key !== nextContext?.key;
+        if (contextChanged) {
+          snapshot = nextContext;
+          onStoreChange();
+        }
+        lastScrollPosition = window.scrollY;
+      };
+
+      updateBrandPosition();
+      window.addEventListener("scroll", updateBrandPosition, { passive: true });
+      return () => window.removeEventListener("scroll", updateBrandPosition);
+    },
+  };
+}
+
+function useBannerContext(pathname: string): BannerContext | null {
+  const store = useMemo(
+    () =>
+      createBannerContextStore(
+        pathname === "/" || pathname.startsWith("/collections/")
+      ),
+    [pathname]
+  );
+
+  return useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    getServerBannerContext
+  );
+}
 
 function OriginalBannerArtwork() {
   return (
@@ -533,109 +664,12 @@ const Header = (): React.ReactElement | null => {
   const reduceMotion = useReducedMotion();
   const [loginOpen, setLoginOpen] = React.useState(false);
   const showCompactBrand = true;
-  const [bannerContext, setBannerContext] = React.useState<BannerContext | null>(
-    null
-  );
+  const bannerContext = useBannerContext(location.pathname);
   const isHomePage = location.pathname === "/";
-  const supportsBannerContext =
-    isHomePage || location.pathname.startsWith("/collections/");
   const compactBrandVisible = !isHomePage || showCompactBrand;
   const bannerContextHasNavigation =
     bannerContext?.kind === "section" ||
     Boolean(bannerContext?.previous || bannerContext?.next);
-
-  useEffect(() => {
-    // A route change can keep the header mounted. Clear the previous page's
-    // scroll context before collecting the context elements for the new page.
-    setBannerContext(null);
-
-    if (!supportsBannerContext) {
-      return;
-    }
-
-    const contextElements = Array.from(
-      document.querySelectorAll<HTMLElement>("[data-banner-context-title]")
-    );
-
-    const contexts = contextElements.flatMap((element) => {
-      const title = element.dataset.bannerContextTitle;
-      const eyebrow = element.dataset.bannerContextEyebrow;
-      const href = element.dataset.bannerContextHref;
-
-      if (!title || !eyebrow || !href) return [];
-
-      return [
-        {
-          element,
-          eyebrow,
-          href,
-          kind:
-            element.dataset.bannerContextKind === "collection"
-              ? ("collection" as const)
-              : element.dataset.bannerContextKind === "item"
-                ? ("item" as const)
-                : ("section" as const),
-          title,
-        },
-      ];
-    });
-
-    let lastScrollPosition = window.scrollY;
-
-    const updateBrandPosition = () => {
-      const direction: 1 | -1 =
-        window.scrollY >= lastScrollPosition ? 1 : -1;
-      const triggerLine = Math.min(window.innerHeight * 0.38, 360);
-      let nextContext: BannerContext | null = null;
-
-      for (const context of contexts) {
-        if (context.element.getBoundingClientRect().top > triggerLine) break;
-
-        if (context.kind !== "section") {
-          const siblingContexts = contexts.filter(
-            (candidate) => candidate.kind === context.kind
-          );
-          const contextIndex = siblingContexts.indexOf(context);
-          const previous = siblingContexts[contextIndex - 1];
-          const next = siblingContexts[contextIndex + 1];
-
-          nextContext = {
-            direction,
-            eyebrow: context.eyebrow,
-            href: context.href,
-            key: `${context.eyebrow}-${context.title}-${context.href}`,
-            kind: context.kind,
-            next: next
-              ? { href: next.href, title: next.title }
-              : undefined,
-            previous: previous
-              ? { href: previous.href, title: previous.title }
-              : undefined,
-            title: context.title,
-          };
-        } else {
-          nextContext = {
-            direction,
-            eyebrow: context.eyebrow,
-            href: context.href,
-            key: `${context.eyebrow}-${context.title}-${context.href}`,
-            kind: context.kind,
-            title: context.title,
-          };
-        }
-      }
-
-      setBannerContext((current) => {
-        if (!nextContext) return current ? null : current;
-        return current?.key === nextContext.key ? current : nextContext;
-      });
-      lastScrollPosition = window.scrollY;
-    };
-
-    updateBrandPosition();
-    window.addEventListener("scroll", updateBrandPosition, { passive: true });
-    return () => window.removeEventListener("scroll", updateBrandPosition);
-  }, [location.pathname, supportsBannerContext]);
 
   return (
     <>
