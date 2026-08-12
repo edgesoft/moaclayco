@@ -12,6 +12,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCart } from "react-use-cart";
 import { useSwipeable } from "react-swipeable";
+import ClientOnly from "~/components/ClientOnly";
 import Magnifier from "~/components/item/magnifier";
 import Loader from "~/components/loader";
 import type { IndexProps } from "~/root";
@@ -91,7 +92,7 @@ function Product({
       ),
     [failedImages, item.images]
   );
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [imageAttempt, setImageAttempt] = useState(0);
   const [preloadDirection, setPreloadDirection] = useState<1 | -1>(1);
   const [loadedImage, setLoadedImage] = useState<string | null>(null);
@@ -100,6 +101,7 @@ function Product({
   const [showImage, setShowImage] = useState<string>();
   const [added, setAdded] = useState(false);
   const articleRef = useRef<HTMLElement>(null);
+  const cachedImageFrameRef = useRef<number | null>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const handledErrorAttemptRef = useRef<string | null>(null);
   const preloadRef = useRef<HTMLImageElement[]>([]);
@@ -107,22 +109,19 @@ function Product({
   const retryTimeoutRef = useRef<number | undefined>(undefined);
   const { addItem, getItem } = useCart();
   const reduceMotion = useReducedMotion();
+  const currentIndex = Math.min(
+    selectedImageIndex,
+    Math.max(0, images.length - 1)
+  );
   const activeImage = images[currentIndex];
   const useOriginalImage = activeImage
     ? unoptimizedImages.includes(activeImage)
     : false;
 
   useEffect(() => {
-    setCurrentIndex((current) =>
-      current >= images.length ? Math.max(0, images.length - 1) : current
-    );
-  }, [images.length]);
-
-  useEffect(() => {
     if (nearViewport || !articleRef.current) return;
 
     if (!("IntersectionObserver" in window)) {
-      setNearViewport(true);
       return;
     }
 
@@ -182,15 +181,15 @@ function Product({
   const previousImage = () => {
     if (images.length < 2) return;
     setPreloadDirection(-1);
-    setCurrentIndex((current) =>
-      current === 0 ? images.length - 1 : current - 1
+    setSelectedImageIndex(
+      currentIndex === 0 ? images.length - 1 : currentIndex - 1
     );
   };
 
   const nextImage = () => {
     if (images.length < 2) return;
     setPreloadDirection(1);
-    setCurrentIndex((current) => (current + 1) % images.length);
+    setSelectedImageIndex((currentIndex + 1) % images.length);
   };
 
   const discardImage = useCallback(() => {
@@ -203,13 +202,15 @@ function Product({
     retryCountsRef.current.delete(activeImage);
     const remainingImages = images.filter((image) => image !== activeImage);
     setLoadedImage(null);
-    setCurrentIndex((current) =>
-      remainingImages.length ? Math.min(current, remainingImages.length - 1) : 0
+    setSelectedImageIndex(
+      remainingImages.length
+        ? Math.min(currentIndex, remainingImages.length - 1)
+        : 0
     );
     setFailedImages((current) =>
       current.includes(activeImage) ? current : [...current, activeImage]
     );
-  }, [activeImage, images]);
+  }, [activeImage, currentIndex, images]);
 
   const handleImageError = useCallback(() => {
     if (!activeImage) return;
@@ -253,15 +254,24 @@ function Product({
     setLoadedImage(activeImage);
   }, [activeImage]);
 
-  useEffect(() => {
-    const image = imageRef.current;
-    if (!activeImage || !image?.complete) return;
+  const setProductImageRef = useCallback(
+    (image: HTMLImageElement | null) => {
+      imageRef.current = image;
+      if (cachedImageFrameRef.current !== null) {
+        window.cancelAnimationFrame(cachedImageFrameRef.current);
+        cachedImageFrameRef.current = null;
+      }
+      if (!image?.complete) return;
 
-    // A cached image may finish before React has attached its onLoad handler.
-    // Synchronize from the element so it never remains permanently transparent.
-    if (image.naturalWidth > 0) handleImageLoad();
-    else handleImageError();
-  }, [activeImage, handleImageError, handleImageLoad]);
+      cachedImageFrameRef.current = window.requestAnimationFrame(() => {
+        cachedImageFrameRef.current = null;
+        if (imageRef.current !== image) return;
+        if (image.naturalWidth > 0) handleImageLoad();
+        else handleImageError();
+      });
+    },
+    [handleImageError, handleImageLoad]
+  );
 
   useEffect(
     () => () => {
@@ -361,7 +371,7 @@ function Product({
                 loading={position < 2 ? "eager" : "lazy"}
                 onError={handleImageError}
                 onLoad={handleImageLoad}
-                ref={imageRef}
+                ref={setProductImageRef}
                 sizes={
                   featured
                     ? "(max-width: 899px) 100vw, 62vw"
@@ -408,7 +418,7 @@ function Product({
                         setPreloadDirection(
                           imageIndex >= currentIndex ? 1 : -1
                         );
-                        setCurrentIndex(imageIndex);
+                        setSelectedImageIndex(imageIndex);
                       }}
                       type="button"
                     />
@@ -567,16 +577,20 @@ function Product({
         ) : null}
       </motion.div>
 
-      <Magnifier
-        alt={`${item.headline} i större format`}
-        close={setShowImage}
-        currentIndex={currentIndex}
-        images={showImage ? images : []}
-        onIndexChange={(nextIndex) => {
-          setPreloadDirection(nextIndex >= currentIndex ? 1 : -1);
-          setCurrentIndex(nextIndex);
-        }}
-      />
+      <ClientOnly fallback={null}>
+        {() => (
+          <Magnifier
+            alt={`${item.headline} i större format`}
+            close={setShowImage}
+            currentIndex={currentIndex}
+            images={showImage ? images : []}
+            onIndexChange={(nextIndex) => {
+              setPreloadDirection(nextIndex >= currentIndex ? 1 : -1);
+              setSelectedImageIndex(nextIndex);
+            }}
+          />
+        )}
+      </ClientOnly>
     </article>
   );
 }
@@ -606,32 +620,46 @@ export default function Collection() {
   const [heroLoaded, setHeroLoaded] = useState(false);
   const [heroFailed, setHeroFailed] = useState(false);
   const [heroUseOriginal, setHeroUseOriginal] = useState(false);
+  const [renderedHeroImage, setRenderedHeroImage] = useState(collection.image);
+  const heroCachedImageFrameRef = useRef<number | null>(null);
   const heroImageRef = useRef<HTMLImageElement>(null);
   const heroAvailable = Boolean(collection.image) && !heroFailed;
   useCollectionScroll();
 
-  useEffect(() => {
+  if (renderedHeroImage !== collection.image) {
+    setRenderedHeroImage(collection.image);
     setHeroLoaded(false);
     setHeroFailed(false);
     setHeroUseOriginal(false);
-  }, [collection.image]);
+  }
 
-  const handleHeroError = () => {
+  const handleHeroError = useCallback(() => {
     setHeroLoaded(false);
     if (!heroUseOriginal) {
       setHeroUseOriginal(true);
       return;
     }
     setHeroFailed(true);
-  };
+  }, [heroUseOriginal]);
 
-  useEffect(() => {
-    const image = heroImageRef.current;
-    if (!heroAvailable || !image?.complete) return;
+  const setHeroImageRef = useCallback(
+    (image: HTMLImageElement | null) => {
+      heroImageRef.current = image;
+      if (heroCachedImageFrameRef.current !== null) {
+        window.cancelAnimationFrame(heroCachedImageFrameRef.current);
+        heroCachedImageFrameRef.current = null;
+      }
+      if (!image?.complete) return;
 
-    // Cached images can complete before React receives onLoad.
-    if (image.naturalWidth > 0) setHeroLoaded(true);
-  }, [collection.image, heroAvailable, heroUseOriginal]);
+      heroCachedImageFrameRef.current = window.requestAnimationFrame(() => {
+        heroCachedImageFrameRef.current = null;
+        if (heroImageRef.current !== image) return;
+        if (image.naturalWidth > 0) setHeroLoaded(true);
+        else handleHeroError();
+      });
+    },
+    [handleHeroError]
+  );
 
   return (
     <main className="collection-page">
@@ -706,7 +734,7 @@ export default function Collection() {
               loading="eager"
               onError={handleHeroError}
               onLoad={() => setHeroLoaded(true)}
-              ref={heroImageRef}
+              ref={setHeroImageRef}
               sizes="(max-width: 767px) 100vw, 52vw"
               src={
                 heroUseOriginal

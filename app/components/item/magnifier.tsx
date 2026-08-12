@@ -55,7 +55,6 @@ const Magnifier: React.FC<MagnifierProps> = ({
 }): React.ReactElement | null => {
   const [isInteracting, setIsInteracting] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [portalNode, setPortalNode] = useState<HTMLElement | null>(null);
   const [position, setPosition] = useState<Position>({ x: 0, y: 0 });
   const [scale, setScale] = useState(MIN_SCALE);
   const [stageSize, setStageSize] = useState<{
@@ -63,6 +62,10 @@ const Magnifier: React.FC<MagnifierProps> = ({
     width: number;
   } | null>(null);
   const [useOriginal, setUseOriginal] = useState(false);
+  const [renderedImageUrl, setRenderedImageUrl] = useState<string | undefined>(
+    images[currentIndex]
+  );
+  const cachedImageFrameRef = useRef<number | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -73,7 +76,20 @@ const Magnifier: React.FC<MagnifierProps> = ({
   const stageRef = useRef<HTMLDivElement>(null);
   const imageUrl = images[currentIndex];
   const canNavigate = images.length > 1;
-  const isOpen = Boolean(imageUrl && portalNode);
+  const isOpen = Boolean(imageUrl);
+
+  if (renderedImageUrl !== imageUrl) {
+    setRenderedImageUrl(imageUrl);
+    setIsLoaded(false);
+    setStageSize(null);
+    setUseOriginal(false);
+    setScale(MIN_SCALE);
+    setPosition({ x: 0, y: 0 });
+    setIsInteracting(false);
+    handledErrorRef.current = null;
+    pointersRef.current.clear();
+    gestureRef.current = null;
+  }
 
   const updateStageSize = useCallback(() => {
     const frame = frameRef.current;
@@ -164,16 +180,6 @@ const Magnifier: React.FC<MagnifierProps> = ({
     resetView();
     onIndexChange((currentIndex + 1) % images.length);
   }, [canNavigate, currentIndex, images.length, onIndexChange, resetView]);
-
-  useEffect(() => setPortalNode(document.body), []);
-
-  useEffect(() => {
-    setIsLoaded(false);
-    setStageSize(null);
-    setUseOriginal(false);
-    handledErrorRef.current = null;
-    resetView();
-  }, [imageUrl, resetView]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -269,13 +275,24 @@ const Magnifier: React.FC<MagnifierProps> = ({
     close(undefined);
   }, [close, imageUrl, useOriginal]);
 
-  useEffect(() => {
-    const image = imageRef.current;
-    if (!imageUrl || !image?.complete) return;
+  const setImageRef = useCallback(
+    (image: HTMLImageElement | null) => {
+      imageRef.current = image;
+      if (cachedImageFrameRef.current !== null) {
+        window.cancelAnimationFrame(cachedImageFrameRef.current);
+        cachedImageFrameRef.current = null;
+      }
+      if (!image?.complete) return;
 
-    if (image.naturalWidth > 0) handleLoad();
-    else handleError();
-  }, [handleError, handleLoad, imageUrl]);
+      cachedImageFrameRef.current = window.requestAnimationFrame(() => {
+        cachedImageFrameRef.current = null;
+        if (imageRef.current !== image) return;
+        if (image.naturalWidth > 0) handleLoad();
+        else handleError();
+      });
+    },
+    [handleError, handleLoad]
+  );
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -394,7 +411,7 @@ const Magnifier: React.FC<MagnifierProps> = ({
     setZoom(scale + (event.deltaY < 0 ? 0.35 : -0.35));
   };
 
-  if (!imageUrl || !portalNode) return null;
+  if (!imageUrl || typeof document === "undefined") return null;
 
   const imageSource = useOriginal ? imageUrl : imageWithWidth(imageUrl, 2200);
   const zoomPercent = Math.round(scale * 100);
@@ -438,7 +455,7 @@ const Magnifier: React.FC<MagnifierProps> = ({
             key={useOriginal ? "original" : "responsive"}
             onError={handleError}
             onLoad={handleLoad}
-            ref={imageRef}
+            ref={setImageRef}
             sizes="96vw"
             src={imageSource}
             style={{
@@ -531,7 +548,7 @@ const Magnifier: React.FC<MagnifierProps> = ({
         Zoom {zoomPercent} procent
       </span>
     </div>,
-    portalNode
+    document.body
   );
 };
 
