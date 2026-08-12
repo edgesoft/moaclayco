@@ -97,16 +97,8 @@ the email allowlist. Missing approved users are provisioned on their first
 successful login, while an existing user is linked to Google's stable subject
 identifier.
 
-## SG Woods accounting export
-
-A separate read-only exporter for the SG Woods general ledger and referenced
-S3 attachments is available in `tools/sgwoods-export`. See
-`tools/sgwoods-export/README.md` for the stage rehearsal and production export
-commands. The exporter does not start the Remix application and never writes to
-MongoDB or S3.
-
-Full local environment templates for continued stage and production-source work
-are available as `.env.stage.example` and `.env.production.example`. Populated
+Local environment templates for stage and production-like development are
+available as `.env.stage.example` and `.env.production.example`. Populated
 `.env.*.local` files are ignored by Git.
 
 ## Accounting document interpretation
