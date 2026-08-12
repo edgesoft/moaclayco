@@ -1,5 +1,5 @@
 import type { ChangeEvent, DragEvent } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { data as json, Link, useFetcher, useLoaderData } from "react-router";
 import type { ActionFunction, LoaderFunction } from "react-router";
 import { Verifications } from "~/schemas/verifications";
@@ -69,6 +69,20 @@ type LabelAnalysisData =
 
 type LabelOrigin = "manual" | "suggestion" | null;
 type AnalysisStatus = "idle" | "loading" | "success" | "fallback" | "failed";
+type VerificationFilesState = {
+  activeAnalysisKey: string | null;
+  analysisStatus: AnalysisStatus;
+  appliedAnalysisData: LabelAnalysisData | undefined;
+  appliedUploadData: FilesActionData | undefined;
+  appliedVerification: FilesLoaderData["verification"];
+  files: VerificationFile[];
+  label: string;
+  labelOrigin: LabelOrigin;
+  localError: string | null;
+  selectedFile: File | null;
+  suggestion: FileLabelSuggestion | null;
+  uploadError: string | null;
+};
 const MAX_CLIENT_FILE_SIZE = 20 * 1024 * 1024;
 
 const documentTypeLabels: Record<FileLabelSuggestion["documentType"], string> = {
@@ -104,6 +118,88 @@ const fileType = (file: VerificationFile) => {
   return extension && extension !== source
     ? extension.toLocaleUpperCase("sv-SE")
     : "FIL";
+};
+
+const resetSelectedFile = (
+  current: VerificationFilesState
+): VerificationFilesState => ({
+  ...current,
+  activeAnalysisKey: null,
+  analysisStatus: "idle",
+  label: "",
+  labelOrigin: null,
+  localError: null,
+  selectedFile: null,
+  suggestion: null,
+  uploadError: null,
+});
+
+const synchronizeVerificationFiles = ({
+  analysisData,
+  current,
+  uploadData,
+  verification,
+}: {
+  analysisData: LabelAnalysisData | undefined;
+  current: VerificationFilesState;
+  uploadData: FilesActionData | undefined;
+  verification: FilesLoaderData["verification"];
+}): VerificationFilesState => {
+  let next = current;
+
+  if (next.appliedVerification !== verification) {
+    const changesVerification =
+      next.appliedVerification.verificationNumber !==
+      verification.verificationNumber;
+    next = {
+      ...(changesVerification ? resetSelectedFile(next) : next),
+      appliedAnalysisData: changesVerification
+        ? analysisData
+        : next.appliedAnalysisData,
+      appliedUploadData: changesVerification
+        ? uploadData
+        : next.appliedUploadData,
+      appliedVerification: verification,
+      files: verification.files || [],
+    };
+  }
+
+  if (next.appliedUploadData !== uploadData) {
+    next = { ...next, appliedUploadData: uploadData };
+    if (uploadData && "success" in uploadData && uploadData.success) {
+      const uploadedFile = { name: uploadData.name, path: uploadData.path };
+      const files = next.files.some((file) => file.path === uploadedFile.path)
+        ? next.files
+        : [...next.files, uploadedFile];
+      next = { ...resetSelectedFile(next), files };
+    } else if (uploadData && "error" in uploadData) {
+      next = { ...next, uploadError: uploadData.error };
+    }
+  }
+
+  if (next.appliedAnalysisData !== analysisData) {
+    next = { ...next, appliedAnalysisData: analysisData };
+    if (analysisData?.analysisKey === next.activeAnalysisKey) {
+      if (analysisData.status === "failed") {
+        next = {
+          ...next,
+          analysisStatus: "failed",
+          localError: analysisData.error,
+        };
+      } else {
+        const usesSuggestion = !next.label.trim();
+        next = {
+          ...next,
+          analysisStatus: analysisData.status,
+          label: usesSuggestion ? analysisData.suggestion.label : next.label,
+          labelOrigin: usesSuggestion ? "suggestion" : next.labelOrigin,
+          suggestion: analysisData.suggestion,
+        };
+      }
+    }
+  }
+
+  return next;
 };
 
 export const loader: LoaderFunction = async ({ params, request }) => {
@@ -211,93 +307,90 @@ export default function VerificationFiles() {
   const uploadFetcher = useFetcher<FilesActionData>();
   const analysisFetcher = useFetcher<LabelAnalysisData>();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const handledAnalysisRef = useRef<string | null>(null);
-  const activeAnalysisKeyRef = useRef<string | null>(null);
-  const labelRef = useRef("");
-  const labelOriginRef = useRef<LabelOrigin>(null);
-  const [files, setFiles] = useState<VerificationFile[]>(verification.files || []);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [label, setLabel] = useState("");
-  const [labelOrigin, setLabelOrigin] = useState<LabelOrigin>(null);
-  const [suggestion, setSuggestion] = useState<FileLabelSuggestion | null>(null);
-  const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus>("idle");
-  const [localError, setLocalError] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [fileState, setFileState] = useState<VerificationFilesState>(() => ({
+    activeAnalysisKey: null,
+    analysisStatus: "idle",
+    appliedAnalysisData: undefined,
+    appliedUploadData: undefined,
+    appliedVerification: verification,
+    files: verification.files || [],
+    label: "",
+    labelOrigin: null,
+    localError: null,
+    selectedFile: null,
+    suggestion: null,
+    uploadError: null,
+  }));
   const [isDragging, setIsDragging] = useState(false);
 
-  const updateLabel = useCallback((value: string, origin: LabelOrigin) => {
-    labelRef.current = value;
-    labelOriginRef.current = origin;
-    setLabel(value);
-    setLabelOrigin(origin);
-  }, []);
+  const synchronizedFileState = synchronizeVerificationFiles({
+    analysisData: analysisFetcher.data,
+    current: fileState,
+    uploadData: uploadFetcher.data,
+    verification,
+  });
+  if (synchronizedFileState !== fileState) {
+    setFileState(synchronizedFileState);
+  }
 
-  const resetSelection = useCallback(() => {
-    setSelectedFile(null);
-    setSuggestion(null);
-    setAnalysisStatus("idle");
-    activeAnalysisKeyRef.current = null;
-    setLocalError(null);
-    setUploadError(null);
-    updateLabel("", null);
+  const {
+    analysisStatus,
+    files,
+    label,
+    labelOrigin,
+    localError,
+    selectedFile,
+    suggestion,
+    uploadError,
+  } = fileState;
+
+  const updateLabel = (value: string, origin: LabelOrigin) => {
+    setFileState((current) => ({
+      ...current,
+      label: value,
+      labelOrigin: origin,
+    }));
+  };
+
+  const resetSelection = () => {
+    setFileState((current) => resetSelectedFile(current));
     if (fileInputRef.current) fileInputRef.current.value = "";
-  }, [updateLabel]);
-
-  useEffect(() => {
-    const response = uploadFetcher.data;
-    if (response && "success" in response && response.success) {
-      setFiles((current) => [
-        ...current,
-        { name: response.name, path: response.path },
-      ]);
-      resetSelection();
-    } else if (response && "error" in response) {
-      setUploadError(response.error);
-    }
-  }, [resetSelection, uploadFetcher.data]);
-
-  useEffect(() => {
-    const response = analysisFetcher.data;
-    if (!response || handledAnalysisRef.current === response.requestId) return;
-    handledAnalysisRef.current = response.requestId;
-    if (response.analysisKey !== activeAnalysisKeyRef.current) return;
-
-    if (response.status === "failed") {
-      setAnalysisStatus("failed");
-      setLocalError(response.error);
-      return;
-    }
-
-    setSuggestion(response.suggestion);
-    setAnalysisStatus(response.status);
-    if (!labelRef.current.trim()) {
-      updateLabel(response.suggestion.label, "suggestion");
-    }
-  }, [analysisFetcher.data, updateLabel]);
+  };
 
   const analyzeFile = (file: File) => {
-    setLocalError(null);
-    setUploadError(null);
     if (
       file.type !== "application/pdf" &&
       !file.type.startsWith("image/")
     ) {
-      setLocalError("Välj en PDF eller bildfil.");
+      setFileState((current) => ({
+        ...current,
+        localError: "Välj en PDF eller bildfil.",
+        uploadError: null,
+      }));
       return;
     }
     if (file.size <= 0 || file.size > MAX_CLIENT_FILE_SIZE) {
-      setLocalError("Filen är tom eller större än 20 MB.");
+      setFileState((current) => ({
+        ...current,
+        localError: "Filen är tom eller större än 20 MB.",
+        uploadError: null,
+      }));
       return;
     }
 
-    setSelectedFile(file);
-    setSuggestion(null);
-    setAnalysisStatus("loading");
-    if (labelOriginRef.current !== "manual") updateLabel("", null);
-
     const formData = new FormData();
     const analysisKey = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    activeAnalysisKeyRef.current = analysisKey;
+    setFileState((current) => ({
+      ...current,
+      activeAnalysisKey: analysisKey,
+      analysisStatus: "loading",
+      label: current.labelOrigin === "manual" ? current.label : "",
+      labelOrigin: current.labelOrigin === "manual" ? "manual" : null,
+      localError: null,
+      selectedFile: file,
+      suggestion: null,
+      uploadError: null,
+    }));
     formData.append("file", file);
     formData.append("analysisKey", analysisKey);
     analysisFetcher.submit(formData, {
@@ -322,7 +415,7 @@ export default function VerificationFiles() {
 
   const saveFile = () => {
     if (!selectedFile || !label.trim()) return;
-    setUploadError(null);
+    setFileState((current) => ({ ...current, uploadError: null }));
     const formData = new FormData();
     formData.append("file", selectedFile);
     formData.append("label", label);
