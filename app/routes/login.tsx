@@ -1,6 +1,5 @@
 import type { LoaderFunction } from "react-router";
-import { data as json } from "react-router";
-import { useLoaderData, useNavigate } from "react-router";
+import { data as json, useLoaderData, useNavigate } from "react-router";
 import LoginModal from "~/components/LoginModal";
 import { auth } from "~/services/auth.server";
 import { isGoogleAuthenticationConfigured } from "~/services/google-auth.server";

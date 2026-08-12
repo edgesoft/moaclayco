@@ -1,4 +1,6 @@
 import {
+  ActionFunction,
+  data as json,
   useActionData,
   useFetcher,
   useNavigate,
@@ -20,7 +22,6 @@ import { toast } from "react-toastify";
 import Select from "react-select";
 import { accounts } from "~/utils/accounts";
 import { Verifications } from "~/schemas/verifications";
-import { ActionFunction, data as json } from "react-router";
 import ClientOnly from "~/components/ClientOnly";
 import { getDomain } from "~/utils/domain";
 import { auth } from "~/services/auth.server";

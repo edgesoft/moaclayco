@@ -1,8 +1,7 @@
 import type { ChangeEvent, DragEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useFetcher, useLoaderData } from "react-router";
+import { data as json, Link, useFetcher, useLoaderData } from "react-router";
 import type { ActionFunction, LoaderFunction } from "react-router";
-import { data as json } from "react-router";
 import { Verifications } from "~/schemas/verifications";
 import { getDomain } from "~/utils/domain";
 import { auth } from "~/services/auth.server";

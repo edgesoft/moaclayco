@@ -1,9 +1,5 @@
-import { data as json } from "react-router";
-import type {
-  LinksFunction,
-  LoaderFunctionArgs,
-} from "react-router";
 import {
+  data as json,
   Outlet,
   ShouldRevalidateFunction,
   useFetcher,
@@ -12,6 +8,7 @@ import {
   useNavigation,
   useParams,
 } from "react-router";
+import type { LinksFunction, LoaderFunctionArgs } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import { Types } from "mongoose";
 import { auth } from "~/services/auth.server";

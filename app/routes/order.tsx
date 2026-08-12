@@ -1,5 +1,11 @@
-import { data as json, LoaderFunctionArgs, MetaFunction, redirect } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import {
+  data as json,
+  Link,
+  LoaderFunctionArgs,
+  MetaFunction,
+  redirect,
+  useLoaderData,
+} from "react-router";
 import mongoose from "mongoose";
 import { useEffect } from "react";
 import { useCart } from "react-use-cart";

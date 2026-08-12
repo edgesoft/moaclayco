@@ -1,7 +1,8 @@
 import type { LoaderFunction, MetaFunction } from "react-router";
-import { data as json, redirect } from "react-router";
 import {
+  data as json,
   Link,
+  redirect,
   useLoaderData,
   useNavigate,
   useNavigation,

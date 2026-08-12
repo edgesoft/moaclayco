@@ -1,6 +1,6 @@
 import type { LoaderFunction, MetaFunction } from "react-router";
-import { data as json } from "react-router";
 import {
+  data as json,
   Link,
   useLoaderData,
   useOutletContext,
