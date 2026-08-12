@@ -103,17 +103,18 @@ function useUserDiscount(code: string) {
     balance?: number;
     percentage?: number | null;
   }>();
+  const submitDiscount = fetcher.submit;
   useEffect(() => {
     const handler = window.setTimeout(() => {
       const normalizedCode = code.trim();
-      fetcher.submit(
+      submitDiscount(
         { code: normalizedCode },
         { action: "/discount", method: "post" }
       );
     }, 300);
 
     return () => window.clearTimeout(handler);
-  }, [code]);
+  }, [code, submitDiscount]);
 
   const normalizedCode = code.trim();
   const isChecked =
@@ -145,7 +146,7 @@ export default function CartView() {
   const [discountValue, setDiscountValue] = useState("");
   const discount = useUserDiscount(discountValue);
 
-  const hasItemsError = () => Boolean(cartFetcher.data?.errors?.items);
+  const itemsError = cartFetcher.data?.errors?.items;
   const getItemError = (key: string) =>
     typeof cartFetcher.data?.errors?.items === "object"
       ? cartFetcher.data.errors.items[key]
@@ -154,8 +155,8 @@ export default function CartView() {
   useEffect(() => scrollToTop(), []);
 
   useEffect(() => {
-    if (hasItemsError()) scrollToTop();
-  }, [cartFetcher.data]);
+    if (itemsError) scrollToTop();
+  }, [itemsError]);
 
   useEffect(() => {
     if (cartTotal === 0) navigate("/");

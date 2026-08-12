@@ -24,12 +24,17 @@ export function DropDown({
     currentOptions[0] ?? null
   );
   const ref = useRef<HTMLInputElement>(null);
+  const currentLabel = currentOptions[0]?.label ?? "";
+  const currentValue = currentOptions[0]?.value ?? "";
 
   useEffect(() => {
+    setSelectedOption(
+      currentValue ? { label: currentLabel, value: currentValue } : null
+    );
     if (ref.current) {
-      ref.current.value = currentOptions[0]?.value ?? "";
+      ref.current.value = currentValue;
     }
-  }, []);
+  }, [currentLabel, currentValue]);
 
   const handleChange = (value: Option | null) => {
     if (ref && ref.current) {

@@ -438,6 +438,7 @@ const getOrdersRequestUrl = (
 export default function Orders() {
   const data = useLoaderData<OrdersLoaderData>();
   const resultsFetcher = useFetcher<OrdersLoaderData>();
+  const loadOrderResults = resultsFetcher.load;
   const moreFetcher = useFetcher<OrdersLoaderData>();
   const navigate = useNavigate();
   const navigation = useNavigation();
@@ -519,12 +520,12 @@ export default function Orders() {
     }
 
     const timeout = window.setTimeout(
-      () => resultsFetcher.load(getOrdersRequestUrl(filter, search)),
+      () => loadOrderResults(getOrdersRequestUrl(filter, search)),
       search.trim() === data.applied.search ? 0 : 280
     );
 
     return () => window.clearTimeout(timeout);
-  }, [filter, search]);
+  }, [data.applied.search, filter, loadOrderResults, search]);
 
   useEffect(() => {
     const nextData = resultsFetcher.data;

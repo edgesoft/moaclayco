@@ -8,7 +8,7 @@ import {
   useOutletContext,
 } from "react-router";
 import { motion, useReducedMotion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCart } from "react-use-cart";
 import { useSwipeable } from "react-swipeable";
 import Magnifier from "~/components/item/magnifier";
@@ -189,7 +189,7 @@ function Product({
     setCurrentIndex((current) => (current + 1) % images.length);
   };
 
-  const discardImage = () => {
+  const discardImage = useCallback(() => {
     if (!activeImage) return;
 
     if (retryTimeoutRef.current) {
@@ -205,9 +205,9 @@ function Product({
     setFailedImages((current) =>
       current.includes(activeImage) ? current : [...current, activeImage]
     );
-  };
+  }, [activeImage, images]);
 
-  const handleImageError = () => {
+  const handleImageError = useCallback(() => {
     if (!activeImage) return;
 
     const errorAttempt = `${activeImage}-${
@@ -235,9 +235,9 @@ function Product({
     }
 
     discardImage();
-  };
+  }, [activeImage, discardImage, imageAttempt, useOriginalImage]);
 
-  const handleImageLoad = () => {
+  const handleImageLoad = useCallback(() => {
     if (!activeImage) return;
 
     if (retryTimeoutRef.current) {
@@ -247,7 +247,7 @@ function Product({
     handledErrorAttemptRef.current = null;
     retryCountsRef.current.delete(activeImage);
     setLoadedImage(activeImage);
-  };
+  }, [activeImage]);
 
   useEffect(() => {
     const image = imageRef.current;
@@ -257,7 +257,7 @@ function Product({
     // Synchronize from the element so it never remains permanently transparent.
     if (image.naturalWidth > 0) handleImageLoad();
     else handleImageError();
-  }, [activeImage, imageAttempt, useOriginalImage]);
+  }, [activeImage, handleImageError, handleImageLoad]);
 
   useEffect(
     () => () => {

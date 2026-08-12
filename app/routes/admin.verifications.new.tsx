@@ -114,16 +114,15 @@ const FileUpload = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fetcher = useFetcher<SuggestionProps>();
-  const [uuid, setUuid] = useState<string | null>(null);
+  const handledUuidRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (fetcher && fetcher.data) {
-      if (!uuid || uuid !== fetcher.data.uuid) {
-        setUuid(fetcher.data.uuid);
-        onSuggestionsReceived(fetcher.data);
-      }
-    }
-  }, [fetcher, fetcher.data]);
+    const response = fetcher.data;
+    if (!response || handledUuidRef.current === response.uuid) return;
+
+    handledUuidRef.current = response.uuid;
+    onSuggestionsReceived(response);
+  }, [fetcher.data, onSuggestionsReceived]);
 
   const submitFile = (file: File) => {
     const formData = new FormData();

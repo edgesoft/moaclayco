@@ -1,5 +1,5 @@
 import type { ChangeEvent, DragEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useFetcher, useLoaderData } from "react-router";
 import type { ActionFunction, LoaderFunction } from "react-router";
 import { data as json } from "react-router";
@@ -202,14 +202,14 @@ export default function VerificationFiles() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const updateLabel = (value: string, origin: LabelOrigin) => {
+  const updateLabel = useCallback((value: string, origin: LabelOrigin) => {
     labelRef.current = value;
     labelOriginRef.current = origin;
     setLabel(value);
     setLabelOrigin(origin);
-  };
+  }, []);
 
-  const resetSelection = () => {
+  const resetSelection = useCallback(() => {
     setSelectedFile(null);
     setSuggestion(null);
     setAnalysisStatus("idle");
@@ -218,7 +218,7 @@ export default function VerificationFiles() {
     setUploadError(null);
     updateLabel("", null);
     if (fileInputRef.current) fileInputRef.current.value = "";
-  };
+  }, [updateLabel]);
 
   useEffect(() => {
     const response = uploadFetcher.data;
@@ -231,7 +231,7 @@ export default function VerificationFiles() {
     } else if (response && "error" in response) {
       setUploadError(response.error);
     }
-  }, [uploadFetcher.data]);
+  }, [resetSelection, uploadFetcher.data]);
 
   useEffect(() => {
     const response = analysisFetcher.data;
@@ -250,7 +250,7 @@ export default function VerificationFiles() {
     if (!labelRef.current.trim()) {
       updateLabel(response.suggestion.label, "suggestion");
     }
-  }, [analysisFetcher.data]);
+  }, [analysisFetcher.data, updateLabel]);
 
   const analyzeFile = (file: File) => {
     setLocalError(null);

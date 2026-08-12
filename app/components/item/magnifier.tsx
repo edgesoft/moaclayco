@@ -247,13 +247,13 @@ const Magnifier: React.FC<MagnifierProps> = ({
     return () => window.removeEventListener("resize", onResize);
   }, [clampPosition, isOpen, scale, updateStageSize]);
 
-  const handleLoad = () => {
+  const handleLoad = useCallback(() => {
     handledErrorRef.current = null;
     setIsLoaded(true);
     window.requestAnimationFrame(updateStageSize);
-  };
+  }, [updateStageSize]);
 
-  const handleError = () => {
+  const handleError = useCallback(() => {
     if (!imageUrl) return;
 
     const failedSource = `${imageUrl}-${useOriginal ? "original" : "responsive"}`;
@@ -267,7 +267,7 @@ const Magnifier: React.FC<MagnifierProps> = ({
     }
 
     close(undefined);
-  };
+  }, [close, imageUrl, useOriginal]);
 
   useEffect(() => {
     const image = imageRef.current;
@@ -275,7 +275,7 @@ const Magnifier: React.FC<MagnifierProps> = ({
 
     if (image.naturalWidth > 0) handleLoad();
     else handleError();
-  }, [imageUrl, useOriginal]);
+  }, [handleError, handleLoad, imageUrl]);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();

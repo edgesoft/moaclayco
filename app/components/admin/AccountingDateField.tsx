@@ -50,7 +50,7 @@ export function AccountingDateField({
 }: AccountingDateFieldProps) {
   const [internalValue, setInternalValue] = useState(defaultValue);
   const selectedValue = value ?? internalValue;
-  const selectedDate = parseDate(selectedValue);
+  const selectedDate = useMemo(() => parseDate(selectedValue), [selectedValue]);
   const todayDate = parseDate(stockholmToday())!;
   const [open, setOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(
@@ -86,7 +86,7 @@ export function AccountingDateField({
         new Date(Date.UTC(selectedDate.getUTCFullYear(), selectedDate.getUTCMonth(), 1))
       );
     }
-  }, [open, selectedValue]);
+  }, [open, selectedDate]);
 
   const days = useMemo(() => {
     const year = visibleMonth.getUTCFullYear();
