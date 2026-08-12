@@ -154,9 +154,8 @@ export let action: ActionFunction = async ({ request, params }) => {
 
     if (!order) return {}
 
-    let intent = null;
     if (order.paymentIntent && order.paymentIntent.id) {
-      intent = await stripeClient.paymentIntents.retrieve(
+      const intent = await stripeClient.paymentIntents.retrieve(
         order.paymentIntent.id,
         {
           expand: ["charges"], // Expanderar charges

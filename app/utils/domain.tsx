@@ -15,7 +15,7 @@ export const domains = [
 export function getDomain(input: Request | string) {
   // Kontrollera om input är en Request eller en string
   let url: URL;
-  let hostname: string | null = null;
+  let hostname: string;
   if (input instanceof Request) {
     url = new URL(input.url);
      hostname = url.hostname;
