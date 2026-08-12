@@ -36,6 +36,7 @@ import { getDomain } from "./utils/domain";
 import { toLoaderData } from "./utils/loaderData";
 import { isGoogleAuthenticationConfigured } from "./services/google-auth.server";
 import { connectToDatabase } from "./services/database.server";
+import { shouldRevalidateRoot } from "./utils/rootRevalidation";
 
 export type IndexProps = {
   hostname: string,
@@ -118,13 +119,12 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({
   formMethod,
   defaultShouldRevalidate,
 }) => {
-  if (formMethod && formMethod !== "GET") return defaultShouldRevalidate;
-
-  const staysInAccounting =
-    currentUrl.pathname.startsWith("/admin/verifications") &&
-    nextUrl.pathname.startsWith("/admin/verifications");
-
-  return staysInAccounting ? false : defaultShouldRevalidate;
+  return shouldRevalidateRoot({
+    currentPathname: currentUrl.pathname,
+    defaultShouldRevalidate,
+    formMethod,
+    nextPathname: nextUrl.pathname,
+  });
 };
 
 function Document({

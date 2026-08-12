@@ -47,4 +47,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=12 \
   CMD ["node", "tools/smoke-check.mjs", "--url=http://localhost:3000", "--timeout=4000"]
 
-CMD ["npm", "run", "start"]
+CMD ["node", "node_modules/@react-router/serve/bin.cjs", "./build/server/index.js"]
