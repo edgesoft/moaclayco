@@ -12,6 +12,11 @@ import { createVerification } from "~/services/verification.server";
 import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
 import type Stripe from "stripe";
+import {
+  MAX_STANDARD_FORM_REQUEST_SIZE,
+  readTextWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 type OrderDetailLoaderData = {
   order: Order;
@@ -122,13 +127,29 @@ export let meta: MetaFunction = ({ loaderData }) => {
 export let action: ActionFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
   const domain = getDomain(request);
-  let body = new URLSearchParams(await request.text());
+  if (!domain) {
+    return json({ error: "Okänd domän" }, { status: 400 });
+  }
+
+  let bodyText: string;
+  try {
+    bodyText = await readTextWithinLimit(
+      request,
+      MAX_STANDARD_FORM_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json({ error: "Formuläret är för stort" }, { status: 413 });
+    }
+    throw error;
+  }
+  const body = new URLSearchParams(bodyText);
   const type = body.get("_action") || "";
 
   if (type === "verification") {
     const order: Order | null = await Orders.findOne({
       _id: params.id,
-      domain: domain?.domain,
+      domain: domain.domain,
     }).lean();
 
     if (!order) return {}
@@ -248,7 +269,7 @@ export let action: ActionFunction = async ({ request, params }) => {
   const data = shippingValue === "true";
   const order: Order | null = await Orders.findOne({
     _id: params.id,
-    domain: domain?.domain,
+    domain: domain.domain,
   }).lean();
 
   if (order) {
@@ -263,7 +284,7 @@ export let action: ActionFunction = async ({ request, params }) => {
       await Orders.updateOne(
         {
           _id: params.id,
-          domain: domain?.domain,
+          domain: domain.domain,
         },
         { $set: { status: "SHIPPED", shippingEmailAt } }
       );
@@ -271,7 +292,7 @@ export let action: ActionFunction = async ({ request, params }) => {
       await Orders.updateOne(
         {
           _id: params.id,
-          domain: domain?.domain,
+          domain: domain.domain,
         },
         {
           $set: {
