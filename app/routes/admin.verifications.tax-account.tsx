@@ -10,7 +10,6 @@ import {
 import {
   ChangeEvent,
   DragEvent,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -109,6 +108,15 @@ type EditableRow = Omit<ReconciledTaxAccountRow, "posting"> & {
 };
 
 type CommitSuccess = Extract<ActionData, { success: true; intent: "commit" }>;
+type TaxAccountFilter = "all" | "missing" | "review" | "booked";
+
+type TaxAccountPageState = {
+  appliedActionData: ActionData | undefined;
+  completion: CommitSuccess | null;
+  draft: TaxAccountDraft | null;
+  filter: TaxAccountFilter;
+  rows: EditableRow[];
+};
 
 const roundCurrency = (value: number) => Math.round(Number(value) * 100) / 100;
 const formatCurrency = (value: number) =>
@@ -527,6 +535,40 @@ const createEditableRows = (draft: TaxAccountDraft): EditableRow[] =>
     };
   });
 
+const createEmptyPageState = (
+  appliedActionData: ActionData | undefined
+): TaxAccountPageState => ({
+  appliedActionData,
+  completion: null,
+  draft: null,
+  filter: "all",
+  rows: [],
+});
+
+const applyActionData = (
+  current: TaxAccountPageState,
+  actionData: ActionData | undefined
+): TaxAccountPageState => {
+  if (current.appliedActionData === actionData) return current;
+  if (actionData?.success && actionData.intent === "parse") {
+    return {
+      appliedActionData: actionData,
+      completion: null,
+      draft: actionData.draft,
+      filter: actionData.draft.summary.missing ? "missing" : "all",
+      rows: createEditableRows(actionData.draft),
+    };
+  }
+  if (actionData?.success && actionData.intent === "commit") {
+    return {
+      ...current,
+      appliedActionData: actionData,
+      completion: actionData,
+    };
+  }
+  return { ...current, appliedActionData: actionData };
+};
+
 const statusLabel = (status: EditableRow["status"]) => {
   if (status === "booked") return "Redan bokförd";
   if (status === "review") return "Kontrollera";
@@ -809,38 +851,30 @@ export default function TaxAccountPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [draft, setDraft] = useState<TaxAccountDraft | null>(null);
-  const [rows, setRows] = useState<EditableRow[]>([]);
-  const [completion, setCompletion] = useState<CommitSuccess | null>(null);
-  const [activeIntent, setActiveIntent] = useState<"parse" | "commit" | null>(null);
-  const [filter, setFilter] = useState<"all" | "missing" | "review" | "booked">(
-    "all"
+  const [pageState, setPageState] = useState<TaxAccountPageState>(() =>
+    createEmptyPageState(undefined)
   );
 
   const actionData = fetcher.data;
   const isWorking = fetcher.state !== "idle";
-  useEffect(() => {
-    if (!actionData) return;
-    if (actionData.success && actionData.intent === "parse") {
-      setDraft(actionData.draft);
-      setRows(createEditableRows(actionData.draft));
-      setFilter(actionData.draft.summary.missing ? "missing" : "all");
-    }
-    if (actionData.success && actionData.intent === "commit") {
-      setCompletion(actionData);
-    }
-    setActiveIntent(null);
-  }, [actionData]);
+  const submittedIntent = fetcher.formData?.get("intent");
+  const activeIntent =
+    isWorking && (submittedIntent === "parse" || submittedIntent === "commit")
+      ? submittedIntent
+      : null;
+
+  if (pageState.appliedActionData !== actionData) {
+    setPageState((current) => applyActionData(current, actionData));
+  }
+
+  const { completion, draft, filter, rows } = pageState;
 
   const submitFile = (file: File) => {
     const formData = new FormData();
     formData.append("intent", "parse");
     formData.append("file", file);
     setSelectedFile(file);
-    setDraft(null);
-    setRows([]);
-    setCompletion(null);
-    setActiveIntent("parse");
+    setPageState(createEmptyPageState(actionData));
     fetcher.submit(formData, { method: "post", encType: "multipart/form-data" });
   };
 
@@ -861,9 +895,12 @@ export default function TaxAccountPage() {
     (row) => row.status === "missing" && !row.selected && Boolean(row.posting)
   );
   const updateRow = (updated: EditableRow) =>
-    setRows((current) =>
-      current.map((row) => (row.id === updated.id ? updated : row))
-    );
+    setPageState((current) => ({
+      ...current,
+      rows: current.rows.map((row) =>
+        row.id === updated.id ? updated : row
+      ),
+    }));
 
   const commit = () => {
     if (!selectedFile || !draft) return;
@@ -877,11 +914,12 @@ export default function TaxAccountPage() {
         journalEntries: normalizeJournalEntries(row.posting!.journalEntries),
       }));
     } catch {
-      setRows((current) =>
-        current.map((row) =>
+      setPageState((current) => ({
+        ...current,
+        rows: current.rows.map((row) =>
           row.selected ? { ...row, editorOpen: true } : row
-        )
-      );
+        ),
+      }));
       return;
     }
     const payload = {
@@ -900,15 +938,12 @@ export default function TaxAccountPage() {
     formData.append("intent", "commit");
     formData.append("file", selectedFile);
     formData.append("payload", JSON.stringify(payload));
-    setActiveIntent("commit");
     fetcher.submit(formData, { method: "post", encType: "multipart/form-data" });
   };
 
   const reset = () => {
     setSelectedFile(null);
-    setDraft(null);
-    setRows([]);
-    setFilter("all");
+    setPageState(createEmptyPageState(actionData));
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -1110,7 +1145,12 @@ export default function TaxAccountPage() {
                   key={value}
                   type="button"
                   aria-pressed={filter === value}
-                  onClick={() => setFilter(value)}
+                  onClick={() =>
+                    setPageState((current) => ({
+                      ...current,
+                      filter: value,
+                    }))
+                  }
                   className={filter === value ? "is-active" : ""}
                 >
                   {label} <span>{count}</span>
