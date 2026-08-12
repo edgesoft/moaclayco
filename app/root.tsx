@@ -185,7 +185,7 @@ function Document({
 }
 
 function RouteTransition({ data }: { data: IndexProps }) {
-  const isFirstRender = useRef(true);
+  const isFirstRenderRef = useRef(true);
   const location = useLocation();
   const shouldReduceMotion = useReducedMotion();
   const routeTransitionKey = location.pathname.startsWith("/admin/orders")
@@ -193,14 +193,14 @@ function RouteTransition({ data }: { data: IndexProps }) {
     : location.pathname;
 
   useEffect(() => {
-    isFirstRender.current = false;
+    isFirstRenderRef.current = false;
   }, []);
 
   return (
     <motion.div
       animate={{ opacity: 1, y: 0 }}
       initial={
-        shouldReduceMotion || isFirstRender.current
+        shouldReduceMotion || isFirstRenderRef.current
           ? false
           : { opacity: 0.97, y: 4 }
       }

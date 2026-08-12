@@ -492,7 +492,7 @@ export default function Verification() {
   const [interpretationWarnings, setInterpretationWarnings] = useState<string[]>([]);
   const [protectingManualInput, setProtectingManualInput] = useState(false);
   const navigate = useNavigate();
-  const previousVerification = useRef<number | null>(null);
+  const previousVerificationRef = useRef<number | null>(null);
   const [uploadingState, setUploadingState] = useState<UploadingState>(
     UploadingState.IDLE
   );
@@ -684,9 +684,9 @@ export default function Verification() {
       const verificationNumber = actionData.verification.verificationNumber;
 
       // Kör endast om verifikationsnumret är nytt
-      if (verificationNumber !== previousVerification.current) {
+      if (verificationNumber !== previousVerificationRef.current) {
         // Uppdatera föregående verifikationsnummer
-        previousVerification.current = verificationNumber;
+        previousVerificationRef.current = verificationNumber;
         setUploadedFile(null);
         setSelectedFile(null);
         setReviewSuggestions([]);
@@ -707,7 +707,7 @@ export default function Verification() {
         navigate("/admin/verifications");
       }
     }
-  }, [actionData, navigate, previousVerification, reset]);
+  }, [actionData, navigate, previousVerificationRef, reset]);
 
   const currentEntries = watch("journalEntries") || [];
   const currentDescription = watch("description") || "";

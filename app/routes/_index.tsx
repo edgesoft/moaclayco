@@ -409,7 +409,7 @@ export default function Index() {
   const { user, collections } = useOutletContext<IndexProps>();
   const { latestItems } = useLoaderData<LandingLoaderData>();
   const revalidator = useRevalidator();
-  const attemptedEmptyDataRepair = useRef(false);
+  const attemptedEmptyDataRepairRef = useRef(false);
   const theme = useTheme();
   const reduceMotion = useReducedMotion();
   const heroCollections = collections.slice(0, 2);
@@ -419,13 +419,13 @@ export default function Index() {
   useEffect(() => {
     if (
       collections.length > 0 ||
-      attemptedEmptyDataRepair.current ||
+      attemptedEmptyDataRepairRef.current ||
       revalidator.state !== "idle"
     ) {
       return;
     }
 
-    attemptedEmptyDataRepair.current = true;
+    attemptedEmptyDataRepairRef.current = true;
     revalidator.revalidate();
   }, [collections.length, revalidator]);
 

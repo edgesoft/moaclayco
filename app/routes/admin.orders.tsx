@@ -449,10 +449,10 @@ export default function Orders() {
     getQueryKey(data.applied.filter, data.applied.search)
   );
   const [lastViewedId, setLastViewedId] = useState<string | undefined>(id);
-  const previousOrderId = useRef(id);
-  const navigationScrollPosition = useRef<number | null>(null);
-  const navigationListScrollPosition = useRef<number | null>(null);
-  const didInitializeQuery = useRef(false);
+  const previousOrderIdRef = useRef(id);
+  const navigationScrollPositionRef = useRef<number | null>(null);
+  const navigationListScrollPositionRef = useRef<number | null>(null);
+  const didInitializeQueryRef = useRef(false);
   const activeQueryKey = getQueryKey(filter, search);
   const isQueryPending =
     activeQueryKey !== displayedQueryKey || resultsFetcher.state !== "idle";
@@ -511,8 +511,8 @@ export default function Orders() {
   }, [data, filter, search]);
 
   useEffect(() => {
-    if (!didInitializeQuery.current) {
-      didInitializeQuery.current = true;
+    if (!didInitializeQueryRef.current) {
+      didInitializeQueryRef.current = true;
       return;
     }
 
@@ -579,8 +579,8 @@ export default function Orders() {
 
     sessionStorage.setItem("ordersScrollPosition", window.scrollY.toString());
     sessionStorage.setItem("ordersLastViewedId", orderId);
-    navigationScrollPosition.current = window.scrollY;
-    navigationListScrollPosition.current =
+    navigationScrollPositionRef.current = window.scrollY;
+    navigationListScrollPositionRef.current =
       document.querySelector<HTMLElement>(".orders-list")?.scrollTop ?? null;
     setLastViewedId(orderId);
 
@@ -591,24 +591,26 @@ export default function Orders() {
   };
 
   useEffect(() => {
-    if (navigation.state !== "idle" || previousOrderId.current === id) return;
+    if (navigation.state !== "idle" || previousOrderIdRef.current === id) {
+      return;
+    }
 
     const isCompact = window.matchMedia("(max-width: 959px)").matches;
     const usesFixedWorkspace = window.matchMedia(fixedWorkspaceMedia).matches;
-    const previousId = previousOrderId.current;
+    const previousId = previousOrderIdRef.current;
     const persistedPosition = sessionStorage.getItem("ordersScrollPosition");
     const persistedOrderId = sessionStorage.getItem("ordersLastViewedId");
     const parsedPersistedPosition =
       persistedPosition === null ? null : Number(persistedPosition);
     const storedPosition =
-      navigationScrollPosition.current ??
+      navigationScrollPositionRef.current ??
       (persistedOrderId === previousId &&
       parsedPersistedPosition !== null &&
       Number.isFinite(parsedPersistedPosition)
         ? parsedPersistedPosition
         : null);
-    const storedListPosition = navigationListScrollPosition.current;
-    previousOrderId.current = id;
+    const storedListPosition = navigationListScrollPositionRef.current;
+    previousOrderIdRef.current = id;
 
     if (isCompact && id) {
       window.scrollTo({ top: 0, behavior: "auto" });
