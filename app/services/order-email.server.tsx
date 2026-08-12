@@ -23,7 +23,11 @@ export async function sendOrderEmail(
 ) {
   const theme = themes[order.domain] ?? themes.moaclayco;
   const markup = renderToStaticMarkup(
-    <EmailOrderTemplate order={order} template={template} />
+    <EmailOrderTemplate
+      copyrightYear={new Date().getFullYear()}
+      order={order}
+      template={template}
+    />
   );
 
   return mailer.sendMail({

@@ -8,6 +8,7 @@ export enum Template {
 }
 
 export type TemplateType = {
+  copyrightYear: number;
   order: Order;
   template: Template;
 };
@@ -163,7 +164,11 @@ const sectionLabelStyle: CSSProperties = {
   textTransform: "uppercase",
 };
 
-const EmailOrderTemplate: React.FC<TemplateType> = ({ order, template }) => {
+const EmailOrderTemplate: React.FC<TemplateType> = ({
+  copyrightYear,
+  order,
+  template,
+}) => {
   const { _id, customer, items, freightCost, discount, totalSum } = order;
   const theme = getTheme(order.domain);
   const copy = orderCopy(template);
@@ -756,7 +761,7 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({ order, template }) => {
                             textTransform: "uppercase",
                           }}
                         >
-                          © {new Date().getFullYear()} {theme.title}
+                          © {copyrightYear} {theme.title}
                         </p>
                       </td>
                     </tr>

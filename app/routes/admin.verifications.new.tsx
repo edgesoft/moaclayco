@@ -499,9 +499,10 @@ export default function Verification() {
   const [entryMode, setEntryMode] = useState<"choose" | "upload" | "manual">(
     "choose"
   );
-  const initialVerificationDate = useRef(
-    accountingDateKey(new Date()) ?? new Date().toISOString().split("T")[0]
-  ).current;
+  const [initialVerificationDate] = useState(() => {
+    const now = new Date();
+    return accountingDateKey(now) ?? now.toISOString().split("T")[0];
+  });
 
   const {
     register,

@@ -56,7 +56,11 @@ const order: Order = {
 
 test("order confirmation uses the shared editorial email design", () => {
   const html = renderToStaticMarkup(
-    <EmailOrderTemplate order={order} template={Template.ORDER} />
+    <EmailOrderTemplate
+      copyrightYear={2026}
+      order={order}
+      template={Template.ORDER}
+    />
   );
 
   assert.match(html, /ORDERBEKRÄFTELSE/);
@@ -70,12 +74,17 @@ test("order confirmation uses the shared editorial email design", () => {
   assert.match(html, /max-width:600px/);
   assert.match(html, /class="email-wordmark"/);
   assert.match(html, /border-radius:999px/);
+  assert.match(html, /© 2026 Moa Clay Co/);
   assert.doesNotMatch(html, /D1FAE5|E5E7EB|All rights reserved/);
 });
 
 test("shipping email reuses the design with delivery-specific copy", () => {
   const html = renderToStaticMarkup(
-    <EmailOrderTemplate order={order} template={Template.SHIPPING} />
+    <EmailOrderTemplate
+      copyrightYear={2026}
+      order={order}
+      template={Template.SHIPPING}
+    />
   );
 
   assert.match(html, /PÅ VÄG TILL DIG/);

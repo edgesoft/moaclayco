@@ -92,12 +92,16 @@ function DiscountDateControl({
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const { date: selectedDate, time } = splitExpiry(value);
-  const initialDate = selectedDate ? new Date(`${selectedDate}T00:00:00Z`) : new Date();
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [visibleMonth, setVisibleMonth] = useState(() => ({
-    month: initialDate.getUTCMonth(),
-    year: initialDate.getUTCFullYear(),
-  }));
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const initialDate = selectedDate
+      ? new Date(`${selectedDate}T00:00:00Z`)
+      : new Date();
+    return {
+      month: initialDate.getUTCMonth(),
+      year: initialDate.getUTCFullYear(),
+    };
+  });
 
   useEffect(() => {
     if (!calendarOpen) return;
@@ -225,7 +229,10 @@ function DiscountPreview({ code, percentage, balance, expireAt }: {
   percentage: number;
 }) {
   const isEmpty = !Number.isFinite(balance) || balance <= 0;
-  const isExpired = expireAt ? new Date(expireAt.replace(" ", "T")).getTime() < Date.now() : false;
+  const [currentTime] = useState(Date.now);
+  const isExpired = expireAt
+    ? new Date(expireAt.replace(" ", "T")).getTime() < currentTime
+    : false;
   const state = isEmpty ? "Inga användningar kvar" : isExpired ? "Giltigheten har gått ut" : "Redo att användas";
 
   return (
