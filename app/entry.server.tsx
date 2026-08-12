@@ -6,27 +6,9 @@ import { createReadableStreamFromReadable } from "@react-router/node";
 import isbot from "isbot";
 import { renderToPipeableStream } from "react-dom/server";
 import connector from '../connector'
-import cron from 'node-cron';
-import fetch from 'node-fetch';
-import { getNextUrl } from "./utils/getNextUrl";
 
 connector()
 
-let heartbeat = false;
-function setupHeartBeat(request: Request) {
-  if (heartbeat) return;
-  heartbeat = true;
-  const { proto, hostname } = getNextUrl(request);
-  const url = `${proto}://${hostname}`;
-  if (hostname !== "localhost") {
-    console.log(`setup heartbeat for ${url}`);
-    cron.schedule("*/5 * * * * *", () => {
-      fetch(url)
-        .then(() => {})
-        .catch((error) => console.error(`Error pinging app:`, error));
-    });
-  }
-}
 const ABORT_DELAY = 5_000;
 
 export default function handleRequest(
@@ -35,7 +17,6 @@ export default function handleRequest(
   responseHeaders: Headers,
   remixContext: EntryContext
 ) {
-  setupHeartBeat(request);
   return isbot(request.headers.get("user-agent"))
     ? handleBotRequest(
         request,
