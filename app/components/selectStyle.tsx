@@ -1,11 +1,10 @@
 import { StylesConfig } from "react-select";
 
-const createOption = (label: string) => ({
-  label,
-  value: label,
-});
-
-export type Option = ReturnType<typeof createOption> & { noValue?: boolean };
+export type Option = {
+  label: string;
+  value: string;
+  noValue?: boolean;
+};
 
 type IsMulti = true;
 
