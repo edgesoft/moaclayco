@@ -25,6 +25,7 @@ test("database connection attempts are shared while they are pending", async () 
 
   assert.equal(attempts, 1);
   assert.equal(first, second);
+  assert.equal(cache.promise, null);
 });
 
 test("a failed database connection can be retried", async () => {
@@ -41,4 +42,5 @@ test("a failed database connection can be retried", async () => {
 
   assert.equal(attempts, 2);
   assert.equal(connection.connected, true);
+  assert.equal(cache.promise, null);
 });

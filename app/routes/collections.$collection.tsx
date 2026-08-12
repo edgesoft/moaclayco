@@ -32,22 +32,25 @@ const imageWithWidth = (image: string, width: number) =>
 
 export const loader: LoaderFunction = async ({ params, request }) => {
   const domain = getDomain(request);
-  const collection = await Collections.findOne({
-    shortUrl: params.collection,
-    domain: domain?.domain,
-  }).lean();
+  const [collection, items] = await Promise.all([
+    Collections.findOne({
+      shortUrl: params.collection,
+      domain: domain?.domain,
+    }).lean(),
+    Items.find({
+      collectionRef: params.collection,
+      domain: domain?.domain,
+    })
+      .sort({ _id: -1 })
+      .lean(),
+  ]);
 
   if (!collection) return redirect("/");
 
   return json(
     toLoaderData({
       collection,
-      items: await Items.find({
-        collectionRef: params.collection,
-        domain: domain?.domain,
-      })
-        .sort({ _id: -1 })
-        .lean(),
+      items,
     }),
     {
       headers: {
