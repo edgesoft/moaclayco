@@ -41,3 +41,20 @@ jobs:
 
       - name: Smoke test stage
         run: node tools/smoke-check.mjs --url=https://moaclayco-stage.fly.dev --timeout=30000
+
+      - name: Set up Node.js for mobile browser tests
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Install mobile browser engines
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Test Android and iPhone storefront flows
+        run: npm run test:e2e:mobile
+        env:
+          MOBILE_E2E_BASE_URL: https://moaclayco-stage.fly.dev

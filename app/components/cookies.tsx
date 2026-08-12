@@ -34,7 +34,11 @@ const Cookies = (): React.ReactElement | null => {
     };
   }, [accepted, loaded]);
 
-  if (!loaded || accepted) return null;
+  if (!loaded) {
+    return <div aria-hidden="true" className="mcc-cookie-hydration-guard" />;
+  }
+
+  if (accepted) return null;
 
   return (
     <div

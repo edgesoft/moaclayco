@@ -1,0 +1,91 @@
+import { expect, test, type Page } from "@playwright/test";
+
+async function acceptCookies(page: Page) {
+  const acceptButton = page.getByRole("button", { name: "Acceptera cookies" });
+  await expect(acceptButton).toBeVisible();
+  await acceptButton.tap();
+  await expect(acceptButton).toBeHidden();
+}
+
+async function expectNoHorizontalOverflow(page: Page) {
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const viewportWidth = document.documentElement.clientWidth;
+        return Math.max(
+          document.documentElement.scrollWidth,
+          document.body.scrollWidth
+        ) - viewportWidth;
+      })
+    )
+    .toBeLessThanOrEqual(1);
+}
+
+test("a touch user can open a Collection", async ({ page }) => {
+  await page.goto("/");
+  await acceptCookies(page);
+  await expectNoHorizontalOverflow(page);
+
+  await page
+    .getByRole("link", { name: "Öppna kollektionen Wanja" })
+    .tap();
+
+  await expect(page).toHaveURL(/\/collections\/wanja$/);
+  await expect(page.getByRole("heading", { name: "Wanja", level: 1 })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+test("the cart and fixed banner remain inside the mobile viewport", async ({
+  page,
+}) => {
+  await page.goto("/collections/wanja");
+  await acceptCookies(page);
+  await page.getByRole("button", { name: /Lägg i varukorgen/ }).tap();
+  await page.getByRole("button", { name: /Öppna varukorgen/ }).tap();
+
+  await expect(page).toHaveURL(/\/cart$/);
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "18px";
+  });
+  await expect(page.getByRole("heading", { name: "Varukorg" })).toBeVisible();
+
+  const viewportWidth = page.viewportSize()!.width;
+  const header = page.locator(".mcc-site-header");
+  const initialHeader = await header.boundingBox();
+  expect(initialHeader).not.toBeNull();
+  expect(initialHeader!.height).toBeGreaterThanOrEqual(68);
+  expect(initialHeader!.x).toBeGreaterThanOrEqual(-1);
+
+  await page.evaluate(() => window.scrollTo(0, 700));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(500);
+
+  const scrolledHeader = await header.boundingBox();
+  expect(scrolledHeader).not.toBeNull();
+  expect(scrolledHeader!.height).toBeGreaterThanOrEqual(68);
+  expect(scrolledHeader!.x).toBeGreaterThanOrEqual(-1);
+  expect(scrolledHeader!.y).toBeGreaterThanOrEqual(-1);
+
+  for (const selector of [
+    ".mcc-cart-hero__title",
+    ".mcc-cart-hero h1",
+    ".mcc-cart-hero__count",
+  ]) {
+    const box = await page.locator(selector).boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(-1);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(viewportWidth + 1);
+  }
+
+  const summaryHeading = await page
+    .getByRole("heading", { name: "Sammanfattning" })
+    .boundingBox();
+  const summaryCurrency = await page
+    .locator(".mcc-cart-summary .mcc-cart-section-heading > span")
+    .boundingBox();
+  expect(summaryHeading).not.toBeNull();
+  expect(summaryCurrency).not.toBeNull();
+  expect(summaryHeading!.x + summaryHeading!.width).toBeLessThanOrEqual(
+    summaryCurrency!.x
+  );
+  await expectNoHorizontalOverflow(page);
+});

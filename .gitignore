@@ -4,6 +4,7 @@ node_modules
 /build
 /public/build
 /public/build-dev*
+/test-results/
 .env
 .env.*
 !.env.*.example
