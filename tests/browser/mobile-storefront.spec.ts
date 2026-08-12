@@ -89,6 +89,77 @@ test("collection gallery controls are touch-friendly", async ({ page }) => {
   await expectNoHorizontalOverflow(page);
 });
 
+test("the fixed product navigator loops at both ends", async ({ page }) => {
+  await page.goto("/collections/molly");
+  await acceptCookies(page);
+
+  const products = page.locator('[data-banner-context-kind="item"]');
+  const productCount = await products.count();
+  expect(productCount).toBeGreaterThan(1);
+
+  const firstTitle = await products
+    .first()
+    .getAttribute("data-banner-context-title");
+  const firstHref = await products
+    .first()
+    .getAttribute("data-banner-context-href");
+  const lastTitle = await products
+    .last()
+    .getAttribute("data-banner-context-title");
+  const lastHref = await products
+    .last()
+    .getAttribute("data-banner-context-href");
+  expect(firstTitle).toBeTruthy();
+  expect(firstHref).toBeTruthy();
+  expect(lastTitle).toBeTruthy();
+  expect(lastHref).toBeTruthy();
+
+  await page.evaluate(() => {
+    const items = document.querySelectorAll<HTMLElement>(
+      '[data-banner-context-kind="item"]'
+    );
+    const lastItem = items.item(items.length - 1);
+    window.scrollTo(0, lastItem.offsetTop + 80);
+  });
+
+  const navigator = page.locator(".mcc-scroll-collection-nav");
+  const previous = navigator.locator(
+    ".mcc-scroll-collection-nav__link--previous"
+  );
+  const next = navigator.locator(".mcc-scroll-collection-nav__link--next");
+  await expect(previous).toHaveAttribute(
+    "aria-label",
+    new RegExp(`^Föregående produkt:`)
+  );
+  await expect(next).toHaveAttribute(
+    "aria-label",
+    `Nästa produkt: ${firstTitle}`
+  );
+
+  for (const link of [previous, next]) {
+    const box = await link.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.height).toBeGreaterThanOrEqual(42);
+  }
+
+  await next.tap();
+  await expect(page).toHaveURL(
+    new RegExp(`${firstHref!.split("#").at(-1)}$`)
+  );
+  await expect(previous).toHaveAttribute(
+    "aria-label",
+    `Föregående produkt: ${lastTitle}`
+  );
+  await expect(next).toBeVisible();
+
+  await previous.tap();
+  await expect(page).toHaveURL(
+    new RegExp(`${lastHref!.split("#").at(-1)}$`)
+  );
+  await expect(next).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
 test("the cart and fixed banner remain inside the mobile viewport", async ({
   page,
 }) => {

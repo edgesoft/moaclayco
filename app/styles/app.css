@@ -2930,8 +2930,18 @@ input[type="search"]::-ms-reveal {
 
   .mcc-scroll-collection-nav__link {
     gap: 0.3rem;
-    height: 2.1rem;
+    height: 2.75rem;
     padding: 0.32rem 0.45rem 0.35rem;
+  }
+
+  .mcc-scroll-collection-nav__arrow {
+    align-items: center;
+    display: inline-flex;
+    font-size: 1.05rem;
+    height: 1.4rem;
+    justify-content: center;
+    line-height: 1;
+    width: 1.15rem;
   }
 
   .mcc-scroll-collection-nav__copy small {
@@ -7896,7 +7906,7 @@ input[type="search"]::-ms-reveal {
   .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__edit,
   .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__zoom,
   .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__arrows button {
-    font-size: 1.05rem;
+    font-size: 1.32rem;
     height: 2.65rem;
     min-height: 2.65rem;
     width: 2.65rem;

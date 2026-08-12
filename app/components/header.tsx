@@ -107,8 +107,13 @@ function createBannerContextStore(supported: boolean): BannerContextStore {
           if (context.kind !== "section") {
             const siblings = siblingContexts[context.kind];
             const contextIndex = siblings.indexOf(context);
-            const previous = siblings[contextIndex - 1];
-            const next = siblings[contextIndex + 1];
+            const hasNeighbors = siblings.length > 1 && contextIndex >= 0;
+            const previous = hasNeighbors
+              ? siblings[(contextIndex - 1 + siblings.length) % siblings.length]
+              : undefined;
+            const next = hasNeighbors
+              ? siblings[(contextIndex + 1) % siblings.length]
+              : undefined;
 
             nextContext = {
               direction,
