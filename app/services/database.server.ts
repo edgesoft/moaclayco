@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { type ConnectOptions } from "mongoose";
 
 export type DatabaseConnectionCache<T> = {
   connection: T | null;
@@ -16,6 +16,17 @@ const cache =
     connection: null,
     promise: null,
   });
+
+export const databaseConnectionOptions = {
+  heartbeatFrequencyMS: 5_000,
+  maxConnecting: 4,
+  maxIdleTimeMS: 60_000,
+  maxPoolSize: 20,
+  minPoolSize: 2,
+  serverSelectionTimeoutMS: 10_000,
+  socketTimeoutMS: 30_000,
+  waitQueueTimeoutMS: 15_000,
+} satisfies ConnectOptions;
 
 export async function connectWithCache<T>(
   connectionCache: DatabaseConnectionCache<T>,
@@ -58,14 +69,6 @@ export async function connectToDatabase() {
   }
 
   return connectWithCache(cache, () =>
-    mongoose.connect(mongoUrl, {
-      heartbeatFrequencyMS: 5_000,
-      maxConnecting: 2,
-      maxIdleTimeMS: 60_000,
-      maxPoolSize: 10,
-      serverSelectionTimeoutMS: 10_000,
-      socketTimeoutMS: 15_000,
-      waitQueueTimeoutMS: 5_000,
-    })
+    mongoose.connect(mongoUrl, databaseConnectionOptions)
   );
 }
