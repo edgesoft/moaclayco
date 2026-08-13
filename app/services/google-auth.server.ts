@@ -102,6 +102,26 @@ const getGoogleConfiguration = () => {
   return configurationPromise;
 };
 
+export const getGoogleAuthorizationParameters = ({
+  redirectUri,
+  codeChallenge,
+  state,
+  nonce,
+}: {
+  redirectUri: string;
+  codeChallenge: string;
+  state: string;
+  nonce: string;
+}) => ({
+  redirect_uri: redirectUri,
+  scope: "openid email profile",
+  code_challenge: codeChallenge,
+  code_challenge_method: "S256" as const,
+  state,
+  nonce,
+  prompt: "select_account" as const,
+});
+
 export const createGoogleAuthorization = async () => {
   const configuration = await getGoogleConfiguration();
   const codeVerifier = oidc.randomPKCECodeVerifier();
@@ -109,15 +129,15 @@ export const createGoogleAuthorization = async () => {
   const state = oidc.randomState();
   const nonce = oidc.randomNonce();
 
-  const url = oidc.buildAuthorizationUrl(configuration, {
-    redirect_uri: getGoogleCallbackUrl().toString(),
-    scope: "openid email profile",
-    code_challenge: codeChallenge,
-    code_challenge_method: "S256",
-    state,
-    nonce,
-    prompt: "select_account",
-  });
+  const url = oidc.buildAuthorizationUrl(
+    configuration,
+    getGoogleAuthorizationParameters({
+      redirectUri: getGoogleCallbackUrl().toString(),
+      codeChallenge,
+      state,
+      nonce,
+    })
+  );
 
   return {
     url,

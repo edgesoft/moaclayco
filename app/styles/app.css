@@ -7065,6 +7065,20 @@ input[type="search"]::-ms-reveal {
   text-align: center;
 }
 
+.mcc-login-account-help {
+  color: #746e67;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  margin: 0.8rem auto 0;
+  max-width: 23rem;
+  text-align: center;
+}
+
+.mcc-login-account-help strong {
+  color: var(--mcc-state-accent-dark);
+  font-weight: 700;
+}
+
 .mcc-login-privacy {
   align-items: flex-start;
   border-top: 1px solid var(--mcc-state-line);

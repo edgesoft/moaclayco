@@ -134,7 +134,7 @@ export default function LoginModal({
           {configured ? (
             <a href="/auth/google">
               <GoogleLogo />
-              Fortsätt med Google
+              Välj Google-konto
               <span aria-hidden="true" className="mcc-login-action-arrow">
                 <ArrowIcon />
               </span>
@@ -142,10 +142,17 @@ export default function LoginModal({
           ) : (
             <button disabled type="button">
               <GoogleLogo />
-              Fortsätt med Google
+              Välj Google-konto
             </button>
           )}
         </div>
+
+        {configured ? (
+          <p className="mcc-login-account-help">
+            Är någon annan redan inloggad? Välj <strong>Använd ett annat konto</strong>{" "}
+            hos Google.
+          </p>
+        ) : null}
 
         {!configured ? (
           <p className="mcc-login-configuration">

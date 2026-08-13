@@ -1,10 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  getGoogleAuthorizationParameters,
   isAllowedGoogleEmail,
   isGoogleOauthFlow,
   normalizeGoogleEmail,
 } from "../app/services/google-auth.server";
+
+test("always asks Google to show the account chooser", () => {
+  const parameters = getGoogleAuthorizationParameters({
+    redirectUri: "https://stage.example.com/auth/google/callback",
+    codeChallenge: "challenge",
+    state: "state",
+    nonce: "nonce",
+  });
+
+  assert.equal(parameters.prompt, "select_account");
+});
 
 test("normalizes Google email addresses", () => {
   assert.equal(normalizeGoogleEmail("  Moaclayco@GMAIL.com "), "moaclayco@gmail.com");
