@@ -21,14 +21,45 @@ async function expectNoHorizontalOverflow(page: Page) {
     .toBeLessThanOrEqual(1);
 }
 
+async function expectContextPanelBelowHeader(page: Page) {
+  const headerBox = await page.locator(".mcc-site-header").boundingBox();
+  const panelBox = await page
+    .locator(".mcc-scroll-context-wrap")
+    .boundingBox();
+  const viewport = page.viewportSize();
+
+  expect(headerBox).not.toBeNull();
+  expect(panelBox).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(panelBox!.y).toBeGreaterThanOrEqual(
+    headerBox!.y + headerBox!.height
+  );
+  expect(panelBox!.x).toBeGreaterThanOrEqual(-1);
+  expect(panelBox!.width).toBeGreaterThanOrEqual(viewport!.width - 1);
+  expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(
+    viewport!.width + 1
+  );
+}
+
 test("a touch user can open a Collection", async ({ page }) => {
   await page.goto("/");
   await acceptCookies(page);
   await expectNoHorizontalOverflow(page);
 
-  await page
-    .getByRole("link", { name: "Öppna kollektionen Wanja" })
-    .tap();
+  const collectionScene = page.locator(
+    '[data-banner-context-kind="collection"][data-banner-context-title="Wanja"]'
+  );
+  const collectionLink = collectionScene.getByRole("link", {
+    name: "Se Collection",
+    exact: true,
+  });
+  await collectionScene.evaluate((element) => {
+    window.scrollTo(0, (element as HTMLElement).offsetTop + 80);
+  });
+  await expect(page.locator(".mcc-scroll-collection-nav")).toBeVisible();
+  await expectContextPanelBelowHeader(page);
+
+  await collectionLink.tap();
 
   await expect(page).toHaveURL(/\/collections\/wanja$/);
   await expect(page.getByRole("heading", { name: "Wanja", level: 1 })).toBeVisible();
@@ -89,6 +120,107 @@ test("collection gallery controls are touch-friendly", async ({ page }) => {
   await expectNoHorizontalOverflow(page);
 });
 
+test("Collection storytelling scrolls without sticky mobile pauses", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await acceptCookies(page);
+
+  const layout = await page.evaluate(() => {
+    const collectionScene = document.querySelector<HTMLElement>(
+      ".mcc-collection-scene"
+    );
+    const collectionStage = document.querySelector<HTMLElement>(
+      ".mcc-collection-scene__stage"
+    );
+
+    return {
+      collectionSceneHeight: collectionScene?.getBoundingClientRect().height,
+      collectionStageHeight: collectionStage?.getBoundingClientRect().height,
+      collectionStagePosition: collectionStage
+        ? getComputedStyle(collectionStage).position
+        : null,
+    };
+  });
+
+  expect(layout.collectionStagePosition).toBe("relative");
+  expect(layout.collectionSceneHeight).toBeDefined();
+  expect(layout.collectionStageHeight).toBeDefined();
+  expect(
+    Math.abs(layout.collectionSceneHeight! - layout.collectionStageHeight!)
+  ).toBeLessThanOrEqual(2);
+
+  const firstScene = page.locator(".mcc-collection-scene").first();
+  const parallax = firstScene.locator(".mcc-collection-scene__parallax");
+  await firstScene.evaluate((element) => {
+    window.scrollTo(0, (element as HTMLElement).offsetTop - innerHeight * 0.45);
+  });
+  await page.waitForTimeout(120);
+  const enteringTransform = await parallax.evaluate(
+    (element) => getComputedStyle(element).transform
+  );
+  await firstScene.evaluate((element) => {
+    window.scrollTo(0, (element as HTMLElement).offsetTop + innerHeight * 0.35);
+  });
+  await page.waitForTimeout(120);
+  const leavingTransform = await parallax.evaluate(
+    (element) => getComputedStyle(element).transform
+  );
+  expect(enteringTransform).not.toBe("none");
+  expect(leavingTransform).not.toBe(enteringTransform);
+});
+
+test("all Collection routes fit the mobile viewport", async ({ page }) => {
+  test.setTimeout(90_000);
+
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  await page.goto("/");
+  await acceptCookies(page);
+  const collectionHrefs = await page
+    .locator('[data-banner-context-kind="collection"]')
+    .evaluateAll((elements) =>
+      Array.from(
+        new Set(
+          elements
+            .map((element) => element.getAttribute("data-banner-context-href"))
+            .filter((href): href is string => Boolean(href))
+        )
+      )
+    );
+  expect(collectionHrefs.length).toBeGreaterThanOrEqual(18);
+
+  for (const href of collectionHrefs) {
+    const response = await page.goto(href);
+    expect(response?.status(), href).toBeLessThan(400);
+    await expect(page.locator("main h1")).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+
+    const products = page.locator('[data-banner-context-kind="item"]');
+    const productCount = await products.count();
+    expect(productCount, href).toBeGreaterThan(0);
+    await products.first().evaluate((element) => {
+      window.scrollTo(0, (element as HTMLElement).offsetTop + 80);
+    });
+
+    if (productCount > 1) {
+      await expect(page.locator(".mcc-scroll-collection-nav")).toBeVisible();
+      await expectContextPanelBelowHeader(page);
+    } else {
+      await expect(page.locator(".mcc-scroll-collection-nav")).toHaveCount(0);
+    }
+  }
+
+  expect(
+    pageErrors.filter(
+      (message) =>
+        !message.includes("/__manifest?") ||
+        !message.includes("access control checks")
+    )
+  ).toEqual([]);
+});
+
 test("the fixed product navigator loops at both ends", async ({ page }) => {
   await page.goto("/collections/molly");
   await acceptCookies(page);
@@ -135,11 +267,12 @@ test("the fixed product navigator loops at both ends", async ({ page }) => {
     "aria-label",
     `Nästa produkt: ${firstTitle}`
   );
+  await expectContextPanelBelowHeader(page);
 
   for (const link of [previous, next]) {
     const box = await link.boundingBox();
     expect(box).not.toBeNull();
-    expect(box!.height).toBeGreaterThanOrEqual(42);
+    expect(box!.height).toBeGreaterThanOrEqual(56);
   }
 
   await next.tap();

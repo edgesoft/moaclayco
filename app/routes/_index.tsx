@@ -268,19 +268,43 @@ function CollectionScene({
   index: number;
   total: number;
 }) {
+  const sectionRef = useRef<HTMLElement>(null);
   const reduceMotion = useReducedMotion();
   const layout = index % 3;
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start end", "end start"],
+  });
+  const mediaParallaxY = useTransform(
+    scrollYProgress,
+    [0, 0.5, 1],
+    layout === 1 ? [58, 0, -52] : [-52, 0, 58]
+  );
+  const mediaParallaxScale = useTransform(
+    scrollYProgress,
+    [0, 0.5, 1],
+    [1.085, 1.015, 1.07]
+  );
+  const copyParallaxX = useTransform(
+    scrollYProgress,
+    [0, 0.5, 1],
+    layout === 1 ? [44, 0, -18] : [-44, 0, 18]
+  );
+  const copyParallaxY = useTransform(
+    scrollYProgress,
+    [0, 0.5, 1],
+    [34, 0, -24]
+  );
+  const copyOpacity = useTransform(
+    scrollYProgress,
+    [0, 0.16, 0.84, 1],
+    [0.56, 1, 1, 0.76]
+  );
   const imageEntrance = [
     { scale: 1.14, x: "11%", rotate: 1.1 },
     { scale: 1.14, x: "-11%", rotate: -1.1 },
     { scale: 1.18, y: "7%", rotate: 1.4 },
   ][layout];
-  const copyEntrance = [
-    { x: -56, y: 12 },
-    { x: 56, y: 12 },
-    { x: -24, y: 52 },
-  ][layout];
-
   return (
     <section
       aria-label={`Collection ${collection.headline}`}
@@ -289,6 +313,7 @@ function CollectionScene({
       data-banner-context-href={`/collections/${collection.shortUrl}`}
       data-banner-context-kind="collection"
       data-banner-context-title={collection.headline}
+      ref={sectionRef}
     >
       <div className="mcc-collection-scene__stage">
         <div className="mcc-collection-scene__progress" aria-hidden="true">
@@ -303,29 +328,43 @@ function CollectionScene({
           prefetch="intent"
           to={`/collections/${collection.shortUrl}`}
         >
-          <motion.img
-            alt={collection.headline}
-            initial={reduceMotion ? false : imageEntrance}
-            loading={index < 2 ? "eager" : "lazy"}
-            sizes="(max-width: 767px) 94vw, 68vw"
-            src={imageWithWidth(collection.image, 1000)}
-            srcSet={`
-              ${imageWithWidth(collection.image, 480)} 480w,
-              ${imageWithWidth(collection.image, 700)} 700w,
-              ${imageWithWidth(collection.image, 1000)} 1000w
-            `}
-            transition={{ duration: 0.82, ease: [0.22, 1, 0.36, 1] }}
-            viewport={{ amount: 0.18, once: true }}
-            whileInView={{ rotate: 0, scale: 1, x: 0, y: 0 }}
-          />
+          <motion.span
+            className="mcc-collection-scene__parallax"
+            style={
+              reduceMotion
+                ? undefined
+                : { scale: mediaParallaxScale, y: mediaParallaxY }
+            }
+          >
+            <motion.img
+              alt={collection.headline}
+              initial={reduceMotion ? false : imageEntrance}
+              loading={index < 2 ? "eager" : "lazy"}
+              sizes="(max-width: 767px) 94vw, 68vw"
+              src={imageWithWidth(collection.image, 1000)}
+              srcSet={`
+                ${imageWithWidth(collection.image, 480)} 480w,
+                ${imageWithWidth(collection.image, 700)} 700w,
+                ${imageWithWidth(collection.image, 1000)} 1000w
+              `}
+              transition={{ duration: 0.82, ease: [0.22, 1, 0.36, 1] }}
+              viewport={{ amount: 0.18, once: true }}
+              whileInView={{ rotate: 0, scale: 1, x: 0, y: 0 }}
+            />
+          </motion.span>
         </Link>
 
         <motion.div
           className="mcc-collection-scene__copy"
-          initial={reduceMotion ? false : copyEntrance}
-          transition={{ duration: 0.56, ease: [0.22, 1, 0.36, 1] }}
-          viewport={{ amount: 0.2, once: true }}
-          whileInView={{ x: 0, y: 0 }}
+          style={
+            reduceMotion
+              ? undefined
+              : {
+                  opacity: copyOpacity,
+                  x: copyParallaxX,
+                  y: copyParallaxY,
+                }
+          }
         >
           <p className="mcc-kicker">Collection</p>
           <h2>{collection.headline}</h2>
