@@ -11,12 +11,10 @@ import {
 import { motion, useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCart } from "react-use-cart";
-import { useSwipeable } from "react-swipeable";
-import ClientOnly from "~/components/ClientOnly";
 import ArrowIcon from "~/components/ArrowIcon";
-import Magnifier from "~/components/item/magnifier";
 import Loader from "~/components/loader";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
+import { useInlineImageZoom } from "~/hooks/useInlineImageZoom";
 import type { IndexProps } from "~/root";
 import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
@@ -107,18 +105,19 @@ function Product({
   );
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [imageAttempt, setImageAttempt] = useState(0);
+  const [detailImage, setDetailImage] = useState<string>();
   const [preloadDirection, setPreloadDirection] = useState<1 | -1>(1);
   const [loadedImage, setLoadedImage] = useState<string | null>(null);
   const [nearViewport, setNearViewport] = useState(position < 2);
   const [selectedAdditions, setSelectedAdditions] = useState<number[]>([]);
   const [additionGlowKey, setAdditionGlowKey] = useState(0);
-  const [showImage, setShowImage] = useState<string>();
   const [added, setAdded] = useState(false);
   const articleRef = useRef<HTMLElement>(null);
   const cachedImageFrameRef = useRef<number | null>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const handledErrorAttemptRef = useRef<string | null>(null);
   const preloadRef = useRef<HTMLImageElement[]>([]);
+  const resetInlineZoomRef = useRef<() => void>(() => undefined);
   const retryCountsRef = useRef<Map<string, number>>(new Map());
   const retryTimeoutRef = useRef<number | undefined>(undefined);
   const { addItem, getItem } = useCart();
@@ -192,22 +191,25 @@ function Product({
     return () => window.clearTimeout(resetTimer);
   }, [added]);
 
-  const previousImage = () => {
+  const previousImage = useCallback(() => {
     if (images.length < 2) return;
+    resetInlineZoomRef.current();
     setPreloadDirection(-1);
     setSelectedImageIndex(
       currentIndex === 0 ? images.length - 1 : currentIndex - 1
     );
-  };
+  }, [currentIndex, images.length]);
 
-  const nextImage = () => {
+  const nextImage = useCallback(() => {
     if (images.length < 2) return;
+    resetInlineZoomRef.current();
     setPreloadDirection(1);
     setSelectedImageIndex((currentIndex + 1) % images.length);
-  };
+  }, [currentIndex, images.length]);
 
   const discardImage = useCallback(() => {
     if (!activeImage) return;
+    resetInlineZoomRef.current();
 
     if (retryTimeoutRef.current) {
       window.clearTimeout(retryTimeoutRef.current);
@@ -297,14 +299,19 @@ function Product({
     [activeImage]
   );
 
-  const swipeHandlers = useSwipeable({
-    delta: 28,
-    onSwipedLeft: nextImage,
-    onSwipedRight: previousImage,
-    preventScrollOnSwipe: false,
-    trackMouse: true,
-    trackTouch: true,
+  const handleZoomIntent = useCallback(() => {
+    if (activeImage) setDetailImage(activeImage);
+  }, [activeImage]);
+  const inlineZoom = useInlineImageZoom({
+    imageKey: activeImage,
+    onNext: nextImage,
+    onPrevious: previousImage,
+    onZoomIntent: handleZoomIntent,
   });
+  useEffect(() => {
+    resetInlineZoomRef.current = inlineZoom.resetView;
+  }, [inlineZoom.resetView]);
+  const detailRequested = detailImage === activeImage;
 
   const additionsTotal = selectedAdditions.reduce(
     (total, additionIndex) =>
@@ -365,13 +372,35 @@ function Product({
             transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
             viewport={{ amount: 0.12, once: true }}
             whileInView={{ opacity: 1, y: 0 }}
-            {...swipeHandlers}
           >
             <div
               aria-busy={loadedImage !== activeImage}
+              aria-describedby={`mcc-image-help-${item._id}`}
+              aria-label={`${item.headline}, interaktiv produktbild`}
               className={`mcc-shop-item__image-stage${
                 loadedImage === activeImage ? " is-loaded" : ""
-              }`}
+              }${inlineZoom.isHoverPreview ? " is-hover-preview" : ""}${
+                inlineZoom.isZoomed ? " is-zoomed" : ""
+              }${inlineZoom.isInteracting ? " is-interacting" : ""}`}
+              data-zoom-mode={
+                inlineZoom.isZoomed
+                  ? "zoomed"
+                  : inlineZoom.isHoverPreview
+                  ? "preview"
+                  : "base"
+              }
+              data-zoom-scale={inlineZoom.scale.toFixed(2)}
+              onKeyDown={inlineZoom.handleKeyDown}
+              onPointerCancel={inlineZoom.handlePointerCancel}
+              onPointerDown={inlineZoom.handlePointerDown}
+              onPointerEnter={inlineZoom.handlePointerEnter}
+              onPointerLeave={inlineZoom.handlePointerLeave}
+              onPointerMove={inlineZoom.handlePointerMove}
+              onPointerUp={inlineZoom.handlePointerUp}
+              ref={inlineZoom.stageRef}
+              role="button"
+              aria-pressed={inlineZoom.isZoomed}
+              tabIndex={0}
             >
               <img
                 alt={`${item.headline}, bild ${currentIndex + 1} av ${
@@ -394,10 +423,10 @@ function Product({
                 src={
                   useOriginalImage
                     ? activeImage
-                    : imageWithWidth(activeImage, 1100)
+                    : imageWithWidth(activeImage, detailRequested ? 2200 : 1100)
                 }
                 srcSet={
-                  !useOriginalImage
+                  !useOriginalImage && !detailRequested
                     ? `${imageWithWidth(
                         activeImage,
                         480
@@ -407,7 +436,15 @@ function Product({
                       )} 760w, ${imageWithWidth(activeImage, 1100)} 1100w`
                     : undefined
                 }
+                style={inlineZoom.imageStyle}
               />
+              <span
+                className="mcc-visually-hidden"
+                id={`mcc-image-help-${item._id}`}
+              >
+                Svep åt sidan för att byta bild. Nyp eller dubbeltryck för att
+                zooma. När bilden är zoomad drar du för att utforska den.
+              </span>
             </div>
 
             <div className="mcc-shop-item__gallery-meta">
@@ -429,6 +466,7 @@ function Product({
                       }`}
                       key={image}
                       onClick={() => {
+                        inlineZoom.resetView();
                         setPreloadDirection(
                           imageIndex >= currentIndex ? 1 : -1
                         );
@@ -444,18 +482,6 @@ function Product({
                 {String(images.length).padStart(2, "0")}
               </span>
               <div className="mcc-shop-item__gallery-actions">
-                <button
-                  aria-label={`Visa ${item.headline} i större format`}
-                  className="mcc-shop-item__zoom"
-                  onClick={() => setShowImage(activeImage)}
-                  type="button"
-                >
-                  <svg aria-hidden="true" viewBox="0 0 20 20">
-                    <circle cx="8.25" cy="8.25" r="4.75" />
-                    <path d="m11.75 11.75 4 4" />
-                  </svg>
-                </button>
-
                 {images.length > 1 ? (
                   <div className="mcc-shop-item__arrows">
                     <button
@@ -601,21 +627,6 @@ function Product({
           </details>
         ) : null}
       </motion.div>
-
-      <ClientOnly fallback={null}>
-        {() => (
-          <Magnifier
-            alt={`${item.headline} i större format`}
-            close={setShowImage}
-            currentIndex={currentIndex}
-            images={showImage ? images : []}
-            onIndexChange={(nextIndex) => {
-              setPreloadDirection(nextIndex >= currentIndex ? 1 : -1);
-              setSelectedImageIndex(nextIndex);
-            }}
-          />
-        )}
-      </ClientOnly>
     </article>
   );
 }
