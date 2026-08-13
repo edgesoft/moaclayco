@@ -2943,8 +2943,9 @@ input[type="search"]::-ms-reveal {
   }
 
   .mcc-navigation-mobile-title {
-    flex: 0 1 auto;
-    max-width: 9rem;
+    flex: 1 1 auto;
+    max-width: 12rem;
+    min-width: 0;
     overflow: hidden;
     transition: max-width 240ms cubic-bezier(0.22, 1, 0.36, 1),
       opacity 150ms ease, transform 220ms ease;

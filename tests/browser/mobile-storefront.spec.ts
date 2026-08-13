@@ -82,6 +82,37 @@ test("the menu opens across the full viewport in tablet WebKit layout", async ({
   await expect(page.locator(".mcc-navigation-layer")).toHaveCount(0);
 });
 
+test("the full wordmark remains visible in the Pixel 10 menu", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto("/");
+  await acceptCookies(page);
+
+  await page.getByRole("button", { name: "Öppna meny" }).tap();
+  const title = page.locator(".mcc-navigation-mobile-title");
+  const wordmark = title.getByRole("img", { name: "Moa Clay Co" });
+  const co = title.locator(".mcc-navigation-wordmark__co");
+
+  await expect(wordmark).toBeVisible();
+  await expect(co).toHaveText("Co");
+  await expect
+    .poll(() =>
+      title.evaluate((element) => {
+        const titleRect = element.getBoundingClientRect();
+        const coElement = element.querySelector(
+          ".mcc-navigation-wordmark__co"
+        )!;
+        const coText = document.createRange();
+        coText.selectNodeContents(coElement);
+        const coTextRect = coText.getBoundingClientRect();
+
+        return titleRect.right - coTextRect.right;
+      })
+    )
+    .toBeGreaterThanOrEqual(16);
+});
+
 test("a touch user can open a Collection", async ({ page }) => {
   await page.goto("/");
   await acceptCookies(page);
