@@ -206,10 +206,18 @@ function VerificationDetails({ verification }: { verification: VerificationProps
                     <span className="min-w-0 truncate">{accountName(entry.account)}</span>
                   </span>
                   <span className="text-right tabular-nums">
-                    {entry.debit ? money.format(entry.debit) : "—"}
+                    {Number(entry.debit || 0) !== 0 ? (
+                      money.format(entry.debit)
+                    ) : (
+                      <span className="sr-only">0 kr</span>
+                    )}
                   </span>
                   <span className="text-right tabular-nums">
-                    {entry.credit ? money.format(entry.credit) : "—"}
+                    {Number(entry.credit || 0) !== 0 ? (
+                      money.format(entry.credit)
+                    ) : (
+                      <span className="sr-only">0 kr</span>
+                    )}
                   </span>
                 </div>
               ))}
@@ -305,7 +313,7 @@ export function ListItemVerification({
 
   return (
     <Fragment>
-      <tr className={`transition hover:bg-slate-50 ${expanded ? "bg-slate-50" : "bg-white"}`}>
+      <tr className={`transition hover:bg-slate-50 ${expanded ? "bg-stone-50" : "bg-white"}`}>
         <td className="px-5 py-4 align-middle">
           <span className="accounting-entry-number">
             A{verification.verificationNumber}
@@ -336,20 +344,20 @@ export function ListItemVerification({
         >
           {isZeroVatReport ? "Nollrapport" : money.format(debit)}
         </td>
-        <td className="px-3 py-4 text-right">
+        <td className="py-4 pl-2 pr-6 text-right xl:pr-8">
           <button
             type="button"
             aria-label={`${expanded ? "Dölj" : "Visa"} verifikation A${verification.verificationNumber}`}
             aria-expanded={expanded}
             onClick={() => setExpanded((value) => !value)}
-            className={`accounting-row-toggle ${expanded ? "accounting-row-toggle--open" : ""}`}
+            className={`accounting-month-toggle bg-transparent p-0 ${expanded ? "accounting-month-toggle--open" : ""}`}
           >
             <PlusMinusIcon operation={expanded ? "minus" : "plus"} />
           </button>
         </td>
       </tr>
       {expanded ? (
-        <tr className="bg-slate-50">
+        <tr className="bg-stone-50">
           <td colSpan={6} className="px-5 pb-5 pt-1">
             {!balanced ? (
               <p className="mb-3 text-xs font-bold text-red-700">Obalanserad verifikation</p>

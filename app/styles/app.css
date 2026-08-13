@@ -1702,33 +1702,6 @@ input[type="search"]::-ms-reveal {
   min-width: 3.25rem;
 }
 
-.accounting-row-toggle {
-  align-items: center;
-  background: #fffdf9 !important;
-  border: 1px solid var(--accounting-line);
-  border-radius: 0.65rem;
-  color: #aaa69e;
-  display: inline-flex;
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  font-size: 1.05rem;
-  font-weight: 500;
-  height: 2.5rem;
-  justify-content: center;
-  transition: background-color 160ms ease, border-color 160ms ease,
-    color 160ms ease;
-  width: 2.5rem;
-}
-
-.accounting-row-toggle:hover {
-  background: #fbf3ef !important;
-  border-color: #c58a79;
-  color: var(--accounting-accent-dark);
-}
-
-.accounting-row-toggle--open {
-  color: var(--accounting-accent);
-}
-
 .accounting-inline-action {
   align-items: center;
   color: var(--accounting-accent-dark);
