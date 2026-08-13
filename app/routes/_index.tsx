@@ -15,12 +15,11 @@ import {
 import { useEffect, useRef } from "react";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
-import { useTheme, themes } from "~/components/Theme";
+import { theme } from "~/components/Theme";
 import useMediaQuery from "~/hooks/useMediaQuery";
 import { Items } from "~/schemas/items";
 import type { CollectionProps, ItemProps } from "~/types";
 import type { IndexProps } from "~/root";
-import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
 import { landingItemProjection } from "~/utils/queryProjections.server";
 
@@ -31,10 +30,9 @@ type LandingLoaderData = {
 const imageWithWidth = (image: string, width: number) =>
   `${image}${image.includes("?") ? "&" : "?"}width=${width}`;
 
-export const loader: LoaderFunction = async ({ request }) => {
-  const domain = getDomain(request);
+export const loader: LoaderFunction = async () => {
   const latestItems = toLoaderData(
-    await Items.find({ domain: domain?.domain })
+    await Items.find({})
       .select(landingItemProjection)
       .slice("images", 2)
       .sort({ _id: -1 })
@@ -52,11 +50,7 @@ export const loader: LoaderFunction = async ({ request }) => {
   );
 };
 
-export const meta: MetaFunction = ({ matches }) => {
-  const rootData = matches[0].loaderData as IndexProps;
-  const domain = getDomain(rootData.hostname);
-  const theme = themes[domain?.domain ?? "moaclayco"];
-
+export const meta: MetaFunction = () => {
   return [
     {
       title: `${theme.longName} — färg, form och personlighet`,
@@ -458,7 +452,6 @@ export default function Index() {
   const { latestItems } = useLoaderData<LandingLoaderData>();
   const revalidator = useRevalidator();
   const attemptedEmptyDataRepairRef = useRef(false);
-  const theme = useTheme();
   const reduceMotion = useReducedMotion();
   const heroCollections = collections.slice(0, 2);
   const featuredItem =

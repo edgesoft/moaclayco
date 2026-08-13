@@ -1,6 +1,5 @@
 import { ActionFunction, data as json } from "react-router";
 import { Discounts } from "../schemas/discounts";
-import { getDomain } from "~/utils/domain";
 import {
   MAX_STANDARD_FORM_REQUEST_SIZE,
   parseFormDataWithinLimit,
@@ -8,11 +7,6 @@ import {
 } from "~/utils/requestBody.server";
 
 export let action: ActionFunction = async ({ request }) => {
-  const domain = getDomain(request);
-  if (!domain) {
-    return json({ code: "", percentage: null, balance: 0 });
-  }
-
   let body: FormData;
   try {
     body = await parseFormDataWithinLimit(
@@ -35,7 +29,6 @@ export let action: ActionFunction = async ({ request }) => {
 
   const now = new Date();
   const discount: any = await Discounts.findOne({
-    domain: domain.domain,
     code,
     balance: { $gt: 0 },
     percentage: { $gt: 0, $lte: 100 },

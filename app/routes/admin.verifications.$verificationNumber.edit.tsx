@@ -29,7 +29,6 @@ import {
   accountingYear,
   parseAccountingDate,
 } from "~/utils/accountingDates";
-import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
 import {
   MAX_STANDARD_FORM_REQUEST_SIZE,
@@ -75,15 +74,12 @@ export const loader: LoaderFunction = async ({ request, params }) => {
   const user = await auth.isAuthenticated(request, {
     failureRedirect: "/login",
   });
-  const domain = getDomain(request);
-  if (!domain) throw new Response("Okänd domän", { status: 404 });
   const verificationNumber = verificationNumberFrom(params.verificationNumber);
   if (!verificationNumber) {
     throw new Response("Ogiltigt verifikationsnummer", { status: 400 });
   }
 
   const verification = await Verifications.findOne({
-    domain: domain.domain,
     verificationNumber,
   })
     .select(
@@ -95,7 +91,6 @@ export const loader: LoaderFunction = async ({ request, params }) => {
 
   const verificationDate = new Date(verification.verificationDate);
   let policy = await getVerificationEditPolicy({
-    domain: domain.domain,
     verification: {
       recordType: verification.recordType,
       verificationDate,
@@ -132,8 +127,6 @@ export const action: ActionFunction = async ({ request, params }) => {
   const user = await auth.isAuthenticated(request, {
     failureRedirect: "/login",
   });
-  const domain = getDomain(request);
-  if (!domain) throw new Response("Okänd domän", { status: 404 });
   const verificationNumber = verificationNumberFrom(params.verificationNumber);
   if (!verificationNumber) {
     return json({ error: "Ogiltigt verifikationsnummer" }, { status: 400 });
@@ -177,7 +170,6 @@ export const action: ActionFunction = async ({ request, params }) => {
 
   try {
     await editVerification({
-      domain: domain.domain,
       verificationNumber,
       expectedYear: user.fiscalYear,
       description,

@@ -12,7 +12,6 @@ import { Verifications } from "~/schemas/verifications";
 import { auth } from "~/services/auth.server";
 import { ReportType } from "~/types";
 import { accounts } from "~/utils/accounts";
-import { getDomain } from "~/utils/domain";
 import { AccountingDateField } from "~/components/admin/AccountingDateField";
 import ArrowIcon from "~/components/ArrowIcon";
 import {
@@ -33,11 +32,9 @@ const normalizeDateParameter = (value: string | null, fallback: string) => {
 
 export const loader: LoaderFunction = async ({ request }) => {
   const url = new URL(request.url);
-  const domain = getDomain(request);
   const user = await auth.isAuthenticated(request, {
     failureRedirect: "/login",
   });
-  if (!domain) throw new Response("Okänd domän", { status: 404 });
   const report = url.searchParams.get("report") === "balance" ? "balance" : "income";
 
   const fromValue = normalizeDateParameter(
@@ -74,7 +71,6 @@ export const loader: LoaderFunction = async ({ request }) => {
           $gte: periodBounds.start,
           $lt: periodBounds.end,
         },
-        domain: domain.domain,
       },
     },
     { $project: { journalEntries: 1 } },
@@ -425,19 +421,31 @@ export default function FinancialOverview() {
         )}
       </section>
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs font-medium text-slate-500">
           {isIncomeReport ? `Period ${dateForInput(from)}–${dateForInput(to)}` : `Balans per ${dateForInput(to)}`}
         </p>
-        <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-600">
-          <input
-            type="checkbox"
-            checked={showZeroAccounts}
-            onChange={(event) => setShowZeroAccounts(event.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600"
+        <button
+          type="button"
+          role="switch"
+          aria-checked={showZeroAccounts}
+          onClick={() => setShowZeroAccounts((current) => !current)}
+          className={`group inline-flex min-h-9 items-center gap-2.5 rounded-full border px-3.5 text-[11px] font-bold tracking-[0.02em] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c98d7b] focus-visible:ring-offset-2 ${
+            showZeroAccounts
+              ? "border-[#c98d7b] bg-[#f8e9e4] text-[#824b3c]"
+              : "border-stone-300 bg-transparent text-slate-600 hover:border-[#c9a99e] hover:bg-[#fbf4f1] hover:text-[#824b3c]"
+          }`}
+        >
+          <span
+            aria-hidden="true"
+            className={`h-1.5 rounded-full transition-all duration-200 ${
+              showZeroAccounts
+                ? "w-5 bg-[#b86e59]"
+                : "w-1.5 bg-stone-300 group-hover:bg-[#c98d7b]"
+            }`}
           />
           Visa nollkonton
-        </label>
+        </button>
       </div>
 
       {unknownAccountTotals.length ? (

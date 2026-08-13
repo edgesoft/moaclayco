@@ -2,9 +2,11 @@
 
 ## Omfattning
 
-Migreringen gäller endast dokument med `domain=moaclayco`. Den läser eller
-skriver inte SGWoods-data. Fältet `domain` finns fortfarande kvar i appens
-datamodell; detta är inte en domänmigrering.
+2050-migreringen genomfördes när datamodellen fortfarande var domänavgränsad
+och omfattade då endast Moa Clay Co. Efter övergången till en enda butik läser
+verktyget samtliga verifikationer; det avbryter om äldre data innehåller en
+annan butik. Själva borttagningen av de äldre `domain`-fälten dokumenteras i
+`docs/single-store-mongo-migration.md`.
 
 Konto 2050 är inte ett tillgängligt konto i appen. Nya verifikationer med
 2050 stoppas av valideringen. Produktionsverktyget nämner kontot endast för att
@@ -21,7 +23,7 @@ node tools/refresh-moaclayco-stage.mjs --apply
 node tools/refresh-moaclayco-stage.mjs --verify
 ```
 
-Endast följande domänavgränsade samlingar kopierades:
+Följande butikssamlingar kopierades:
 
 | Samling | Antal dokument |
 | --- | ---: |
@@ -82,12 +84,10 @@ Slutkontrollen av `storm-stage` gav:
 Det finns äldre nollrader (`debet=0`, `kredit=0`) i production-underlaget,
 främst i momsrapporter. De berörs inte av denna avgränsade 2050-migrering.
 
-## Production — inte utförd
+## Production — utförd 2026-08-13
 
-Production har inte skrivits till. En skrivskyddad dry-run har kontrollerat att
-samma migrering ger samma slutliga antal och kontosaldon som i stage.
-
-Kör dry-run igen om production har ändrats:
+En ny skrivskyddad dry-run bekräftade den dokumenterade fördelningen 16/6/10/10,
+ett slutantal på 230 verifikationer och 0 rader på konto 2050:
 
 ```sh
 node --env-file=.env.production.local --import=tsx \
@@ -95,7 +95,7 @@ node --env-file=.env.production.local --import=tsx \
   --target=production
 ```
 
-Efter uttryckligt godkännande körs production med både skrivflagga och separat
+Production migrerades därefter med både skrivflagga och separat
 production-spärr:
 
 ```sh
@@ -105,6 +105,19 @@ node --env-file=.env.production.local --import=tsx \
   --apply \
   --confirm-production=remove-2050
 ```
+
+Efterkontrollen gav:
+
+- 230 verifikationer.
+- 0 journalrader på konto 2050.
+- 0 obalanserade verifikationer.
+- 0 dubbla verifikationsnummer.
+- Samtliga 42 originalverifikationer låg på rätt konto för sin händelsetyp.
+- Verifikationsräknaren på A238.
+
+Production saknade den valfria tillfälliga A239. De sex gamla rättelserna A231,
+A232, A233, A235, A236 och A237 samt den felaktiga A229 togs bort. A229:s
+underlag flyttades till A238.
 
 Verktyget avbryter om databasnamnet, källverifikationerna, de sex gamla
 rättelserna, A229, A238, verifikationsräknaren eller den förväntade

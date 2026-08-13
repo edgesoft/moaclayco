@@ -6,7 +6,6 @@ import { Items } from "~/schemas/items";
 import { auth } from "~/services/auth.server";
 import { s3Client } from "~/services/s3.server";
 import type { ItemProps } from "~/types";
-import { getDomain } from "~/utils/domain";
 import { itemImageStorageKey } from "~/utils/itemImageStorage.server";
 import {
   MAX_STANDARD_FORM_REQUEST_SIZE,
@@ -19,8 +18,7 @@ const AWS_ITEM_PATH = process.env.AWS_ITEM_PATH;
 async function deleteFileFromS3(
   id: string | null,
   collection: string,
-  requestedFileName: string,
-  domain: string
+  requestedFileName: string
 ) {
   if (!AWS_ITEM_PATH) return false;
   const fileName = requestedFileName.split("/").pop()?.split("?")[0];
@@ -30,7 +28,6 @@ async function deleteFileFromS3(
     ? await Items.findOne({
         _id: id,
         collectionRef: collection,
-        domain,
       }).lean<ItemProps>()
     : null;
 
@@ -45,7 +42,7 @@ async function deleteFileFromS3(
     if (!key) return false;
 
     const updateResult = await Items.updateOne(
-      { _id: id, collectionRef: collection, domain, images: image },
+      { _id: id, collectionRef: collection, images: image },
       { $pull: { images: image } }
     );
     if (updateResult.modifiedCount !== 1) return false;
@@ -76,8 +73,6 @@ async function deleteFileFromS3(
 
 export const action: ActionFunction = async ({ request }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
-  const domain = getDomain(request);
-  if (!domain) return json({ error: "Okänd domän." }, { status: 400 });
 
   let formData: FormData;
   try {
@@ -102,7 +97,6 @@ export const action: ActionFunction = async ({ request }) => {
   }
 
   const collectionExists = await Collections.exists({
-    domain: domain.domain,
     shortUrl: collection,
   });
   if (!collectionExists) {
@@ -110,12 +104,7 @@ export const action: ActionFunction = async ({ request }) => {
   }
 
   try {
-    const success = await deleteFileFromS3(
-      id,
-      collection,
-      imageName,
-      domain.domain
-    );
+    const success = await deleteFileFromS3(id, collection, imageName);
     return success
       ? json({ success: true })
       : json({ error: "Bilden kunde inte hittas.", success: false }, { status: 404 });

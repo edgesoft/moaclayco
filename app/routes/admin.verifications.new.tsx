@@ -23,7 +23,6 @@ import Select from "react-select";
 import { accounts } from "~/utils/accounts";
 import { Verifications } from "~/schemas/verifications";
 import ClientOnly from "~/components/ClientOnly";
-import { getDomain } from "~/utils/domain";
 import { auth } from "~/services/auth.server";
 import {
   AccountingYearClosedError,
@@ -336,7 +335,6 @@ export const action: ActionFunction = async ({ request }) => {
   const user = await auth.isAuthenticated(request, {
     failureRedirect: "/login",
   });
-  const domain = getDomain(request);
   let requestFormData: globalThis.FormData;
   try {
     requestFormData = await parseFormDataWithinLimit(
@@ -353,7 +351,6 @@ export const action: ActionFunction = async ({ request }) => {
     throw error;
   }
 
-  if (!domain) throw new Error("Could not find domain");
   const description = requestFormData.get("description");
   const verificationDate = requestFormData.get("verificationDate");
   const rawJournalEntries = requestFormData.get("journalEntries");
@@ -457,7 +454,6 @@ export const action: ActionFunction = async ({ request }) => {
     const monthKey = accountingMonthKey(dateForDatabase);
     const isVatRegistered = monthKey
       ? await Verifications.findOne({
-      domain: domain?.domain,
       metadata: { $elemMatch: { key: "vatReport", value: monthKey } },
     })
         .select("_id")
@@ -480,7 +476,7 @@ export const action: ActionFunction = async ({ request }) => {
     }
   }
 
-  await ensureIncomingBalance(domain.domain, verificationYear);
+  await ensureIncomingBalance(verificationYear);
 
   try {
     let uploadedFile: Awaited<ReturnType<typeof uploadVerificationFile>> | null = null;
@@ -493,7 +489,6 @@ export const action: ActionFunction = async ({ request }) => {
         );
       }
       const newVerification = await createVerification({
-        domain: domain?.domain,
         description: result.data.description,
         verificationDate: dateForDatabase,
         journalEntries: result.data.journalEntries,

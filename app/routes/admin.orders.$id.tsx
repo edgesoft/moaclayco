@@ -5,10 +5,12 @@ import {
   MetaFunction,
   useFetcher,
   useLoaderData,
+  useLocation,
   useNavigate,
 } from "react-router";
 import { Orders } from "../schemas/orders";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { auth } from "~/services/auth.server";
 import stripeClient from "../stripeClient";
 import { sendOrderEmail } from "~/services/order-email.server";
@@ -16,7 +18,6 @@ import { Template } from "~/components/mail/order";
 import { Order } from "~/types";
 import { Verifications } from "~/schemas/verifications";
 import { createVerification } from "~/services/verification.server";
-import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
@@ -75,11 +76,9 @@ const formatDateTime = (value?: Date | string) => {
 
 export let loader: LoaderFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
-  const domain = getDomain(request);
 
   const order = (await Orders.findOne({
     _id: params.id,
-    domain: domain?.domain,
   })
     .select(orderDetailProjection)
     .lean()
@@ -90,7 +89,6 @@ export let loader: LoaderFunction = async ({ request, params }) => {
   const verification = (await Verifications.findOne({
     "metadata.key": "orderId",
     "metadata.value": params.id,
-    domain: order.domain
   })
     .select("verificationNumber")
     .lean()) as unknown as { verificationNumber: number } | null;
@@ -139,10 +137,6 @@ export let meta: MetaFunction = ({ loaderData }) => {
 
 export let action: ActionFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
-  const domain = getDomain(request);
-  if (!domain) {
-    return json({ error: "Okänd domän" }, { status: 400 });
-  }
 
   let bodyText: string;
   try {
@@ -162,7 +156,6 @@ export let action: ActionFunction = async ({ request, params }) => {
   if (type === "verification") {
     const order = await Orders.findOne({
       _id: params.id,
-      domain: domain.domain,
     }).lean<Order>();
 
     if (!order) return {}
@@ -198,7 +191,6 @@ export let action: ActionFunction = async ({ request, params }) => {
         const amountExVat = Math.round((totalAmount - vatAmount) * 100) / 100;
 
         await createVerification({
-          domain: order.domain,
           idempotencyKey: `stripe:payment:${intent.id}`,
           verificationDate: new Date(charge.created * 1000),
           description: `Order id: ${order._id}\r\nPayment intent id: ${intent.id}`,
@@ -242,7 +234,6 @@ export let action: ActionFunction = async ({ request, params }) => {
         const exclVat = order.totalSum - Number(vat)
 
         await createVerification({
-          domain: order.domain,
           idempotencyKey: `manual-order-accounting:${order._id}`,
           verificationDate: new Date(order.manualOrderAt),
           description: `Order id: ${order._id}`,
@@ -281,7 +272,6 @@ export let action: ActionFunction = async ({ request, params }) => {
   const data = shippingValue === "true";
   const order = await Orders.findOne({
     _id: params.id,
-    domain: domain.domain,
   }).lean<Order>();
 
   if (order) {
@@ -296,7 +286,6 @@ export let action: ActionFunction = async ({ request, params }) => {
       await Orders.updateOne(
         {
           _id: params.id,
-          domain: domain.domain,
         },
         { $set: { status: "SHIPPED", shippingEmailAt } }
       );
@@ -304,7 +293,6 @@ export let action: ActionFunction = async ({ request, params }) => {
       await Orders.updateOne(
         {
           _id: params.id,
-          domain: domain.domain,
         },
         {
           $set: {
@@ -342,7 +330,13 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
   } = data;
   const [on, setOn] = useState(status === "SHIPPED");
   const orderFetcher = useFetcher<{ error?: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
+  const swipeStartRef = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+  } | null>(null);
   const orderDate = webhookAt ?? manualOrderAt;
   const discountAmount = discount?.amount ?? 0;
   const productSubtotal = Math.max(0, totalSum - freightCost + discountAmount);
@@ -358,8 +352,78 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
   const creatingVerification =
     orderFetcher.state !== "idle" && pendingAction === "verification";
 
-  const closeDetail = () => {
-    navigate("/admin/orders", { preventScrollReset: true });
+  const requestedReturnTo = (location.state as { returnTo?: unknown } | null)
+    ?.returnTo;
+  const returnTo =
+    typeof requestedReturnTo === "string" &&
+    /^\/admin\/verifications(?:[/?#]|$)/.test(requestedReturnTo)
+      ? requestedReturnTo
+      : null;
+
+  const closeDetail = useCallback(() => {
+    navigate(returnTo || "/admin/orders", {
+      preventScrollReset: true,
+      replace: Boolean(returnTo),
+    });
+  }, [navigate, returnTo]);
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (
+        event.key !== "Escape" ||
+        event.defaultPrevented ||
+        !window.matchMedia("(min-width: 960px)").matches
+      ) {
+        return;
+      }
+
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target instanceof HTMLSelectElement)
+      ) {
+        return;
+      }
+
+      closeDetail();
+    };
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [closeDetail]);
+
+  const beginSwipe = (event: ReactPointerEvent<HTMLElement>) => {
+    if (
+      !event.isPrimary ||
+      !window.matchMedia("(max-width: 959px)").matches
+    ) {
+      return;
+    }
+
+    swipeStartRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const finishSwipe = (event: ReactPointerEvent<HTMLElement>) => {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!start || start.pointerId !== event.pointerId) return;
+
+    const horizontalDistance = event.clientX - start.x;
+    const verticalDistance = event.clientY - start.y;
+    if (
+      horizontalDistance <= -72 &&
+      Math.abs(horizontalDistance) > Math.abs(verticalDistance) * 1.25
+    ) {
+      closeDetail();
+    }
   };
 
   const updateShipment = () => {
@@ -372,12 +436,25 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
   };
 
   return (
-    <article className="order-detail">
+    <article
+      className="order-detail"
+      onPointerCancel={() => {
+        swipeStartRef.current = null;
+      }}
+      onPointerDown={beginSwipe}
+      onPointerUp={finishSwipe}
+    >
       <header className="order-detail-header">
         <div className="order-detail-header__topline">
-          <button className="order-detail-back" onClick={closeDetail} type="button">
-            <span aria-hidden="true"><ArrowIcon direction="left" /></span>
-            Till orderlistan
+          <button
+            className="order-detail-back"
+            onClick={closeDetail}
+            type="button"
+          >
+            <span aria-hidden="true">
+              <ArrowIcon direction="left" />
+            </span>
+            Tillbaka
           </button>
           <div className="order-detail-context">
             <span>Vald order</span>

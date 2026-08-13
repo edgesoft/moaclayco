@@ -2,9 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Verifications } from "../app/schemas/verifications";
 import { AccountingYears } from "../app/schemas/accounting-years";
+import { Collections } from "../app/schemas/collections";
+import { Discounts } from "../app/schemas/discounts";
+import { Items } from "../app/schemas/items";
+import { Orders } from "../app/schemas/orders";
+import { VerificationCounters } from "../app/schemas/verification-counters";
 
 const baseVerification = {
-  domain: "moaclayco",
   description: "Momsdeklaration för April 2026",
   verificationNumber: 1,
   verificationDate: new Date("2026-04-30T12:00:00.000Z"),
@@ -140,16 +144,47 @@ test("keeps an audit record when a verification file is removed", async () => {
 
 test("accounting years only accept controlled open and closed states", async () => {
   const openYear = new AccountingYears({
-    domain: "moaclayco",
     year: 2025,
     status: "open",
   });
   await openYear.validate();
 
   const invalidYear = new AccountingYears({
-    domain: "moaclayco",
     year: 2025,
     status: "archived",
   });
   await assert.rejects(() => invalidYear.validate(), /not a valid enum value/);
+});
+
+test("single-store Mongo schemas and indexes contain no domain key", () => {
+  const models = [
+    AccountingYears,
+    Collections,
+    Discounts,
+    Items,
+    Orders,
+    VerificationCounters,
+    Verifications,
+  ];
+
+  for (const model of models) {
+    assert.equal(
+      model.schema.path("domain"),
+      undefined,
+      `${model.modelName} still has a domain field`
+    );
+    for (const [keys] of model.schema.indexes()) {
+      assert.equal(
+        Object.hasOwn(keys, "domain"),
+        false,
+        `${model.modelName} still has a domain index`
+      );
+    }
+  }
+
+  const counterIndex = VerificationCounters.schema.indexes().find(
+    ([keys]) => keys.key === 1
+  );
+  assert.ok(counterIndex);
+  assert.equal(counterIndex[1].unique, true);
 });

@@ -19,7 +19,6 @@ import type { IndexProps } from "~/root";
 import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
 import type { CollectionProps, ItemProps } from "~/types";
-import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
 import {
   collectionDetailProjection,
@@ -34,19 +33,16 @@ type ItemLoaderProps = {
 const imageWithWidth = (image: string, width: number) =>
   `${image}${image.includes("?") ? "&" : "?"}width=${width}`;
 
-export const loader: LoaderFunction = async ({ params, request }) => {
-  const domain = getDomain(request);
+export const loader: LoaderFunction = async ({ params }) => {
   const [collection, items] = await Promise.all([
     Collections.findOne({
       shortUrl: params.collection,
-      domain: domain?.domain,
     })
       .select(collectionDetailProjection)
       .lean()
       .exec(),
     Items.find({
       collectionRef: params.collection,
-      domain: domain?.domain,
     })
       .select(collectionItemProjection)
       .sort({ _id: -1 })

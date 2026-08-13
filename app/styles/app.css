@@ -7652,14 +7652,11 @@ input[type="search"]::-ms-reveal {
   align-items: center;
   background: rgba(255, 253, 249, 0.96);
   border: 1px solid var(--accounting-line);
-  bottom: 1rem;
   box-shadow: 0 0.8rem 2rem rgba(64, 48, 40, 0.08);
   display: flex;
   gap: 1.5rem;
   justify-content: space-between;
   padding: 1rem 1.15rem;
-  position: sticky;
-  z-index: 8;
 }
 
 .tax-account-complete {
@@ -7793,7 +7790,6 @@ input[type="search"]::-ms-reveal {
     align-items: stretch;
     flex-direction: column;
     gap: 0.8rem;
-    position: static;
   }
 
   .tax-account-submit .accounting-primary-action {

@@ -6,7 +6,6 @@ import { v4 as uuidv4 } from "uuid";
 import { Collections } from "~/schemas/collections";
 import { auth } from "~/services/auth.server";
 import { s3Client } from "~/services/s3.server";
-import { getDomain } from "~/utils/domain";
 import { optimizeImageBuffer } from "~/utils/imageProcessing.server";
 import {
   parseFormDataWithinLimit,
@@ -65,7 +64,6 @@ async function uploadToS3(file: File, collectionRef: string) {
 
 export const action: ActionFunction = async ({ request }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
-  const domain = getDomain(request);
   let formData: FormData;
   try {
     formData = await parseFormDataWithinLimit(request, MAX_IMAGE_REQUEST_SIZE);
@@ -78,13 +76,11 @@ export const action: ActionFunction = async ({ request }) => {
   const file = formData.get("file");
   const collectionRef = formData.get("collectionRef")?.toString().trim();
 
-  if (!domain) return json({ error: "Okänd domän." }, { status: 400 });
   if (!collectionRef) {
     return json({ error: "Kollektionen saknas." }, { status: 400 });
   }
 
   const collection = await Collections.exists({
-    domain: domain.domain,
     shortUrl: collectionRef,
   });
   if (!collection) {

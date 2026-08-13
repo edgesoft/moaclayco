@@ -85,7 +85,6 @@ const createScenario = async ({
   const item = await Items.create({
     amount: 3,
     collectionRef: `stripe-e2e-${runId}`,
-    domain: "moaclayco",
     headline: `Stripe E2E ${runId}`,
     images: ["stripe-e2e.webp"],
     price: 100,
@@ -95,7 +94,6 @@ const createScenario = async ({
     await Discounts.create({
       balance: 2,
       code: discountCode,
-      domain: "moaclayco",
       percentage: 10,
     });
   }
@@ -116,7 +114,6 @@ const createScenario = async ({
     discount: discountCode
       ? { amount: 10, code: discountCode, percentage: 10 }
       : { amount: 0 },
-    domain: "moaclayco",
     freightCost: 0,
     items: [
       {
@@ -255,7 +252,6 @@ test(
           (
             await Discounts.findOne({
               code: scenario.discountCode,
-              domain: "moaclayco",
             }).lean()
           )?.balance,
           1

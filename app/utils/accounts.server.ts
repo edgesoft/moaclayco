@@ -7,7 +7,6 @@ import { getAccountingYearBounds } from "~/utils/accountingDates";
 import type { ClientSession } from "mongoose";
 
 export const getIBJournalEntries = async (
-  domain: string,
   year: number,
   session?: ClientSession
 ) => {
@@ -15,7 +14,6 @@ export const getIBJournalEntries = async (
   if (!bounds) throw new Error("Ogiltigt bokföringsår för ingående balans");
 
   const query = Verifications.find({
-    domain,
     verificationDate: {
       $gte: bounds.start,
       $lt: bounds.end,

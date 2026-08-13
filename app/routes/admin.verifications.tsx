@@ -19,7 +19,6 @@ import {
   accountingMonthKeyForVerification,
   getAccountingYearBounds,
 } from "~/utils/accountingDates";
-import { getDomain } from "~/utils/domain";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
 import { getAccountingYearStatus } from "~/services/verification.server";
@@ -42,8 +41,6 @@ const verificationNumberFrom = (verification: unknown) => {
 
 export const loader: LoaderFunction = async ({ request, url }) => {
   const user = await auth.isAuthenticated(request, { failureRedirect: "/login" });
-  const domain = getDomain(request);
-  if (!domain) throw new Response("Okänd domän", { status: 404 });
   const pathname = normalizePathname(url.pathname);
   const isOverview = pathname === "/admin/verifications";
   const needsLatestVerificationNumber = pathname.endsWith("/new");
@@ -56,13 +53,13 @@ export const loader: LoaderFunction = async ({ request, url }) => {
   if (!isOverview) {
     const [latestVerification, yearStatus] = await Promise.all([
       needsLatestVerificationNumber
-        ? Verifications.findOne({ domain: domain.domain })
+        ? Verifications.findOne({})
             .sort({ verificationNumber: -1 })
             .select("verificationNumber")
             .lean()
             .exec()
         : null,
-      getAccountingYearStatus(domain.domain, user.fiscalYear),
+      getAccountingYearStatus(user.fiscalYear),
     ]);
 
     return json({
@@ -80,7 +77,6 @@ export const loader: LoaderFunction = async ({ request, url }) => {
       $gte: fiscalBounds.start,
       $lt: fiscalBounds.end,
     },
-    domain: domain.domain,
   })
     .select(verificationListProjection)
     .sort({ verificationDate: -1 })
@@ -88,7 +84,6 @@ export const loader: LoaderFunction = async ({ request, url }) => {
     .exec();
 
   const vatReportsPromise = Verifications.find({
-    domain: domain.domain,
     metadata: {
       $elemMatch: {
         key: "vatReport",
@@ -100,18 +95,13 @@ export const loader: LoaderFunction = async ({ request, url }) => {
     .lean()
     .exec();
 
-  const latestVerificationNumberPromise = Verifications.findOne({
-    domain: domain.domain,
-  })
+  const latestVerificationNumberPromise = Verifications.findOne({})
     .sort({ verificationNumber: -1 })
     .select("verificationNumber")
     .lean()
     .exec();
 
-  const yearStatusPromise = getAccountingYearStatus(
-    domain.domain,
-    user.fiscalYear
-  );
+  const yearStatusPromise = getAccountingYearStatus(user.fiscalYear);
 
   const [verifications, latestVerification, vatReports, yearStatus] = await Promise.all([
     verificationsPromise,

@@ -4,7 +4,6 @@ import { z } from "zod";
 import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
 import { auth } from "~/services/auth.server";
-import { getDomain } from "~/utils/domain";
 import {
   MAX_STANDARD_FORM_REQUEST_SIZE,
   parseFormDataWithinLimit,
@@ -47,11 +46,8 @@ const AdditionalItemsSchema = z.array(
 
 export const ItemAction: ActionFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
-  const domain = getDomain(request);
-  if (!domain) return json({ errors: { form: "Okänd domän" } }, { status: 400 });
 
   const collection = await Collections.findOne({
-    domain: domain.domain,
     shortUrl: params.collection,
   });
   if (!collection) return redirect("/");
@@ -123,7 +119,6 @@ export const ItemAction: ActionFunction = async ({ request, params }) => {
     })),
     amount: Number(validatedItem.data.amount),
     collectionRef: params.collection,
-    domain: domain.domain,
     headline: validatedItem.data.headline,
     images,
     instagram: result.instagram?.trim() ?? "",
@@ -139,7 +134,6 @@ export const ItemAction: ActionFunction = async ({ request, params }) => {
       {
         _id: params.id,
         collectionRef: params.collection,
-        domain: domain.domain,
       },
       data
     );

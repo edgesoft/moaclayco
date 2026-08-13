@@ -1,7 +1,6 @@
 import mongoose from "mongoose";
 import { connectToDatabase } from "../app/services/database.server";
 
-const DOMAIN = "moaclayco";
 const MIGRATION = "remove-tax-account-2050-v2";
 const LEGACY_RECLASSIFICATION_KEY =
   "tax-account-2050-to-2012-2026-v1:single-reclassification";
@@ -76,7 +75,6 @@ type Entry = {
 
 type Verification = {
   _id: mongoose.Types.ObjectId;
-  domain: string;
   verificationNumber: number;
   verificationDate: Date;
   description: string;
@@ -324,8 +322,14 @@ const run = async () => {
 
   const collection = database.collection<Verification>("verifications");
   const counters = database.collection("verificationCounters");
+  const unexpectedDomain = await collection.findOne({
+    domain: { $exists: true, $ne: "moaclayco" },
+  });
+  if (unexpectedDomain) {
+    throw new Error("Verifikationerna innehåller en annan äldre butik än moaclayco");
+  }
   const all = await collection
-    .find({ domain: DOMAIN })
+    .find({})
     .sort({ verificationDate: 1, verificationNumber: 1 })
     .toArray();
   const correctionKeys = REPLACED_CORRECTIONS.map(({ key }) => key);
@@ -480,7 +484,11 @@ const run = async () => {
   const currentMax = Math.max(
     ...all.map((verification) => Number(verification.verificationNumber))
   );
-  const counter = await counters.findOne({ domain: DOMAIN });
+  const counterDocuments = await counters.find({}).toArray();
+  if (counterDocuments.length !== 1) {
+    throw new Error(`Förväntade en verifikationsräknare, fick ${counterDocuments.length}`);
+  }
+  const counter = counterDocuments[0];
   if (Number(counter?.sequence) !== currentMax) {
     throw new Error(
       `Verifikationsräknaren ${counter?.sequence} matchar inte maxnumret ${currentMax}`
@@ -520,7 +528,6 @@ const run = async () => {
         const result = await collection.updateOne(
           {
             _id: document._id,
-            domain: DOMAIN,
             "journalEntries.account": 2050,
           },
           {
@@ -537,7 +544,7 @@ const run = async () => {
       }
 
       const vatUpdate = await collection.updateOne(
-        { _id: correctVat._id, domain: DOMAIN },
+        { _id: correctVat._id },
         {
           $set: {
             files: updatedVat.files,
@@ -554,7 +561,7 @@ const run = async () => {
         ...corrections.map((verification) => verification._id),
       ];
       const deletion = await collection.deleteMany(
-        { _id: { $in: deletionIds }, domain: DOMAIN },
+        { _id: { $in: deletionIds } },
         { session }
       );
       if (deletion.deletedCount !== deletionIds.length) {
@@ -562,13 +569,13 @@ const run = async () => {
       }
 
       const latest = await collection
-        .find({ domain: DOMAIN }, { session })
+        .find({}, { session })
         .sort({ verificationNumber: -1 })
         .limit(1)
         .next();
       if (!latest) throw new Error("Senaste verifikation saknas");
       await counters.updateOne(
-        { domain: DOMAIN },
+        { _id: counter._id },
         { $set: { sequence: Number(latest.verificationNumber) } },
         { session }
       );
@@ -578,7 +585,7 @@ const run = async () => {
   }
 
   const after = await collection
-    .find({ domain: DOMAIN })
+    .find({})
     .sort({ verificationDate: 1, verificationNumber: 1 })
     .toArray();
   assertFinalState(after);
@@ -592,7 +599,7 @@ const run = async () => {
   ) {
     throw new Error("Efterkontrollen av borttagna verifikationer misslyckades");
   }
-  const afterCounter = await counters.findOne({ domain: DOMAIN });
+  const afterCounter = await counters.findOne({ _id: counter._id });
   const afterMax = Math.max(
     ...after.map((verification) => Number(verification.verificationNumber))
   );

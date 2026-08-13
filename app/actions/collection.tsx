@@ -7,7 +7,6 @@ import { Items } from "~/schemas/items";
 import { auth } from "~/services/auth.server";
 import { s3Client } from "~/services/s3.server";
 import type { CollectionProps } from "~/types";
-import { getDomain } from "~/utils/domain";
 import {
   MAX_STANDARD_FORM_REQUEST_SIZE,
   parseFormDataWithinLimit,
@@ -62,8 +61,6 @@ async function deleteAssetKeys(keys: Array<string | null>) {
 
 export const CollectionAction: ActionFunction = async ({ params, request }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
-  const domain = getDomain(request);
-  if (!domain) return json({ errors: { form: "Okänd domän" } }, { status: 400 });
 
   let formData: FormData;
   try {
@@ -83,7 +80,6 @@ export const CollectionAction: ActionFunction = async ({ params, request }) => {
   const intent = formData.get("intent")?.toString();
   const currentCollection = (params.collection
     ? await Collections.findOne({
-        domain: domain.domain,
         shortUrl: params.collection,
       }).lean()
     : null) as (CollectionProps & { _id: any }) | null;
@@ -99,7 +95,6 @@ export const CollectionAction: ActionFunction = async ({ params, request }) => {
 
     const items = await Items.find({
       collectionRef: params.collection,
-      domain: domain.domain,
     })
       .select({ images: 1 })
       .lean();
@@ -114,11 +109,9 @@ export const CollectionAction: ActionFunction = async ({ params, request }) => {
 
     await Items.deleteMany({
       collectionRef: params.collection,
-      domain: domain.domain,
     });
     await Collections.deleteOne({
       _id: currentCollection._id,
-      domain: domain.domain,
     });
 
     try {
@@ -158,7 +151,6 @@ export const CollectionAction: ActionFunction = async ({ params, request }) => {
 
   const duplicate = await Collections.findOne({
     ...(currentCollection ? { _id: { $ne: currentCollection._id } } : {}),
-    domain: domain.domain,
     shortUrl: validated.data.shortUrl,
   }).lean();
   if (duplicate) {
@@ -169,7 +161,6 @@ export const CollectionAction: ActionFunction = async ({ params, request }) => {
   }
 
   const data = {
-    domain: domain.domain,
     headline: validated.data.headline,
     image: validated.data.image,
     instagram: result.instagram?.trim() ?? "",
@@ -181,12 +172,12 @@ export const CollectionAction: ActionFunction = async ({ params, request }) => {
 
   if (currentCollection && params.collection) {
     await Collections.updateOne(
-      { _id: currentCollection._id, domain: domain.domain },
+      { _id: currentCollection._id },
       data
     );
     if (params.collection !== validated.data.shortUrl) {
       await Items.updateMany(
-        { collectionRef: params.collection, domain: domain.domain },
+        { collectionRef: params.collection },
         { collectionRef: validated.data.shortUrl }
       );
     }
@@ -201,10 +192,7 @@ export const CollectionAction: ActionFunction = async ({ params, request }) => {
       }
     }
   } else {
-    await Collections.updateMany(
-      { domain: domain.domain },
-      { $inc: { sortOrder: 1 } }
-    );
+    await Collections.updateMany({}, { $inc: { sortOrder: 1 } });
     await Collections.create({ ...data, sortOrder: 0 });
   }
 

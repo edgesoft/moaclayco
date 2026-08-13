@@ -44,7 +44,8 @@ docker compose -f compose.stage-smoke.yml exec app npm run smoke
 docker compose -f compose.stage-smoke.yml down
 ```
 
-`localhost` is mapped to the Moa Clay Co domain in `app/utils/domain.tsx`.
+The storefront has one customer and one theme. Localhost uses the same Moa Clay
+Collections configuration as every deployed hostname.
 
 
 ## Deployment

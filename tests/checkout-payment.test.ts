@@ -19,10 +19,10 @@ import {
   createCheckoutFingerprint,
 } from "../app/services/checkout-payment.server";
 import { Orders } from "../app/schemas/orders";
+import { STORE_ID } from "../app/utils/store";
 
 const order = {
   _id: "64f10123456789abcdef0123",
-  domain: "moaclayco",
   totalSum: 549,
 };
 
@@ -42,7 +42,7 @@ test("checkout attempt cookie is signed and rejects tampering", async () => {
 
 test("checkout token uniqueness ignores historical orders without a token", () => {
   const checkoutTokenIndex = Orders.schema.indexes().find(
-    ([fields]) => fields.domain === 1 && fields.checkoutToken === 1
+    ([fields]) => fields.checkoutToken === 1
   );
 
   assert.ok(checkoutTokenIndex);
@@ -71,7 +71,7 @@ test("duplicate checkout requests use the same Stripe idempotency key", () => {
   assert.equal(first.params.capture_method, "automatic");
   assert.equal(
     first.options.idempotencyKey,
-    `checkout:${order.domain}:${checkoutToken}`
+    `checkout:${STORE_ID}:${checkoutToken}`
   );
 });
 
@@ -104,7 +104,7 @@ test("Stripe SDK sends the checkout request with amount, metadata and idempotenc
           client_secret: "pi_sdk_secret_test",
           currency: "sek",
           id: "pi_sdk_test",
-          metadata: { domain: order.domain, orderId: order._id },
+          metadata: { domain: STORE_ID, orderId: order._id },
           object: "payment_intent",
           status: "requires_payment_method",
         }),
@@ -135,7 +135,7 @@ test("Stripe SDK sends the checkout request with amount, metadata and idempotenc
   assert.equal(params.get("amount"), "54900");
   assert.equal(params.get("capture_method"), "automatic");
   assert.equal(params.get("currency"), "sek");
-  assert.equal(params.get("metadata[domain]"), order.domain);
+  assert.equal(params.get("metadata[domain]"), STORE_ID);
   assert.equal(params.get("metadata[orderId]"), order._id);
   assert.deepEqual(params.getAll("payment_method_types[0]"), ["card"]);
   assert.deepEqual(params.getAll("payment_method_types[1]"), ["klarna"]);
@@ -144,7 +144,7 @@ test("Stripe SDK sends the checkout request with amount, metadata and idempotenc
   )?.[1];
   assert.equal(
     idempotencyHeader,
-    `checkout:${order.domain}:d9428888-122b-4e80-a248-2eae9917c80f`
+    `checkout:${STORE_ID}:d9428888-122b-4e80-a248-2eae9917c80f`
   );
   const apiVersionHeader = Object.entries(captured?.headers ?? {}).find(
     ([key]) => key.toLowerCase() === "stripe-version"
@@ -215,7 +215,7 @@ test("webhook validation rejects a PaymentIntent for another amount or order", (
     amount: 54_900,
     currency: "sek",
     id: "pi_checkout",
-    metadata: { domain: order.domain, orderId: String(order._id) },
+    metadata: { domain: STORE_ID, orderId: String(order._id) },
   } as Pick<Stripe.PaymentIntent, "amount" | "currency" | "id" | "metadata">;
 
   assert.doesNotThrow(() =>

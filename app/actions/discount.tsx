@@ -3,7 +3,6 @@ import {
   redirect
 } from "react-router";
 import { Discounts as DiscountEntity } from "../schemas/discounts";
-import { getDomain } from "~/utils/domain";
 import { auth } from "~/services/auth.server";
 import { parseStockholmDateTime } from "~/utils/accountingDates";
 import { formSchema } from "~/schemas/discount-form";
@@ -43,8 +42,6 @@ let action: ActionFunction = async ({ request, params }) => {
     throw error;
   }
   let action = formData.get("action");
-  const domain = getDomain(request)
-
   switch (action) {
     case "save": {
       const formObject = objectFromFormData(formData);
@@ -69,7 +66,7 @@ let action: ActionFunction = async ({ request, params }) => {
         );
       }
       const discountData = { ...result, expireAt };
-      const obj: any = await DiscountEntity.findOne({ domain: domain?.domain, code: result.code }).lean();
+      const obj: any = await DiscountEntity.findOne({ code: result.code }).lean();
 
       if (params.id) {
         if (obj) {
@@ -82,11 +79,8 @@ let action: ActionFunction = async ({ request, params }) => {
         }
 
         await DiscountEntity.updateOne(
-          { _id: params.id, domain: domain?.domain },
-          {
-            ...discountData,
-            domain: domain?.domain
-          }
+          { _id: params.id },
+          discountData
         );
       } else {
         if (obj) {
@@ -97,13 +91,13 @@ let action: ActionFunction = async ({ request, params }) => {
           
         }
 
-        await DiscountEntity.create({...discountData, domain: domain?.domain});
+        await DiscountEntity.create(discountData);
       }
 
       break;
     }
     case "delete": {
-      await DiscountEntity.deleteOne({ _id: params.id, domain: domain?.domain });
+      await DiscountEntity.deleteOne({ _id: params.id });
       break;
     }
     default:

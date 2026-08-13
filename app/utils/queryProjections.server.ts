@@ -24,7 +24,7 @@ export const orderConfirmationProjection =
   "customer discount freightCost items paymentIntent.id status totalSum";
 
 export const orderDetailProjection =
-  "customer discount domain freightCost items manualOrderAt paymentIntent shippingEmailAt status totalSum";
+  "customer discount freightCost items manualOrderAt paymentIntent shippingEmailAt status totalSum";
 
 export const verificationListProjection =
   "-_id recordType description verificationNumber verificationDate metadata.key metadata.value files.name files.path journalEntries.account journalEntries.debit journalEntries.credit";

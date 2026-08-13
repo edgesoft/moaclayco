@@ -2,11 +2,6 @@ import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
 const OrderSchema = new Schema({
-    domain: {
-        type: String,
-        required: true,
-        default: "moaclayco"
-    },
     customer: {
         firstname: String,
         lastname: String,
@@ -60,13 +55,13 @@ const OrderSchema = new Schema({
 
 OrderSchema.index({ "paymentIntent.id": 1 }, { unique: true, sparse: true });
 OrderSchema.index(
-    { domain: 1, checkoutToken: 1 },
+    { checkoutToken: 1 },
     {
         unique: true,
         partialFilterExpression: { checkoutToken: { $type: "string" } }
     }
 );
-OrderSchema.index({ domain: 1, status: 1, createdAt: -1 });
-OrderSchema.index({ domain: 1, createdAt: -1, _id: -1 });
+OrderSchema.index({ status: 1, createdAt: -1 });
+OrderSchema.index({ createdAt: -1, _id: -1 });
 
 export const Orders = mongoose.models.Orders || mongoose.model('Orders', OrderSchema);

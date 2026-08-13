@@ -20,6 +20,7 @@ import {
 
 type MetadataEntry = { key: string; value: string | number };
 type FileEntry = { name: string; path: string };
+const GLOBAL_COUNTER_KEY = "global";
 
 export class AccountingYearClosedError extends Error {
   constructor(public readonly year: number) {
@@ -45,7 +46,6 @@ export class VerificationEditBlockedError extends Error {
 }
 
 export type CreateVerificationInput = {
-  domain: string;
   description: string;
   verificationDate: Date;
   journalEntries: unknown;
@@ -56,7 +56,6 @@ export type CreateVerificationInput = {
 };
 
 export type EditVerificationInput = {
-  domain: string;
   verificationNumber: number;
   expectedYear: number;
   description: string;
@@ -67,7 +66,6 @@ export type EditVerificationInput = {
 };
 
 export type RemoveVerificationFileInput = {
-  domain: string;
   verificationNumber: number;
   expectedYear: number;
   path: string;
@@ -75,9 +73,7 @@ export type RemoveVerificationFileInput = {
 };
 
 const normalizeInput = (input: CreateVerificationInput) => {
-  const domain = input.domain?.trim();
   const description = input.description?.trim();
-  if (!domain || domain.length > 100) throw new Error("Ogiltig domän för verifikation");
   if (!description || description.length > 1_000) {
     throw new Error("Verifikationen måste ha en giltig beskrivning");
   }
@@ -118,7 +114,6 @@ const normalizeInput = (input: CreateVerificationInput) => {
   }
 
   return {
-    domain,
     description,
     verificationDate: input.verificationDate,
     recordType,
@@ -135,29 +130,27 @@ const normalizeInput = (input: CreateVerificationInput) => {
 };
 
 const accountingYearState = async (
-  domain: string,
   year: number,
   session?: ClientSession
 ) => {
-  const query = AccountingYears.findOne({ domain, year });
+  const query = AccountingYears.findOne({ year });
   if (session) query.session(session);
   return query.exec();
 };
 
-const ensureAccountingYearState = async (domain: string, year: number) => {
+const ensureAccountingYearState = async (year: number) => {
   await AccountingYears.updateOne(
-    { domain, year },
-    { $setOnInsert: { domain, year, status: "open", revision: 0 } },
+    { year },
+    { $setOnInsert: { year, status: "open", revision: 0 } },
     { upsert: true }
   );
 };
 
 const touchOpenAccountingYear = async (
-  domain: string,
   year: number,
   session: ClientSession
 ) => {
-  const state = await accountingYearState(domain, year, session);
+  const state = await accountingYearState(year, session);
   if (!state) throw new Error("Bokföringsåret kunde inte förberedas");
   if (state.status !== "open") throw new AccountingYearClosedError(year);
   state.revision = Number(state.revision || 0) + 1;
@@ -172,13 +165,11 @@ type EditableVerification = {
 };
 
 const reportedVatPeriods = async (
-  domain: string,
   periods: string[],
   session?: ClientSession
 ) => {
   if (periods.length === 0) return [];
   const query = Verifications.find({
-    domain,
     metadata: {
       $elemMatch: {
         key: "vatReport",
@@ -198,12 +189,10 @@ const reportedVatPeriods = async (
 };
 
 export async function getVerificationEditPolicy({
-  domain,
   verification,
   targetDate,
   session,
 }: {
-  domain: string;
   verification: EditableVerification;
   targetDate?: Date;
   session?: ClientSession;
@@ -222,9 +211,8 @@ export async function getVerificationEditPolicy({
     };
   }
   const [yearState, reportedPeriods] = await Promise.all([
-    accountingYearState(domain, sourceYear, session),
+    accountingYearState(sourceYear, session),
     reportedVatPeriods(
-      domain,
       Array.from(new Set([sourceMonth, targetMonth])),
       session
     ),
@@ -245,7 +233,7 @@ export async function createVerification(input: CreateVerificationInput) {
   const sourceYear = accountingYear(normalized.verificationDate);
   if (!sourceYear) throw new Error("Verifikationen saknar bokföringsår");
   if (normalized.recordType !== "incomingBalance") {
-    await ensureAccountingYearState(normalized.domain, sourceYear);
+    await ensureAccountingYearState(sourceYear);
   }
   const session = await mongoose.startSession();
   let createdVerification: any = null;
@@ -254,7 +242,6 @@ export async function createVerification(input: CreateVerificationInput) {
     await session.withTransaction(async () => {
       if (normalized.idempotencyKey) {
         const existing = await Verifications.findOne({
-          domain: normalized.domain,
           idempotencyKey: normalized.idempotencyKey,
         }).session(session);
         if (existing) {
@@ -264,10 +251,10 @@ export async function createVerification(input: CreateVerificationInput) {
       }
 
       if (normalized.recordType !== "incomingBalance") {
-        await touchOpenAccountingYear(normalized.domain, sourceYear, session);
+        await touchOpenAccountingYear(sourceYear, session);
       }
 
-      const latest = await Verifications.findOne({ domain: normalized.domain })
+      const latest = await Verifications.findOne({})
         .sort({ verificationNumber: -1 })
         .select("verificationNumber")
         .session(session)
@@ -275,15 +262,15 @@ export async function createVerification(input: CreateVerificationInput) {
       const latestNumber = Number((latest as any)?.verificationNumber ?? 0);
 
       await VerificationCounters.updateOne(
-        { domain: normalized.domain },
+        { key: GLOBAL_COUNTER_KEY },
         {
           $max: { sequence: latestNumber },
-          $setOnInsert: { domain: normalized.domain },
+          $setOnInsert: { key: GLOBAL_COUNTER_KEY },
         },
         { upsert: true, session }
       );
       const counter = await VerificationCounters.findOneAndUpdate(
-        { domain: normalized.domain },
+        { key: GLOBAL_COUNTER_KEY },
         { $inc: { sequence: 1 } },
         { new: true, session }
       );
@@ -302,7 +289,6 @@ export async function createVerification(input: CreateVerificationInput) {
 
       if (normalized.recordType !== "incomingBalance") {
         await refreshIncomingBalanceForFollowingYear(
-          normalized.domain,
           sourceYear,
           session
         );
@@ -323,12 +309,6 @@ export async function createVerificationsBatch(inputs: CreateVerificationInput[]
   }
 
   const normalizedInputs = inputs.map(normalizeInput);
-  const domains = new Set(normalizedInputs.map((input) => input.domain));
-  if (domains.size !== 1) {
-    throw new Error("Alla verifikationer i en registrering måste tillhöra samma domän");
-  }
-
-  const domain = normalizedInputs[0].domain;
   const sourceYears = new Set<number>();
   for (const normalized of normalizedInputs) {
     if (normalized.recordType === "incomingBalance") continue;
@@ -337,9 +317,7 @@ export async function createVerificationsBatch(inputs: CreateVerificationInput[]
     sourceYears.add(sourceYear);
   }
   await Promise.all(
-    Array.from(sourceYears, (sourceYear) =>
-      ensureAccountingYearState(domain, sourceYear)
-    )
+    Array.from(sourceYears, (sourceYear) => ensureAccountingYearState(sourceYear))
   );
   const session = await mongoose.startSession();
   let savedVerifications: any[] = [];
@@ -351,7 +329,6 @@ export async function createVerificationsBatch(inputs: CreateVerificationInput[]
         .filter((key): key is string => Boolean(key));
       const existing = idempotencyKeys.length
         ? await Verifications.find({
-            domain,
             idempotencyKey: { $in: idempotencyKeys },
           })
             .session(session)
@@ -361,17 +338,17 @@ export async function createVerificationsBatch(inputs: CreateVerificationInput[]
         existing.map((verification) => [verification.idempotencyKey, verification])
       );
 
-      const latest = await Verifications.findOne({ domain })
+      const latest = await Verifications.findOne({})
         .sort({ verificationNumber: -1 })
         .select("verificationNumber")
         .session(session)
         .lean();
       const latestNumber = Number((latest as any)?.verificationNumber ?? 0);
       await VerificationCounters.updateOne(
-        { domain },
+        { key: GLOBAL_COUNTER_KEY },
         {
           $max: { sequence: latestNumber },
-          $setOnInsert: { domain },
+          $setOnInsert: { key: GLOBAL_COUNTER_KEY },
         },
         { upsert: true, session }
       );
@@ -390,12 +367,12 @@ export async function createVerificationsBatch(inputs: CreateVerificationInput[]
         const sourceYear = accountingYear(normalized.verificationDate);
         if (!sourceYear) throw new Error("Verifikationen saknar bokföringsår");
         if (normalized.recordType !== "incomingBalance") {
-          await touchOpenAccountingYear(domain, sourceYear, session);
+          await touchOpenAccountingYear(sourceYear, session);
           changedSourceYears.add(sourceYear);
         }
 
         const counter = await VerificationCounters.findOneAndUpdate(
-          { domain },
+          { key: GLOBAL_COUNTER_KEY },
           { $inc: { sequence: 1 } },
           { new: true, session }
         );
@@ -412,7 +389,6 @@ export async function createVerificationsBatch(inputs: CreateVerificationInput[]
       }
       for (const sourceYear of changedSourceYears) {
         await refreshIncomingBalanceForFollowingYear(
-          domain,
           sourceYear,
           session
         );
@@ -441,7 +417,6 @@ export async function editVerification(input: EditVerificationInput) {
     );
   }
   const normalized = normalizeInput({
-    domain: input.domain,
     description: input.description,
     verificationDate: input.verificationDate,
     journalEntries: input.journalEntries,
@@ -453,14 +428,13 @@ export async function editVerification(input: EditVerificationInput) {
       `Bokföringsdatumet måste tillhöra bokföringsår ${input.expectedYear}.`
     );
   }
-  await ensureAccountingYearState(normalized.domain, input.expectedYear);
+  await ensureAccountingYearState(input.expectedYear);
 
   const session = await mongoose.startSession();
   let editedVerification: any = null;
   try {
     await session.withTransaction(async () => {
       const verification = await Verifications.findOne({
-        domain: normalized.domain,
         verificationNumber: input.verificationNumber,
       }).session(session);
       if (!verification) throw new Error("Verifikationen hittades inte");
@@ -472,7 +446,6 @@ export async function editVerification(input: EditVerificationInput) {
         );
       }
       const policy = await getVerificationEditPolicy({
-        domain: normalized.domain,
         verification,
         targetDate: normalized.verificationDate,
         session,
@@ -483,11 +456,7 @@ export async function editVerification(input: EditVerificationInput) {
         );
       }
 
-      await touchOpenAccountingYear(
-        normalized.domain,
-        input.expectedYear,
-        session
-      );
+      await touchOpenAccountingYear(input.expectedYear, session);
       verification.editHistory = [
         ...(verification.editHistory ?? []),
         {
@@ -511,7 +480,6 @@ export async function editVerification(input: EditVerificationInput) {
       verification.journalEntries = normalized.journalEntries;
       await verification.save({ session });
       await refreshIncomingBalanceForFollowingYear(
-        normalized.domain,
         input.expectedYear,
         session
       );
@@ -534,14 +502,13 @@ export async function removeVerificationFileReference(
   if (!path || path.length > 4_096) {
     throw new VerificationValidationError("Bilagan kunde inte identifieras");
   }
-  await ensureAccountingYearState(input.domain, input.expectedYear);
+  await ensureAccountingYearState(input.expectedYear);
 
   const session = await mongoose.startSession();
   let removedFile: { name: string; path: string } | null = null;
   try {
     await session.withTransaction(async () => {
       const verification = await Verifications.findOne({
-        domain: input.domain,
         verificationNumber: input.verificationNumber,
       }).session(session);
       if (!verification) {
@@ -555,7 +522,6 @@ export async function removeVerificationFileReference(
         );
       }
       const policy = await getVerificationEditPolicy({
-        domain: input.domain,
         verification,
         session,
       });
@@ -579,7 +545,7 @@ export async function removeVerificationFileReference(
         path: String(file.path),
       };
 
-      await touchOpenAccountingYear(input.domain, input.expectedYear, session);
+      await touchOpenAccountingYear(input.expectedYear, session);
       verification.files.splice(fileIndex, 1);
       verification.fileHistory = [
         ...(verification.fileHistory ?? []),
@@ -593,7 +559,6 @@ export async function removeVerificationFileReference(
       ];
       await verification.save({ session });
       await refreshIncomingBalanceForFollowingYear(
-        input.domain,
         input.expectedYear,
         session
       );
@@ -608,8 +573,7 @@ export async function removeVerificationFileReference(
   return removedFile;
 }
 
-const incomingBalanceQuery = (domain: string, year: number) => ({
-  domain,
+const incomingBalanceQuery = (year: number) => ({
   metadata: { $elemMatch: { key: "IB", value: String(year) } },
 });
 
@@ -703,12 +667,10 @@ export async function synchronizeIncomingBalance(
 }
 
 export async function refreshIncomingBalanceForFollowingYear(
-  domain: string,
   sourceYear: number,
   session?: ClientSession
 ) {
   const targetYearState = await accountingYearState(
-    domain,
     sourceYear + 1,
     session
   );
@@ -716,14 +678,14 @@ export async function refreshIncomingBalanceForFollowingYear(
     throw new AccountingYearClosedError(sourceYear + 1);
   }
   const incomingBalanceQueryBuilder = Verifications.findOne(
-    incomingBalanceQuery(domain, sourceYear + 1)
+    incomingBalanceQuery(sourceYear + 1)
   );
   if (session) incomingBalanceQueryBuilder.session(session);
   const incomingBalance = await incomingBalanceQueryBuilder.exec();
   if (!incomingBalance) return null;
 
-  const sourceState = await accountingYearState(domain, sourceYear, session);
-  const journalEntries = await getIBJournalEntries(domain, sourceYear, session);
+  const sourceState = await accountingYearState(sourceYear, session);
+  const journalEntries = await getIBJournalEntries(sourceYear, session);
   return synchronizeIncomingBalance(incomingBalance, journalEntries, {
     sourceYear,
     sourceRevision: Number(sourceState?.revision || 0),
@@ -732,27 +694,26 @@ export async function refreshIncomingBalanceForFollowingYear(
   });
 }
 
-export async function ensureIncomingBalance(domain: string, year: number) {
-  const existing = await Verifications.findOne(incomingBalanceQuery(domain, year));
-  const targetState = await accountingYearState(domain, year);
+export async function ensureIncomingBalance(year: number) {
+  const existing = await Verifications.findOne(incomingBalanceQuery(year));
+  const targetState = await accountingYearState(year);
   if (targetState?.status === "closed") {
     if (existing) return existing;
     throw new AccountingYearClosedError(year);
   }
-  const sourceState = await accountingYearState(domain, year - 1);
+  const sourceState = await accountingYearState(year - 1);
   const synchronizationOptions = {
     sourceYear: year - 1,
     sourceRevision: Number(sourceState?.revision || 0),
     state: (sourceState?.status === "closed" ? "final" : "preliminary") as IncomingBalanceState,
   };
   if (existing) {
-    const journalEntries = await getIBJournalEntries(domain, year - 1);
+    const journalEntries = await getIBJournalEntries(year - 1);
     return synchronizeIncomingBalance(existing, journalEntries, synchronizationOptions);
   }
 
-  const journalEntries = await getIBJournalEntries(domain, year - 1);
+  const journalEntries = await getIBJournalEntries(year - 1);
   return createVerification({
-    domain,
     idempotencyKey: `ib:${year}`,
     description: "Ingående balans",
     verificationDate: new Date(Date.UTC(year, 0, 1, 12)),
@@ -777,12 +738,10 @@ const metadataValue = (
 };
 
 const loadClosingVatReports = async (
-  domain: string,
   year: number,
   session?: ClientSession
 ) => {
   const query = Verifications.find({
-    domain,
     metadata: {
       $elemMatch: {
         key: "vatReport",
@@ -817,14 +776,13 @@ const incomingBalanceSummary = (incomingBalance: any) =>
     : null;
 
 export async function getAccountingYearClosingReadiness(
-  domain: string,
   year: number,
   now = new Date()
 ) {
   const [state, vatReports, incomingBalance] = await Promise.all([
-    accountingYearState(domain, year),
-    loadClosingVatReports(domain, year),
-    Verifications.findOne(incomingBalanceQuery(domain, year + 1))
+    accountingYearState(year),
+    loadClosingVatReports(year),
+    Verifications.findOne(incomingBalanceQuery(year + 1))
       .select("verificationNumber metadata")
       .lean()
       .exec(),
@@ -844,8 +802,8 @@ export async function getAccountingYearClosingReadiness(
   };
 }
 
-export async function getAccountingYearStatus(domain: string, year: number) {
-  const state = await AccountingYears.findOne({ domain, year })
+export async function getAccountingYearStatus(year: number) {
+  const state = await AccountingYears.findOne({ year })
     .select("status -_id")
     .lean()
     .exec();
@@ -853,16 +811,13 @@ export async function getAccountingYearStatus(domain: string, year: number) {
 }
 
 export async function closeAccountingYear({
-  domain,
   year,
   now = new Date(),
 }: {
-  domain: string;
   year: number;
   now?: Date;
 }) {
   const initialReadiness = await getAccountingYearClosingReadiness(
-    domain,
     year,
     now
   );
@@ -883,26 +838,26 @@ export async function closeAccountingYear({
     );
   }
 
-  const followingYearStatus = await getAccountingYearStatus(domain, year + 1);
+  const followingYearStatus = await getAccountingYearStatus(year + 1);
   if (followingYearStatus === "closed") {
     throw new AccountingYearClosingError(
       `Bokföringsår ${year + 1} är redan avslutat och dess IB kan därför inte ändras.`
     );
   }
 
-  await ensureAccountingYearState(domain, year);
-  await ensureIncomingBalance(domain, year + 1);
+  await ensureAccountingYearState(year);
+  await ensureIncomingBalance(year + 1);
 
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
-      const state = await accountingYearState(domain, year, session);
+      const state = await accountingYearState(year, session);
       if (!state) throw new Error("Bokföringsåret kunde inte förberedas");
       if (state.status === "closed") return;
 
       const currentYear = accountingYear(now);
       if (!currentYear) throw new Error("Kunde inte fastställa aktuellt bokföringsår");
-      const vatReports = await loadClosingVatReports(domain, year, session);
+      const vatReports = await loadClosingVatReports(year, session);
       const readiness = evaluateAccountingYearClosing({
         year,
         currentYear,
@@ -916,13 +871,13 @@ export async function closeAccountingYear({
       }
 
       const incomingBalanceQueryBuilder = Verifications.findOne(
-        incomingBalanceQuery(domain, year + 1)
+        incomingBalanceQuery(year + 1)
       ).session(session);
       const incomingBalance = await incomingBalanceQueryBuilder.exec();
       if (!incomingBalance) {
         throw new Error("Nästa års ingående balans kunde inte skapas");
       }
-      const journalEntries = await getIBJournalEntries(domain, year, session);
+      const journalEntries = await getIBJournalEntries(year, session);
       await synchronizeIncomingBalance(incomingBalance, journalEntries, {
         sourceYear: year,
         sourceRevision: Number(state.revision || 0),
@@ -942,5 +897,5 @@ export async function closeAccountingYear({
     await session.endSession();
   }
 
-  return getAccountingYearClosingReadiness(domain, year, now);
+  return getAccountingYearClosingReadiness(year, now);
 }

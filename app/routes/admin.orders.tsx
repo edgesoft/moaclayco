@@ -14,7 +14,6 @@ import { Types } from "mongoose";
 import { auth } from "~/services/auth.server";
 import { Orders as OrderEntity } from "~/schemas/orders";
 import ordersStyles from "~/styles/orders.css?url";
-import { getDomain } from "~/utils/domain";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
 
@@ -251,14 +250,12 @@ const encodeCursor = (order: { createdAt?: unknown; _id: unknown }) => {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
-  const domain = getDomain(request);
   const url = new URL(request.url);
   const filter = parseFilter(url.searchParams.get("filter"));
   const search = url.searchParams.get("q")?.trim().slice(0, 120) ?? "";
   const cursor = decodeCursor(url.searchParams.get("cursor"));
   const includeSummary = url.searchParams.get("partial") !== "1";
   const baseMatch = {
-    domain: domain?.domain,
     status: { $in: includedStatuses },
   };
   const filteredConditions: Record<string, unknown>[] = [baseMatch];

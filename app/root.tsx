@@ -33,8 +33,7 @@ import { auth } from "./services/auth.server";
 import s from "react-toastify/dist/ReactToastify.css?url";
 import { ToastContainer } from "react-toastify";
 import { CollectionProps, User } from "./types";
-import { ThemeProvider, useTheme } from "./components/Theme";
-import { getDomain } from "./utils/domain";
+import { theme } from "./components/Theme";
 import { toLoaderData } from "./utils/loaderData";
 import { isGoogleAuthenticationConfigured } from "./services/google-auth.server";
 import { connectToDatabase } from "./services/database.server";
@@ -42,7 +41,6 @@ import { shouldRevalidateRoot } from "./utils/rootRevalidation";
 import { collectionCardProjection } from "./utils/queryProjections.server";
 
 export type IndexProps = {
-  hostname: string,
   user?: User;
   ENV: {
     STRIPE_PUBLIC_KEY: string;
@@ -71,7 +69,6 @@ export const middleware: MiddlewareFunction[] = [
 ];
 
 export const loader: LoaderFunction = async ({ request }) => {
-  const domain = getDomain(request);
   const url = new URL(request.url);
   const hostname = url.hostname;
   const proto = request.headers.get("X-Forwarded-Proto") ?? url.protocol;
@@ -91,7 +88,7 @@ export const loader: LoaderFunction = async ({ request }) => {
   }
 
   const [collectionDocuments, user] = await Promise.all([
-    Collections.find({ domain: domain?.domain })
+    Collections.find({})
       .select(collectionCardProjection)
       .sort({ sortOrder: 1 })
       .lean()
@@ -102,7 +99,6 @@ export const loader: LoaderFunction = async ({ request }) => {
 
   return json(
     {
-      hostname,
       user,
       ENV: {
         STRIPE_PUBLIC_KEY: process.env.STRIPE_PUBLIC_KEY,
@@ -141,7 +137,6 @@ function Document({
 }) {
   let data: { ENV: { STRIPE_PUBLIC_KEY: string } } =
   useLoaderData<IndexProps>();
-  const theme = useTheme();
   return (
     <html lang="sv">
       <head>
@@ -246,7 +241,6 @@ function RouteTransition({ data }: { data: IndexProps }) {
 export default function App() {
   const data = useLoaderData<IndexProps>();
   return (
-    <ThemeProvider hostname={data.hostname}>
     <CartProvider>
       <Document>
         <RouteTransition data={data} />
@@ -254,7 +248,6 @@ export default function App() {
         <Footer />
       </Document>
     </CartProvider>
-    </ThemeProvider>
   );
 }
 
