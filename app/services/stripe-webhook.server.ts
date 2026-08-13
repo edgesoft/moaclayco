@@ -201,43 +201,52 @@ export const handlePayoutPaid = async (
 ) => {
   const payoutId = payout.id;
   const amountInSek = payout.amount / 100;
-  let description = `Stripe Payout(${payoutId})`
+  const description = `Stripe Payout(${payoutId})`;
 
   console.log(`Payout ID: ${payoutId}`);
   console.log(`Payout amount: ${amountInSek} SEK`);
   const domains = new Set<string>();
+  const metadata: Array<{ key: string; value: string }> = [];
 
-  // Hämta alla balance transactions som är kopplade till denna utbetalning
-  const balanceTransactions = await dependencies.stripe.balanceTransactions
-    .list({ payout: payoutId, limit: 100 })
-    .autoPagingToArray({ limit: 10_000 });
+  if (payout.automatic === false) {
+    const manualPayoutDomain = payout.metadata?.domain?.trim();
+    if (!manualPayoutDomain) {
+      throw new Error("Manual Stripe payout is missing domain metadata");
+    }
+    domains.add(manualPayoutDomain);
+  } else {
+    // Stripe only supports filtering balance transactions by automatic payouts.
+    const balanceTransactions = await dependencies.stripe.balanceTransactions
+      .list({ payout: payoutId, limit: 100 })
+      .autoPagingToArray({ limit: 10_000 });
 
-  let metadata = []
-  let index = 0; // Startar index på 0
-  for (const balanceTransaction of balanceTransactions) {
-    if (balanceTransaction.source) {
+    let index = 0;
+    for (const balanceTransaction of balanceTransactions) {
+      if (!balanceTransaction.source) continue;
+
       try {
-        // Hämta PaymentIntent kopplad till denna balance transaction
-        const charge = await dependencies.stripe.charges.retrieve(balanceTransaction.source as string);
+        const charge = await dependencies.stripe.charges.retrieve(
+          String(balanceTransaction.source)
+        );
+        if (!charge.payment_intent) continue;
 
-        if (charge.payment_intent) {
-          const paymentIntentId = charge.payment_intent;
+        const paymentIntentId = String(charge.payment_intent);
+        const order = await dependencies.orders
+          .findOne(paymentIntentOrderQuery(paymentIntentId))
+          .lean<Order>();
 
-          // Hämta order kopplad till PaymentIntent
-          const order = await dependencies.orders.findOne(
-            paymentIntentOrderQuery(String(paymentIntentId))
-          ).lean<Order>();
-
-          if (order) {
-            // Lägg till i beskrivningen
-            domains.add(order.domain)
-            metadata.push({key: `orderId.${index}`, value: `${order._id}`})
-            metadata.push({key: `paymentIntentId.${index}`, value: `${paymentIntentId}`})
-            index = index + 1
-          } else {
-            console.warn(`Order not found for PaymentIntent: ${paymentIntentId}`);
-          }
+        if (!order) {
+          console.warn(`Order not found for PaymentIntent: ${paymentIntentId}`);
+          continue;
         }
+
+        domains.add(order.domain);
+        metadata.push({ key: `orderId.${index}`, value: `${order._id}` });
+        metadata.push({
+          key: `paymentIntentId.${index}`,
+          value: paymentIntentId,
+        });
+        index += 1;
       } catch (error) {
         console.error(
           "Error retrieving PaymentIntent or order for balance transaction:",
@@ -259,10 +268,10 @@ export const handlePayoutPaid = async (
   // Sätt ihop beskrivningen från alla delar
   // Skapa bokföringspost
   await dependencies.createVerification({
-    domain: domain,
+    domain,
     idempotencyKey: `stripe:payout:${payoutId}`,
     verificationDate: new Date((payout.arrival_date || payout.created) * 1000),
-    description: description.trim(), // Rensa onödiga tomma rader
+    description,
     journalEntries: [
       {
         account: 1930, // Bankkonto
@@ -271,15 +280,13 @@ export const handlePayoutPaid = async (
       {
         account: 1580, // Fordran på Stripe
         credit: cents(amountInSek),
-      }
+      },
     ],
-    metadata: [{ key: "payoutId", value: payoutId }, ...metadata]
+    metadata: [{ key: "payoutId", value: payoutId }, ...metadata],
   });
 
   console.log(`Bokföringspost skapad för utbetalning: ${payoutId}`);
 };
-
-
 class PaidOrderNeedsReviewError extends Error {}
 
 export const fromPaymentIntent = async (

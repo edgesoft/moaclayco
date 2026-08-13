@@ -863,7 +863,7 @@ test("payout accounting resolves one domain and balances Stripe clearing", async
       arrival_date: 1_786_622_400,
       created: 1_786_536_000,
       id: "po_test",
-    } as Stripe.Payout,
+    } as unknown as Stripe.Payout,
     dependencies
   );
 
@@ -873,4 +873,56 @@ test("payout accounting resolves one domain and balances Stripe clearing", async
     { account: 1930, debit: 534.5 },
     { account: 1580, credit: 534.5 },
   ]);
+});
+
+test("manual payout accounting uses explicit domain metadata", async () => {
+  const verifications: Array<Record<string, unknown>> = [];
+  const dependencies = makeDependencies({
+    createVerification: async (input) => {
+      verifications.push(input as unknown as Record<string, unknown>);
+      return input as never;
+    },
+    stripe: {
+      balanceTransactions: {
+        list: () => {
+          throw new Error("manual payouts must not query by payout");
+        },
+      },
+    } as never,
+  });
+
+  await handlePayoutPaid(
+    {
+      amount: 30_037,
+      automatic: false,
+      created: 1_786_634_763,
+      id: "po_manual",
+      metadata: { domain: order.domain },
+    } as unknown as Stripe.Payout,
+    dependencies
+  );
+
+  assert.equal(verifications[0].domain, order.domain);
+  assert.equal(verifications[0].idempotencyKey, "stripe:payout:po_manual");
+  assert.deepEqual(verifications[0].journalEntries, [
+    { account: 1930, debit: 300.37 },
+    { account: 1580, credit: 300.37 },
+  ]);
+});
+
+test("manual payout accounting rejects missing domain metadata", async () => {
+  await assert.rejects(
+    () =>
+      handlePayoutPaid(
+        {
+          amount: 30_037,
+          automatic: false,
+          created: 1_786_634_763,
+          id: "po_manual_without_domain",
+          metadata: {},
+        } as unknown as Stripe.Payout,
+        makeDependencies()
+      ),
+    /missing domain metadata/
+  );
 });

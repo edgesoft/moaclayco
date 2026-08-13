@@ -6024,6 +6024,38 @@ input[type="search"]::-ms-reveal {
   padding-top: 0.1rem;
 }
 
+.mcc-checkout-payment-choice {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--mcc-purchase-line);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+}
+
+.mcc-checkout-payment-choice p {
+  color: #746f68;
+  font-size: 0.68rem;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 25rem;
+}
+
+.mcc-checkout-payment-choice button {
+  background: transparent;
+  border: 0;
+  color: var(--mcc-purchase-accent-dark);
+  cursor: pointer;
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0;
+  text-decoration: underline;
+  text-underline-offset: 0.2rem;
+}
+
 .mcc-checkout-terms {
   align-items: center;
   border-top: 1px solid var(--mcc-purchase-line);
@@ -6131,6 +6163,24 @@ input[type="search"]::-ms-reveal {
 
 .mcc-purchase-page button.mcc-checkout-submit[type="submit"] {
   margin-top: 1.15rem;
+}
+
+.mcc-checkout-cart-return {
+  align-items: center;
+  color: #6f6a63;
+  display: flex;
+  font-size: 0.64rem;
+  font-weight: 700;
+  gap: 0.55rem;
+  letter-spacing: 0.08em;
+  margin-top: 1.1rem;
+  text-decoration: none;
+  text-transform: uppercase;
+  width: fit-content;
+}
+
+.mcc-checkout-cart-return:hover {
+  color: var(--mcc-purchase-accent-dark);
 }
 
 .mcc-purchase-page button.mcc-checkout-submit[type="submit"]:hover:not(:disabled),
@@ -6376,6 +6426,8 @@ input[type="search"]::-ms-reveal {
 }
 
 .mcc-purchase-back:focus-visible,
+.mcc-checkout-payment-choice button:focus-visible,
+.mcc-checkout-cart-return:focus-visible,
 .mcc-checkout-terms > button:focus-visible,
 .mcc-checkout-submit:focus-visible,
 .mcc-purchase-action:focus-visible {
@@ -6463,6 +6515,15 @@ input[type="search"]::-ms-reveal {
 
   .mcc-purchase-section-heading h2 {
     font-size: 2rem;
+  }
+
+  .mcc-checkout-payment-choice {
+    display: block;
+  }
+
+  .mcc-checkout-payment-choice button {
+    margin-top: 0.65rem;
+    min-height: 2.5rem;
   }
 
   .mcc-checkout-element {

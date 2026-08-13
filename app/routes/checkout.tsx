@@ -112,6 +112,7 @@ function CheckoutForm({ onReady }: CheckoutFormProps) {
   const termsRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string>();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [useLink, setUseLink] = useState(true);
   const [showTerms, setShowTerms] = useState(false);
 
   useEffect(() => {
@@ -164,12 +165,34 @@ function CheckoutForm({ onReady }: CheckoutFormProps) {
     <form className="mcc-checkout-form" onSubmit={handleSubmit}>
       {showTerms ? <Terms show={setShowTerms} /> : null}
 
+      <div className="mcc-checkout-payment-choice">
+        <p>
+          {useLink
+            ? "Link har valt ditt sparade kort. Du kan använda det eller fylla i ett annat kort."
+            : "Fyll i kortet du vill använda. Dina kortuppgifter hanteras av Stripe."}
+        </p>
+        <button
+          aria-pressed={!useLink}
+          onClick={() => {
+            setError(undefined);
+            setUseLink((current) => !current);
+          }}
+          type="button"
+        >
+          {useLink ? "Använd ett annat kort" : "Använd mitt sparade Link-kort"}
+        </button>
+      </div>
+
       <PaymentElement
+        key={useLink ? "link" : "card-entry"}
         onReady={(element) => {
           paymentElementRef.current = element;
           onReady();
         }}
-        options={{ layout: "tabs" }}
+        options={{
+          layout: "tabs",
+          wallets: { link: useLink ? "auto" : "never" },
+        }}
       />
 
       <div className="mcc-checkout-terms">
@@ -207,6 +230,11 @@ function CheckoutForm({ onReady }: CheckoutFormProps) {
           </>
         )}
       </button>
+
+      <Link className="mcc-checkout-cart-return" to="/cart">
+        <ArrowIcon direction="left" />
+        Tillbaka till varukorgen
+      </Link>
     </form>
   );
 }
