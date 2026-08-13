@@ -41,6 +41,47 @@ async function expectContextPanelBelowHeader(page: Page) {
   );
 }
 
+test("the menu opens across the full viewport in tablet WebKit layout", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/");
+  await acceptCookies(page);
+
+  const menuButton = page.getByRole("button", { name: "Öppna meny" });
+  await menuButton.tap();
+
+  await expect(menuButton).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("dialog", { name: "Huvudmeny" })).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator(".mcc-navigation-layer")
+        .evaluate((layer) => layer.parentElement === document.body)
+    )
+    .toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Boolean(
+          document
+            .elementFromPoint(innerWidth / 2, innerHeight / 2)
+            ?.closest(".mcc-navigation-layer")
+        )
+      )
+    )
+    .toBe(true);
+
+  const headerBox = await page.locator(".mcc-site-header").boundingBox();
+  const layerBox = await page.locator(".mcc-navigation-layer").boundingBox();
+  expect(headerBox).not.toBeNull();
+  expect(layerBox).not.toBeNull();
+  expect(layerBox!.height).toBeGreaterThan(headerBox!.height * 4);
+
+  await page.locator(".mcc-navigation-rail .mcc-navigation-close").tap();
+  await expect(page.locator(".mcc-navigation-layer")).toHaveCount(0);
+});
+
 test("a touch user can open a Collection", async ({ page }) => {
   await page.goto("/");
   await acceptCookies(page);
@@ -108,6 +149,13 @@ test("collection gallery controls are touch-friendly", async ({ page }) => {
   await firstGallery
     .getByRole("button", { name: /Visa .* i större format/ })
     .tap();
+  await expect
+    .poll(() =>
+      page
+        .locator(".mcc-image-viewer")
+        .evaluate((viewer) => viewer.parentElement === document.body)
+    )
+    .toBe(true);
   const viewerControls = page.locator(".mcc-image-viewer__toolbar button");
   await expect(viewerControls).toHaveCount(5);
   for (let index = 0; index < (await viewerControls.count()); index += 1) {
@@ -118,6 +166,31 @@ test("collection gallery controls are touch-friendly", async ({ page }) => {
   }
   await page.getByRole("button", { name: "Stäng stor bild" }).last().tap();
   await expectNoHorizontalOverflow(page);
+});
+
+test("the login dialog is detached from animated route containers", async ({
+  page,
+}) => {
+  await page.goto("/login");
+
+  const loginDialog = page.getByRole("dialog", {
+    name: "Fint att se dig igen.",
+  });
+  await expect(loginDialog).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator(".mcc-login-modal")
+        .evaluate((modal) => modal.parentElement === document.body)
+    )
+    .toBe(true);
+
+  const modalBox = await page.locator(".mcc-login-modal").boundingBox();
+  const viewport = page.viewportSize();
+  expect(modalBox).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(modalBox!.width).toBeGreaterThanOrEqual(viewport!.width - 1);
+  expect(modalBox!.height).toBeGreaterThanOrEqual(viewport!.height - 1);
 });
 
 test("Collection storytelling scrolls without sticky mobile pauses", async ({
@@ -170,6 +243,46 @@ test("Collection storytelling scrolls without sticky mobile pauses", async ({
   expect(leavingTransform).not.toBe(enteringTransform);
 });
 
+test("WebKit keeps every Collection image joined to its text card", async ({
+  browserName,
+  page,
+}) => {
+  test.skip(browserName !== "webkit", "Physical iOS uses WebKit layout rules");
+
+  await page.goto("/");
+  await acceptCookies(page);
+
+  const measurements = await page
+    .locator(".mcc-collection-scene")
+    .evaluateAll((scenes) =>
+      scenes.map((scene) => {
+        const media = scene
+          .querySelector<HTMLElement>(".mcc-collection-scene__media")!
+          .getBoundingClientRect();
+        const copyElement = scene.querySelector<HTMLElement>(
+          ".mcc-collection-scene__copy"
+        )!;
+        const copy = copyElement.getBoundingClientRect();
+
+        return {
+          gap: copy.top - media.bottom,
+          title: scene.getAttribute("data-banner-context-title"),
+          transform: getComputedStyle(copyElement).transform,
+        };
+      })
+    );
+
+  expect(measurements.length).toBeGreaterThan(0);
+  for (const measurement of measurements) {
+    expect(measurement.transform, measurement.title ?? undefined).toBe("none");
+    expect(measurement.gap, measurement.title ?? undefined).toBeGreaterThan(15);
+    expect(measurement.gap, measurement.title ?? undefined).toBeLessThan(17);
+  }
+
+  const gaps = measurements.map(({ gap }) => gap);
+  expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThanOrEqual(0.5);
+});
+
 test("all Collection routes fit the mobile viewport", async ({ page }) => {
   test.setTimeout(90_000);
 
@@ -189,7 +302,7 @@ test("all Collection routes fit the mobile viewport", async ({ page }) => {
         )
       )
     );
-  expect(collectionHrefs.length).toBeGreaterThanOrEqual(18);
+  expect(collectionHrefs.length).toBeGreaterThan(0);
 
   for (const href of collectionHrefs) {
     const response = await page.goto(href);

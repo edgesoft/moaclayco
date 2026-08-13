@@ -14,6 +14,7 @@ import {
 } from "framer-motion";
 import { useEffect, useRef } from "react";
 import { useTheme, themes } from "~/components/Theme";
+import useMediaQuery from "~/hooks/useMediaQuery";
 import { Items } from "~/schemas/items";
 import type { CollectionProps, ItemProps } from "~/types";
 import type { IndexProps } from "~/root";
@@ -270,6 +271,7 @@ function CollectionScene({
 }) {
   const sectionRef = useRef<HTMLElement>(null);
   const reduceMotion = useReducedMotion();
+  const usesCompactLayout = useMediaQuery("(max-width: 899px)");
   const layout = index % 3;
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -359,6 +361,8 @@ function CollectionScene({
           style={
             reduceMotion
               ? undefined
+              : usesCompactLayout
+                ? { opacity: copyOpacity }
               : {
                   opacity: copyOpacity,
                   x: copyParallaxX,

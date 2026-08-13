@@ -1,5 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
+import ViewportPortal from "./ViewportPortal";
 
 type FeedbackProp = {
   type: "error" | "success";
@@ -35,43 +36,50 @@ const Feedback: React.FC<FeedbackProp> = ({
   const visible = !forceInvisble && dismissedHeadline !== headline;
 
   return (
-    <AnimatePresence>
-      {visible ? (
-        <motion.div
-          animate={{ opacity: 1, y: 0 }}
-          aria-live={type === "error" ? "assertive" : "polite"}
-          className={`mcc-feedback mcc-feedback--${type}`}
-          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: initialYValue }}
-          initial={
-            reduceMotion ? { opacity: 0 } : { opacity: 0, y: initialYValue }
-          }
-          onClick={onHandleClick}
-          role={type === "error" ? "alert" : "status"}
-          transition={{ duration: reduceMotion ? 0 : 0.24, ease: "easeOut" }}
-        >
-          <span aria-hidden="true" className="mcc-feedback-mark">
-            {type === "error" ? "!" : "✓"}
-          </span>
-          <div className="mcc-feedback-copy">
-            <p>{headline}</p>
-            {message ? <span>{message}</span> : null}
-          </div>
-          {!visibleInMillis ? (
-            <button
-              aria-label="Stäng meddelandet"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setDismissedHeadline(headline);
-              }}
-              type="button"
-            >
-              <span aria-hidden="true">×</span>
-            </button>
-          ) : null}
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+    <ViewportPortal>
+      <AnimatePresence>
+        {visible ? (
+          <motion.div
+            animate={{ opacity: 1, y: 0 }}
+            aria-live={type === "error" ? "assertive" : "polite"}
+            className={`mcc-feedback mcc-feedback--${type}`}
+            exit={
+              reduceMotion ? { opacity: 0 } : { opacity: 0, y: initialYValue }
+            }
+            initial={
+              reduceMotion ? { opacity: 0 } : { opacity: 0, y: initialYValue }
+            }
+            onClick={onHandleClick}
+            role={type === "error" ? "alert" : "status"}
+            transition={{
+              duration: reduceMotion ? 0 : 0.24,
+              ease: "easeOut",
+            }}
+          >
+            <span aria-hidden="true" className="mcc-feedback-mark">
+              {type === "error" ? "!" : "✓"}
+            </span>
+            <div className="mcc-feedback-copy">
+              <p>{headline}</p>
+              {message ? <span>{message}</span> : null}
+            </div>
+            {!visibleInMillis ? (
+              <button
+                aria-label="Stäng meddelandet"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setDismissedHeadline(headline);
+                }}
+                type="button"
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            ) : null}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </ViewportPortal>
   );
 };
 

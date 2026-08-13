@@ -1,5 +1,6 @@
 import { useNavigation } from "react-router";
 import { useEffect, useState } from "react";
+import ViewportPortal from "./ViewportPortal";
 
 type Navigation = ReturnType<typeof useNavigation>;
 
@@ -34,11 +35,13 @@ function DelayedLoader() {
   if (!show) return null;
 
   return (
-    <div aria-live="polite" className="mcc-route-loader" role="status">
-      <span aria-hidden="true" className="mcc-route-loader-mark">
-        <span />
-      </span>
-      <span>Laddar nästa vy</span>
-    </div>
+    <ViewportPortal>
+      <div aria-live="polite" className="mcc-route-loader" role="status">
+        <span aria-hidden="true" className="mcc-route-loader-mark">
+          <span />
+        </span>
+        <span>Laddar nästa vy</span>
+      </div>
+    </ViewportPortal>
   );
 }

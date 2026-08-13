@@ -15,6 +15,7 @@ import { useCart } from "react-use-cart";
 import { CollectionProps, User } from "~/types";
 import ClientOnly from "./ClientOnly";
 import LoginModal from "./LoginModal";
+import ViewportPortal from "./ViewportPortal";
 
 type IndexLoadingType = {
   user?: User;
@@ -335,15 +336,16 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
         <Icon name="menu" />
       </button>
 
-      <AnimatePresence>
-        {menuOpen ? (
-          <motion.div
-            animate={{ opacity: 1 }}
-            className="mcc-navigation-layer"
-            exit={{ opacity: 0 }}
-            initial={{ opacity: 0 }}
-            transition={{ duration: 0.22 }}
-          >
+      <ViewportPortal>
+        <AnimatePresence>
+          {menuOpen ? (
+            <motion.div
+              animate={{ opacity: 1 }}
+              className="mcc-navigation-layer"
+              exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }}
+              transition={{ duration: 0.22 }}
+            >
             <button
               aria-label="Stäng meny"
               className="mcc-navigation-backdrop"
@@ -625,9 +627,10 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
                 </div>
               </motion.section>
             </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </ViewportPortal>
     </>
   );
 }

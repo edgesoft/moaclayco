@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { FREE_FREIGHT, FREIGHT_COST } from "~/utils/constants";
 import { useTheme } from "./Theme";
+import ViewportPortal from "./ViewportPortal";
 
 type Show = {
   show: (close: boolean) => void;
@@ -52,35 +53,36 @@ export default function Terms({ show }: Show) {
   }, [show]);
 
   return (
-    <div
-      className="mcc-terms-modal fixed inset-0"
-      aria-labelledby="modal-title"
-      role="dialog"
-      aria-modal="true"
-    >
+    <ViewportPortal>
       <div
-        className="mcc-terms-backdrop fixed inset-0 transition-opacity"
-        aria-hidden="true"
-        onClick={() => show(false)}
-      />
-      <div className="mcc-terms-modal__positioner">
-        <div className="mcc-terms-dialog" ref={dialogRef}>
-          <header className="mcc-terms-toolbar">
-            <h2 className="mcc-terms-title" id="modal-title">
-              Villkor
-            </h2>
-            <button
-              aria-label="Stäng villkoren"
-              className="mcc-terms-icon-close"
-              onClick={() => show(false)}
-              ref={closeButtonRef}
-              type="button"
-            >
-              <span aria-hidden="true">×</span>
-            </button>
-          </header>
-          <div className="mcc-terms-scroll">
-            <div className="mcc-terms-content pb-4 pt-5 px-4 sm:p-6 sm:pb-4">
+        className="mcc-terms-modal fixed inset-0"
+        aria-labelledby="modal-title"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div
+          className="mcc-terms-backdrop fixed inset-0 transition-opacity"
+          aria-hidden="true"
+          onClick={() => show(false)}
+        />
+        <div className="mcc-terms-modal__positioner">
+          <div className="mcc-terms-dialog" ref={dialogRef}>
+            <header className="mcc-terms-toolbar">
+              <h2 className="mcc-terms-title" id="modal-title">
+                Villkor
+              </h2>
+              <button
+                aria-label="Stäng villkoren"
+                className="mcc-terms-icon-close"
+                onClick={() => show(false)}
+                ref={closeButtonRef}
+                type="button"
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </header>
+            <div className="mcc-terms-scroll">
+              <div className="mcc-terms-content pb-4 pt-5 px-4 sm:p-6 sm:pb-4">
               <div className="sm:flex sm:items-start">
                 <div className="mt-3 sm:ml-4 sm:mt-0 sm:text-left">
                   <div className="mt-2">
@@ -192,19 +194,20 @@ export default function Terms({ show }: Show) {
                   </div>
                 </div>
               </div>
+              </div>
             </div>
-          </div>
-          <div className="mcc-terms-footer">
-            <button
-              onClick={() => show(false)}
-              type="button"
-              className="mcc-terms-close"
-            >
-              Stäng
-            </button>
+            <div className="mcc-terms-footer">
+              <button
+                onClick={() => show(false)}
+                type="button"
+                className="mcc-terms-close"
+              >
+                Stäng
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </ViewportPortal>
   );
 }

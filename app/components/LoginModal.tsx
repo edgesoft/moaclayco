@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import ViewportPortal from "./ViewportPortal";
 
 type LoginModalProps = {
   configured: boolean;
@@ -77,7 +78,7 @@ export default function LoginModal({
     };
   }, [onClose]);
 
-  return (
+  const modal = (
     <div
       aria-labelledby="login-modal-title"
       aria-modal="true"
@@ -159,4 +160,6 @@ export default function LoginModal({
       </div>
     </div>
   );
+
+  return <ViewportPortal fallback={modal}>{modal}</ViewportPortal>;
 }

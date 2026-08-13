@@ -1125,9 +1125,11 @@ body.mcc-menu-open .mcc-scroll-context-wrap {
   }
 
   .mcc-collection-scene__stage {
-    display: block;
-    height: calc(100svh - 5rem);
-    min-height: 35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    height: auto;
+    min-height: 0;
     padding: 0.75rem;
     position: relative;
     top: auto;
@@ -1136,11 +1138,14 @@ body.mcc-menu-open .mcc-scroll-context-wrap {
   .mcc-collection-scene--1 .mcc-collection-scene__media,
   .mcc-collection-scene--2 .mcc-collection-scene__media,
   .mcc-collection-scene--3 .mcc-collection-scene__media {
+    aspect-ratio: 4 / 5;
     border-radius: 1.05rem;
+    flex: 0 0 auto;
     grid-column: auto;
-    height: 59%;
-    inset: 0.75rem 0.75rem auto;
-    position: absolute;
+    height: auto;
+    inset: auto;
+    position: relative;
+    width: 100%;
   }
 
   .mcc-collection-scene--1 .mcc-collection-scene__copy,
@@ -1151,14 +1156,16 @@ body.mcc-menu-open .mcc-scroll-context-wrap {
     background: rgba(255, 255, 255, 0.94);
     border: 1px solid rgba(255, 255, 255, 0.86);
     border-radius: 1.05rem;
-    bottom: 0.75rem;
+    bottom: auto;
+    flex: 0 0 auto;
     grid-column: auto;
-    left: 0.75rem;
+    left: auto;
     margin: 0;
     max-width: none;
     padding: 1.25rem;
-    position: absolute;
-    right: 0.75rem;
+    position: relative;
+    right: auto;
+    width: 100%;
   }
 
   .mcc-collection-scene__copy h2 {
@@ -7896,7 +7903,7 @@ input[type="search"]::-ms-reveal {
   }
 
   .landing-page .mcc-collection-scene__stage {
-    height: calc(100svh - var(--mcc-site-header-height, 4.5rem));
+    height: auto;
     position: relative;
     top: auto;
   }
