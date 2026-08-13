@@ -57,29 +57,3 @@ test("still rejects an empty ordinary journal verification", async () => {
 
   await assert.rejects(() => verification.validate(), /minst två konteringsrader/);
 });
-
-test("allows 2050 in an explicitly marked legacy correction", async () => {
-  const correction = new Verifications({
-    ...baseVerification,
-    description: "Rättelse av äldre skattekontokontering",
-    recordType: "journal",
-    metadata: [{ key: "legacy2050Correction", value: "true" }],
-    journalEntries: [
-      { account: 2050, debit: 1 },
-      { account: 8314, credit: 1 },
-    ],
-  });
-
-  await correction.validate();
-  assert.deepEqual(
-    correction.journalEntries.map((entry: any) => ({
-      account: entry.account,
-      debit: entry.debit,
-      credit: entry.credit,
-    })),
-    [
-      { account: 2050, debit: 1, credit: 0 },
-      { account: 8314, debit: 0, credit: 1 },
-    ]
-  );
-});

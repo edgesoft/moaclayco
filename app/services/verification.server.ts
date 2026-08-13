@@ -35,9 +35,6 @@ const normalizeInput = (input: CreateVerificationInput) => {
     key: String(key).trim(),
     value: String(value).trim(),
   }));
-  const allowsLegacyAccount2050 = metadata.some(
-    (entry) => entry.key === "legacy2050Correction" && entry.value === "true"
-  );
   const allowsEmptyJournal =
     recordType === "vatReport" || recordType === "incomingBalance";
   const isEmptyNonPostingRecord =
@@ -72,9 +69,7 @@ const normalizeInput = (input: CreateVerificationInput) => {
     recordType,
     journalEntries: isEmptyNonPostingRecord
       ? []
-      : normalizeJournalEntries(input.journalEntries, {
-          allowLegacyAccount2050: allowsLegacyAccount2050,
-        }),
+      : normalizeJournalEntries(input.journalEntries),
     idempotencyKey: input.idempotencyKey?.trim() || undefined,
     metadata,
     files: (input.files ?? []).map(({ name, path }) => ({

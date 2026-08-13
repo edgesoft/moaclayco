@@ -75,13 +75,7 @@ VerificationsSchema.pre("validate", function () {
     return;
   }
 
-  const allowsLegacyAccount2050 = this.metadata?.some(
-    (entry: any) =>
-      entry?.key === "legacy2050Correction" && entry?.value === "true"
-  );
-  this.journalEntries = normalizeJournalEntries(this.journalEntries, {
-    allowLegacyAccount2050: allowsLegacyAccount2050,
-  }) as any;
+  this.journalEntries = normalizeJournalEntries(this.journalEntries) as any;
 });
 
 VerificationsSchema.index({ domain: 1, verificationNumber: 1 }, { unique: true });

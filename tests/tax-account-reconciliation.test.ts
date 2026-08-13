@@ -3,7 +3,6 @@ import test from "node:test";
 import { validateTaxAccountStatement } from "../app/services/tax-account-document.server";
 import {
   assignTaxAccountRowIds,
-  applyLinkedLegacyCorrections,
   buildTaxAccountPosting,
   calculateTaxAccountBalance,
   calculateTaxAccountOpeningState,
@@ -116,32 +115,7 @@ test("unmatched tax-account payouts default to the private account", () => {
   ]);
 });
 
-test("same-date legacy 2050 posting is flagged for review instead of accepted", () => {
-  const [row] = assignTaxAccountRowIds([
-    {
-      date: "2026-04-13",
-      description: "Moms feb 2026",
-      amount: -239,
-      balanceAfter: 0,
-      sourceReference: "Moms feb 2026",
-    },
-  ]);
-  const [result] = reconcileTaxAccountRows([row], [
-    {
-      verificationNumber: 224,
-      verificationDate: "2026-04-13",
-      description: "Moms feb 2026",
-      journalEntries: [
-        { account: 2650, debit: 239, credit: 0 },
-        { account: 2050, debit: 0, credit: 239 },
-      ],
-    },
-  ]);
-  assert.equal(result.status, "review");
-  assert.equal(result.match?.verificationNumber, 224);
-});
-
-test("book balance reports current and legacy tax accounts separately", () => {
+test("book balance follows account 2012", () => {
   assert.deepEqual(
     calculateTaxAccountBalance([
       {
@@ -153,17 +127,8 @@ test("book balance reports current and legacy tax accounts separately", () => {
           { account: 2999, debit: 0, credit: 171 },
         ],
       },
-      {
-        verificationNumber: 2,
-        verificationDate: "2026-01-02",
-        description: "Äldre saldo",
-        journalEntries: [
-          { account: 2050, debit: 10, credit: 0 },
-          { account: 2999, debit: 0, credit: 10 },
-        ],
-      },
     ]),
-    { account2012: 171, legacy2050: 10, total: 171 }
+    { account2012: 171, total: 171 }
   );
 });
 
@@ -190,45 +155,6 @@ test("legacy journal records are recognized as IB through metadata", () => {
   assert.equal(state.sourceVerificationNumber, 217);
   assert.equal(state.bookBalance, 171);
   assert.equal(state.difference, 0);
-});
-
-test("linked legacy corrections expose the effective posting", () => {
-  const effective = applyLinkedLegacyCorrections([
-    {
-      verificationNumber: 223,
-      verificationDate: "2026-02-01",
-      description: "Intäktsränta",
-      journalEntries: [
-        { account: 2012, debit: 1, credit: 0 },
-        { account: 2050, debit: 0, credit: 1 },
-      ],
-    },
-    {
-      verificationNumber: 252,
-      verificationDate: "2026-08-12",
-      description: "Rättelse av äldre skattekontokontering A223",
-      metadata: [
-        { key: "legacy2050Correction", value: "true" },
-        { key: "correctionForVerification", value: "223" },
-      ],
-      journalEntries: [
-        { account: 2050, debit: 1, credit: 0 },
-        { account: 8314, debit: 0, credit: 1 },
-      ],
-    },
-  ]);
-
-  assert.deepEqual(effective, [
-    {
-      verificationNumber: 223,
-      verificationDate: "2026-02-01",
-      description: "Intäktsränta",
-      journalEntries: [
-        { account: 2012, debit: 1, credit: 0 },
-        { account: 8314, debit: 0, credit: 1 },
-      ],
-    },
-  ]);
 });
 
 test("tax-account statement validation accepts an unbroken balance chain", () => {

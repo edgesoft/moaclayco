@@ -29,8 +29,7 @@ const normalizeAmount = (value: unknown, label: string) => {
 };
 
 export function normalizeJournalEntries(
-  entries: unknown,
-  options: { allowLegacyAccount2050?: boolean } = {}
+  entries: unknown
 ): NormalizedJournalEntry[] {
   if (!Array.isArray(entries) || entries.length < 2) {
     throw new VerificationValidationError(
@@ -52,7 +51,7 @@ export function normalizeJournalEntries(
     if (!Number.isInteger(account) || account < 1000 || account > 9999) {
       throw new VerificationValidationError(`Rad ${index + 1} har ett ogiltigt konto`);
     }
-    if (account === 2050 && !options.allowLegacyAccount2050) {
+    if (account === 2050) {
       throw new VerificationValidationError(
         `Rad ${index + 1} använder det utgångna kontot 2050; använd ett konto för enskild firma`
       );

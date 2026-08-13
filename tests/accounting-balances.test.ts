@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildIncomingBalanceEntries } from "../app/utils/accounts";
 import {
   buildVatReportEntries,
   buildVatTaxAccountEntries,
@@ -22,24 +21,6 @@ import { synchronizeIncomingBalance } from "../app/services/verification.server"
 const totals = (entries: Array<{ debit: number; credit: number }>) => ({
   debit: entries.reduce((sum, entry) => sum + entry.debit, 0),
   credit: entries.reduce((sum, entry) => sum + entry.credit, 0),
-});
-
-test("IB does not treat legacy counter-account 2050 as tax-account balance", () => {
-  const entries = buildIncomingBalanceEntries([
-    {
-      journalEntries: [
-        { account: 1930, debit: 1_500 },
-        { account: 2018, credit: 1_500 },
-        { account: 2050, credit: 840 },
-      ],
-    },
-  ]);
-
-  assert.deepEqual(entries, [
-    { account: 1930, debit: 1_500, credit: 0 },
-    { account: 2018, debit: 0, credit: 1_500 },
-  ]);
-  assert.deepEqual(totals(entries), { debit: 1_500, credit: 1_500 });
 });
 
 test("existing IB is cleared when the recalculated balance is zero", async () => {

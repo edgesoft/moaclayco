@@ -45,7 +45,6 @@ import {
   TaxAccountBankChoice,
   TaxAccountJournalEntry,
   TaxAccountPosting,
-  applyLinkedLegacyCorrections,
   buildTaxAccountPosting,
   calculateTaxAccountBalance,
   calculateTaxAccountOpeningState,
@@ -195,8 +194,8 @@ const parseStatement = async ({
     .sort({ verificationDate: 1, verificationNumber: 1 })
     .lean()
     .exec();
-  const reconciliationVerifications = applyLinkedLegacyCorrections(
-    verifications.map(toReconciliationVerification)
+  const reconciliationVerifications = verifications.map(
+    toReconciliationVerification
   );
   const rows = reconcileTaxAccountRows(
     statement.transactions,

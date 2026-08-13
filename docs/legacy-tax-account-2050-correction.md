@@ -1,145 +1,112 @@
-# Legacy 2050 correction runbook
+# Borttagning av konto 2050
 
-GitHub issue: https://github.com/edgesoft/moaclayco/issues/209
+## Omfattning
 
-## Purpose
+Migreringen gäller endast dokument med `domain=moaclayco`. Den läser eller
+skriver inte SGWoods-data. Fältet `domain` finns fortfarande kvar i appens
+datamodell; detta är inte en domänmigrering.
 
-Older Moa Clay Co verifications used account 2050 as a technical tax-account
-counter account. BAS uses 2012 for tax-account reconciliation in a sole trader,
-while 2050 is reserved for an expansion fund.
+Konto 2050 är inte ett tillgängligt konto i appen. Nya verifikationer med
+2050 stoppas av valideringen. Produktionsverktyget nämner kontot endast för att
+kunna hitta och ta bort de befintliga raderna.
 
-This runbook records the traceable correction tested in stage. Original
-verifications are never overwritten. Each change is a separate correction
-verification linked to its source through metadata and an idempotency key.
+## Återställning av stage — 2026-08-13
 
-Ordinary postings still reject account 2050. It is accepted only when metadata
-contains `legacy2050Correction=true`.
-
-## Stage execution - 2026-08-12
-
-Source database: `storm-stage`
-
-Source verifications: A223, A224, A226, A227, A228 and A229.
-
-The correct replacement for the VAT part of A229 had already been created as
-A240 by the tax-account PDF import. The migration tool refuses to run unless
-that replacement exists with row fingerprint `2026-04-13:-23900:1`.
-
-### Commands used
-
-Dry-run:
+Stage återställdes från Moa Clay Co-dokumenten i production-databasen
+`storm` till `storm-stage` med:
 
 ```sh
-npx tsx --env-file=.env.stage.local tools/correct-legacy-tax-account-2050.ts \
-  --target=stage \
-  --date=2026-08-12
+node tools/refresh-moaclayco-stage.mjs
+node tools/refresh-moaclayco-stage.mjs --apply
+node tools/refresh-moaclayco-stage.mjs --verify
 ```
 
-Apply:
+Endast följande domänavgränsade samlingar kopierades:
+
+| Samling | Antal dokument |
+| --- | ---: |
+| collections | 17 |
+| discounts | 4 |
+| items | 145 |
+| orders | 167 |
+| verificationCounters | 1 |
+| verifications | 237 |
+
+`users` och `webhookEvents` lämnades orörda. 671 refererade filer och bilder
+kontrollerades mot stage-sökvägarna. 669 fanns oförändrade och två filer som
+endast fanns i stage behölls. Inga SGWoods-dokument eller SGWoods-filer
+kopierades.
+
+## Direkt migrering av de ursprungliga verifikationerna
+
+Stage migrerades med:
 
 ```sh
-npx tsx --env-file=.env.stage.local tools/correct-legacy-tax-account-2050.ts \
+node --env-file=.env.stage.local --import=tsx \
+  tools/remove-tax-account-2050.ts \
   --target=stage \
-  --date=2026-08-12 \
   --apply
 ```
 
-### Corrections created
+Verktyget ändrade 42 ursprungliga verifikationer enligt deras verkliga
+händelsetyp:
 
-| New | Corrects | Journal entries |
-| --- | --- | --- |
-| A252 | A223 | Debit 2050 1; credit 8314 1 |
-| A253 | A224 | Debit 2013 399; credit 2050 399 |
-| A254 | A226 | Debit 2050 239; credit 2650 239 |
-| A255 | A227 | Debit 2050 1; credit 8314 1 |
-| A256 | A228 | Debit 2013 399; credit 2050 399 |
-| A257 | A229 | Debit 2012 239; credit 2650 239; debit 2050 239; credit 2018 239 |
+| Typ | Antal | Slutlig kontering |
+| --- | ---: | --- |
+| Intäktsränta | 16 | 2012 mot 8314 |
+| Preliminär/slutlig/avdragen skatt | 6 | 2013 mot 2012 |
+| Inbetalning till skattekontot | 10 | 2012 mot 1930 eller 2018 |
+| Moms på skattekontot | 10 | 2012 mot 2650 |
 
-Every correction has:
+Debet- och kreditriktningen behölls från respektive verklig transaktion.
+Den gamla extra 2050/2650-delen togs bort från sammanslagna inbetalningar.
 
-- `legacy2050Correction=true`
-- `migration=legacy-tax-account-2050-2026-v1`
-- `correctionForVerification=<source number>`
-- `githubIssue=209`
-- idempotency key `legacy-tax-account-2050-2026-v1:A<source number>`
+Dessutom gjordes följande i samma transaktion:
 
-### Verified account balances
+- De sex tidigare rättelserna A231, A232, A233, A235, A236 och A237 togs bort.
+- Den felaktiga/dubbla A229 togs bort.
+- A229:s underlag flyttades till den korrekta momsverifikationen A238.
+- Den tillfälliga A239 togs bort.
+- Verifikationsräknaren verifierades mot högsta kvarvarande nummer, A238.
 
-| Account | Before | After | Change |
-| --- | ---: | ---: | ---: |
-| 2012 | 3,115.00 | 3,354.00 | +239.00 |
-| 2050 | 318.00 | 0.00 | -318.00 |
-| 2013 | 6,164.00 | 6,962.00 | +798.00 |
-| 2018 | -10,955.75 | -11,194.75 | -239.00 |
-| 2650 | 436.00 | -42.00 | -478.00 |
-| 8314 | -12.00 | -14.00 | -2.00 |
+Slutkontrollen av `storm-stage` gav:
 
-The tax-account balance on 2012 now agrees with the uploaded statement's
-closing balance of 3,354.00. Account 2050 is zero. The correction is mainly a
-balance-sheet reclassification, but the two old interest rows also increase
-interest income on 8314 by 2.00.
+- 230 verifikationer.
+- 0 journalrader på konto 2050.
+- 0 obalanserade verifikationer.
+- 0 dubbla verifikationsnummer.
+- Alla migrerade rader har ett positivt belopp på exakt en av debet eller
+  kredit.
+- 0 SGWoods-dokument i de sex kontrollerade samlingarna.
 
-### Verified statement re-upload
+Det finns äldre nollrader (`debet=0`, `kredit=0`) i production-underlaget,
+främst i momsrapporter. De berörs inte av denna avgränsade 2050-migrering.
 
-The same 21 statement rows were reconciled again against `storm-stage` after
-the correction. The result was:
+## Production — inte utförd
 
-- booked: 21
-- review: 0
-- missing: 0
+Production har inte skrivits till. En skrivskyddad dry-run har kontrollerat att
+samma migrering ger samma slutliga antal och kontosaldon som i stage.
 
-For statement reconciliation, a correction marked with
-`legacy2050Correction=true` and `correctionForVerification=<source number>` is
-combined with its original verification. This exposes the corrected effective
-posting without rewriting or hiding either database record. A correction that
-fully reverses an original, as for A229, removes that original from matching so
-the imported replacement A240 is used instead.
+Kör dry-run igen om production har ändrats:
 
-## Production procedure - do not run without approval
+```sh
+node --env-file=.env.production.local --import=tsx \
+  tools/remove-tax-account-2050.ts \
+  --target=production
+```
 
-Production must be checked independently. Do not assume it has the same latest
-verification numbers or replacement postings as stage.
+Efter uttryckligt godkännande körs production med både skrivflagga och separat
+production-spärr:
 
-1. Deploy the validation change and migration tool.
-2. Confirm that production still has the exact source signatures expected for
-   A223, A224, A226, A227, A228 and A229.
-3. Confirm that the tax-account PDF import has created the correct replacement
-   for the A229 VAT portion. The tool checks the row fingerprint and entries.
-4. Run the dry-run using the actual correction date:
+```sh
+node --env-file=.env.production.local --import=tsx \
+  tools/remove-tax-account-2050.ts \
+  --target=production \
+  --apply \
+  --confirm-production=remove-2050
+```
 
-   ```sh
-   npx tsx --env-file=.env.production.local tools/correct-legacy-tax-account-2050.ts \
-     --target=production \
-     --date=YYYY-MM-DD
-   ```
-
-5. Review the database name, original signatures, replacement verification,
-   existing corrections, proposed entries and before-balances in the output.
-6. Obtain explicit approval for the production write.
-7. Apply with the production confirmation guard:
-
-   ```sh
-   npx tsx --env-file=.env.production.local tools/correct-legacy-tax-account-2050.ts \
-     --target=production \
-     --date=YYYY-MM-DD \
-     --apply \
-     --confirm-production=issue-209
-   ```
-
-8. Verify that 2050 is zero, 2012 agrees with the tax-account statement and all
-   account deltas equal the dry-run. Re-upload the same PDF and confirm the
-   stage acceptance result: 21 booked, 0 review and 0 missing.
-9. Re-run the tool in dry-run mode. It must report all six idempotent
-   corrections as existing and propose no duplicate writes.
-
-The tool stops instead of writing if the database target, source signatures,
-replacement VAT posting or migration completeness differs from the verified
-stage state. Do not bypass those guards; investigate the production difference
-and update this runbook first.
-
-## Reversal policy
-
-Do not delete a correction verification. If a correction itself is wrong,
-create a new dated and traceable reversal linked to the correction. A disposable
-stage environment may alternatively be restored from a known source import,
-but production history must remain append-only.
+Verktyget avbryter om databasnamnet, källverifikationerna, de sex gamla
+rättelserna, A229, A238, verifikationsräknaren eller den förväntade
+fördelningen 16/6/10/10 avviker. Efter genomförd migrering är det idempotent
+och verifierar slutläget utan nya skrivningar.

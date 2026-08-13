@@ -63,19 +63,3 @@ test("rejects legacy account 2050 for new entries", () => {
     /utgångna kontot 2050/
   );
 });
-
-test("allows account 2050 only for an explicit legacy correction", () => {
-  assert.deepEqual(
-    normalizeJournalEntries(
-      [
-        { account: 2050, debit: 1 },
-        { account: 8314, credit: 1 },
-      ],
-      { allowLegacyAccount2050: true }
-    ),
-    [
-      { account: 2050, debit: 1, credit: 0 },
-      { account: 8314, debit: 0, credit: 1 },
-    ]
-  );
-});

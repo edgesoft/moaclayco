@@ -57,7 +57,6 @@ export type ReconciliationVerification = {
 export type TaxAccountOpeningState = {
   sourceVerificationNumber: number | null;
   bookBalance: number;
-  legacy2050Balance: number;
   difference: number;
 };
 
@@ -222,60 +221,6 @@ const metadataValue = (
   key: string
 ) => verification.metadata?.find((entry) => entry.key === key)?.value;
 
-export const applyLinkedLegacyCorrections = (
-  verifications: ReconciliationVerification[]
-) => {
-  const sourceNumbers = new Set(
-    verifications.map((verification) => verification.verificationNumber)
-  );
-  const correctionsBySource = new Map<number, ReconciliationVerification[]>();
-  const linkedCorrectionNumbers = new Set<number>();
-
-  for (const verification of verifications) {
-    if (metadataValue(verification, "legacy2050Correction") !== "true") continue;
-    const sourceNumber = Number(
-      metadataValue(verification, "correctionForVerification")
-    );
-    if (!Number.isInteger(sourceNumber) || !sourceNumbers.has(sourceNumber)) continue;
-    correctionsBySource.set(sourceNumber, [
-      ...(correctionsBySource.get(sourceNumber) ?? []),
-      verification,
-    ]);
-    linkedCorrectionNumbers.add(verification.verificationNumber);
-  }
-
-  return verifications.flatMap((verification) => {
-    if (linkedCorrectionNumbers.has(verification.verificationNumber)) return [];
-    const corrections = correctionsBySource.get(verification.verificationNumber);
-    if (!corrections?.length) return [verification];
-
-    const balances = new Map<number, number>();
-    for (const entry of [
-      ...verification.journalEntries,
-      ...corrections.flatMap((correction) => correction.journalEntries),
-    ]) {
-      const account = Number(entry.account);
-      balances.set(
-        account,
-        roundCurrency(
-          (balances.get(account) ?? 0) +
-            Number(entry.debit || 0) -
-            Number(entry.credit || 0)
-        )
-      );
-    }
-    const journalEntries = Array.from(balances.entries())
-      .filter(([, balance]) => balance !== 0)
-      .map(([account, balance]) => ({
-        account,
-        debit: balance > 0 ? balance : 0,
-        credit: balance < 0 ? Math.abs(balance) : 0,
-      }));
-
-    return journalEntries.length ? [{ ...verification, journalEntries }] : [];
-  });
-};
-
 export const isIncomingBalanceVerification = (
   verification: ReconciliationVerification,
   fiscalYear: number
@@ -310,7 +255,6 @@ export const calculateTaxAccountOpeningState = ({
   return {
     sourceVerificationNumber: sourceVerification?.verificationNumber ?? null,
     bookBalance: booked.account2012,
-    legacy2050Balance: booked.legacy2050,
     difference: roundCurrency(booked.account2012 - expectedOpeningBalance),
   };
 };
@@ -357,7 +301,7 @@ const verificationContainsAmount = (
 
 const containsTaxAccount = (verification: ReconciliationVerification) =>
   verification.journalEntries.some((entry) =>
-    [2012, 2050].includes(Number(entry.account))
+    Number(entry.account) === 2012
   );
 
 const matchScore = (
@@ -469,19 +413,14 @@ export const calculateTaxAccountBalance = (
   verifications: ReconciliationVerification[]
 ) => {
   let account2012 = 0;
-  let legacy2050 = 0;
   for (const verification of verifications) {
     for (const entry of verification.journalEntries) {
       const change = roundCurrency(Number(entry.debit || 0) - Number(entry.credit || 0));
       if (entry.account === 2012) account2012 = roundCurrency(account2012 + change);
-      if (entry.account === 2050) legacy2050 = roundCurrency(legacy2050 + change);
     }
   }
   return {
     account2012,
-    legacy2050,
-    // 2050 var ett motkonto i äldre verifikationer, inte en del av
-    // Skatteverkets kontosaldo. Avstämningen ska därför följa 2012.
     total: account2012,
   };
 };
