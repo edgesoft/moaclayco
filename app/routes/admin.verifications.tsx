@@ -22,6 +22,7 @@ import {
 import { getDomain } from "~/utils/domain";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
+import { getAccountingYearStatus } from "~/services/verification.server";
 
 const normalizePathname = (pathname: string) => pathname.replace(/\/+$/, "");
 const verificationNumberFrom = (verification: unknown) => {
@@ -38,6 +39,7 @@ const verificationNumberFrom = (verification: unknown) => {
 export const loader: LoaderFunction = async ({ request, url }) => {
   const user = await auth.isAuthenticated(request, { failureRedirect: "/login" });
   const domain = getDomain(request);
+  if (!domain) throw new Response("Okänd domän", { status: 404 });
   const pathname = normalizePathname(url.pathname);
   const isOverview = pathname === "/admin/verifications";
   const needsLatestVerificationNumber = pathname.endsWith("/new");
@@ -48,13 +50,16 @@ export const loader: LoaderFunction = async ({ request, url }) => {
   }
 
   if (!isOverview) {
-    const latestVerification = needsLatestVerificationNumber
-      ? await Verifications.findOne({ domain: domain?.domain })
-          .sort({ verificationNumber: -1 })
-          .select("verificationNumber")
-          .lean()
-          .exec()
-      : null;
+    const [latestVerification, yearStatus] = await Promise.all([
+      needsLatestVerificationNumber
+        ? Verifications.findOne({ domain: domain.domain })
+            .sort({ verificationNumber: -1 })
+            .select("verificationNumber")
+            .lean()
+            .exec()
+        : null,
+      getAccountingYearStatus(domain.domain, user.fiscalYear),
+    ]);
 
     return json({
       verifications: [],
@@ -62,6 +67,7 @@ export const loader: LoaderFunction = async ({ request, url }) => {
       currentYearMonth,
       latestVerificationNumber: verificationNumberFrom(latestVerification),
       vatReports: [],
+      yearStatus,
     });
   }
 
@@ -70,7 +76,7 @@ export const loader: LoaderFunction = async ({ request, url }) => {
       $gte: fiscalBounds.start,
       $lt: fiscalBounds.end,
     },
-    domain: domain?.domain,
+    domain: domain.domain,
   })
     .select(
       "recordType description verificationNumber verificationDate metadata files journalEntries"
@@ -80,7 +86,7 @@ export const loader: LoaderFunction = async ({ request, url }) => {
     .exec();
 
   const vatReportsPromise = Verifications.find({
-    domain: domain?.domain,
+    domain: domain.domain,
     metadata: {
       $elemMatch: {
         key: "vatReport",
@@ -93,17 +99,23 @@ export const loader: LoaderFunction = async ({ request, url }) => {
     .exec();
 
   const latestVerificationNumberPromise = Verifications.findOne({
-    domain: domain?.domain,
+    domain: domain.domain,
   })
     .sort({ verificationNumber: -1 })
     .select("verificationNumber")
     .lean()
     .exec();
 
-  const [verifications, latestVerification, vatReports] = await Promise.all([
+  const yearStatusPromise = getAccountingYearStatus(
+    domain.domain,
+    user.fiscalYear
+  );
+
+  const [verifications, latestVerification, vatReports, yearStatus] = await Promise.all([
     verificationsPromise,
     latestVerificationNumberPromise,
     vatReportsPromise,
+    yearStatusPromise,
   ]);
 
   return json(toLoaderData({
@@ -112,6 +124,7 @@ export const loader: LoaderFunction = async ({ request, url }) => {
     currentYearMonth,
     latestVerificationNumber: verificationNumberFrom(latestVerification),
     vatReports,
+    yearStatus,
   }));
 };
 
@@ -181,6 +194,7 @@ type LoaderData = {
   latestVerificationNumber: number;
   year: number;
   currentYearMonth: string;
+  yearStatus: "open" | "closed";
 };
 
 const hasVatReport = (
@@ -204,6 +218,7 @@ export default function VerificationsPage() {
     currentYearMonth,
     latestVerificationNumber,
     vatReports,
+    yearStatus,
   } =
     useLoaderData<LoaderData>();
   const location = useLocation();
@@ -276,6 +291,7 @@ export default function VerificationsPage() {
                 className="accounting-secondary-action"
               >
                 År&nbsp; <span>{year}</span>
+                {yearStatus === "closed" ? <span>&nbsp;· avslutat</span> : null}
                 <span aria-hidden="true" className="ml-2 opacity-50"><ArrowIcon direction="down" /></span>
               </Link>
             </div>
@@ -316,6 +332,14 @@ export default function VerificationsPage() {
 
         {isOverview ? (
           <div className="space-y-5">
+            {yearStatus === "closed" ? (
+              <section className="border-y border-[#d3b6aa] bg-[#fbf3ef] px-4 py-4 sm:px-5" aria-label="Avslutat bokföringsår">
+                <p className="text-sm font-bold text-stone-800">Bokföringsår {year} är avslutat</p>
+                <p className="mt-1 text-xs leading-5 text-stone-600">
+                  Årets UB är fryst och överfört till {year + 1}. Vanliga bokningar i det här året är låsta.
+                </p>
+              </section>
+            ) : null}
             <section className="accounting-summary-line grid grid-cols-3" aria-label="Översikt">
               <div className="accounting-summary-item">
                 <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-stone-400 sm:text-xs">
@@ -390,15 +414,24 @@ export default function VerificationsPage() {
                 </div>
               </div>
 
-              <Link
-                to="/admin/verifications/new"
-                prefetch="intent"
-                className="accounting-primary-action accounting-sticky-new"
-              >
-                <span aria-hidden="true" className="text-base leading-none"><PlusMinusIcon /></span>
-                <span className="hidden sm:inline">Ny verifikation</span>
-                <span className="sm:hidden">Ny</span>
-              </Link>
+              {yearStatus === "open" ? (
+                <Link
+                  to="/admin/verifications/new"
+                  prefetch="intent"
+                  className="accounting-primary-action accounting-sticky-new"
+                >
+                  <span aria-hidden="true" className="text-base leading-none"><PlusMinusIcon /></span>
+                  <span className="hidden sm:inline">Ny verifikation</span>
+                  <span className="sm:hidden">Ny</span>
+                </Link>
+              ) : (
+                <Link
+                  to="/admin/verifications/settings"
+                  className="accounting-secondary-action accounting-sticky-new"
+                >
+                  Visa årsavslut
+                </Link>
+              )}
             </section>
 
             {monthKeys.length === 0 ? (

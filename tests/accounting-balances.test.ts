@@ -17,6 +17,11 @@ import {
 } from "../app/utils/accountingDates";
 import { buildTaxAccountJournalEntries } from "../app/utils/taxAccount";
 import { synchronizeIncomingBalance } from "../app/services/verification.server";
+import { buildIncomingBalanceEntries } from "../app/utils/accounts";
+import {
+  accountingYearMonthKeys,
+  evaluateAccountingYearClosing,
+} from "../app/utils/accountingYearClosing";
 
 const totals = (entries: Array<{ debit: number; credit: number }>) => ({
   debit: entries.reduce((sum, entry) => sum + entry.debit, 0),
@@ -42,6 +47,115 @@ test("existing IB is cleared when the recalculated balance is zero", async () =>
   assert.equal(incomingBalance.recordType, "incomingBalance");
   assert.deepEqual(incomingBalance.journalEntries, []);
   assert.equal(saveCalls, 1);
+});
+
+test("a preliminary IB keeps the same record and records its source revision", async () => {
+  const incomingBalance = {
+    recordType: "incomingBalance",
+    metadata: [{ key: "IB", value: "2026" }],
+    journalEntries: [],
+    save: async () => undefined,
+  };
+
+  await synchronizeIncomingBalance(
+    incomingBalance,
+    [
+      { account: 1930, debit: 800, credit: 0 },
+      { account: 2999, debit: 0, credit: 800 },
+    ],
+    {
+      sourceYear: 2025,
+      sourceRevision: 7,
+      state: "preliminary",
+      calculatedAt: new Date("2026-01-12T10:00:00.000Z"),
+    }
+  );
+
+  assert.deepEqual(incomingBalance.journalEntries, [
+    { account: 1930, debit: 800, credit: 0 },
+    { account: 2999, debit: 0, credit: 800 },
+  ]);
+  assert.deepEqual(incomingBalance.metadata, [
+    { key: "IB", value: "2026" },
+    { key: "IBStatus", value: "preliminary" },
+    { key: "IBSourceYear", value: "2025" },
+    { key: "IBSourceRevision", value: "7" },
+    { key: "IBCalculatedAt", value: "2026-01-12T10:00:00.000Z" },
+  ]);
+});
+
+test("a late December posting is reflected when the same IB is recalculated", () => {
+  const entries = buildIncomingBalanceEntries([
+    {
+      journalEntries: [
+        { account: 1930, debit: 1_000, credit: 0 },
+        { account: 2999, debit: 0, credit: 1_000 },
+      ],
+    },
+    {
+      journalEntries: [
+        { account: 4000, debit: 200, credit: 0 },
+        { account: 1930, debit: 0, credit: 200 },
+      ],
+    },
+  ]);
+
+  assert.deepEqual(entries, [
+    { account: 1930, debit: 800, credit: 0 },
+    { account: 2999, debit: 0, credit: 800 },
+  ]);
+});
+
+test("year closing requires every VAT period and every non-zero VAT payment", () => {
+  const reports: Array<{
+    period: string;
+    journalEntries: Array<{ account: number; debit: number; credit: number }>;
+    metadata: Array<{ key: string; value: string }>;
+  }> = accountingYearMonthKeys(2025).map((period) => ({
+    period,
+    journalEntries:
+      period === "2025-12"
+        ? [{ account: 2650, debit: 0, credit: 250 }]
+        : [],
+    metadata: [],
+  }));
+
+  const beforePayment = evaluateAccountingYearClosing({
+    year: 2025,
+    currentYear: 2026,
+    status: "open",
+    vatReports: reports,
+  });
+  assert.equal(beforePayment.canClose, false);
+  assert.deepEqual(beforePayment.missingVatMonths, []);
+  assert.deepEqual(beforePayment.unsettledVatMonths, ["2025-12"]);
+
+  reports.at(-1)!.metadata.push({
+    key: "vatRegisteredAtAccount",
+    value: "true",
+  });
+  const afterPayment = evaluateAccountingYearClosing({
+    year: 2025,
+    currentYear: 2026,
+    status: "open",
+    vatReports: reports,
+  });
+  assert.equal(afterPayment.canClose, true);
+});
+
+test("an open year remains open when a VAT period is missing", () => {
+  const reports = accountingYearMonthKeys(2025)
+    .slice(0, -1)
+    .map((period) => ({ period, journalEntries: [], metadata: [] }));
+  const readiness = evaluateAccountingYearClosing({
+    year: 2025,
+    currentYear: 2026,
+    status: "open",
+    vatReports: reports,
+  });
+
+  assert.equal(readiness.canClose, false);
+  assert.deepEqual(readiness.missingVatMonths, ["2025-12"]);
 });
 
 test("VAT report closes a VAT liability to credit 2650", () => {

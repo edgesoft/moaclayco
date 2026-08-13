@@ -1,12 +1,34 @@
-import mongoose from "mongoose";
+import mongoose, { type ClientSession } from "mongoose";
+import { AccountingYears } from "~/schemas/accounting-years";
 import { VerificationCounters } from "~/schemas/verification-counters";
 import { Verifications } from "~/schemas/verifications";
 import { normalizeJournalEntries } from "~/utils/verificationValidation";
 import { getIBJournalEntries } from "~/utils/accounts.server";
 import { accountingYear } from "~/utils/accountingDates";
+import {
+  evaluateAccountingYearClosing,
+  type AccountingYearStatus,
+  type ClosingVatReport,
+} from "~/utils/accountingYearClosing";
 
 type MetadataEntry = { key: string; value: string | number };
 type FileEntry = { name: string; path: string };
+
+export class AccountingYearClosedError extends Error {
+  constructor(public readonly year: number) {
+    super(
+      `Bokföringsår ${year} är avslutat. Registrera rättelsen i ett öppet bokföringsår.`
+    );
+    this.name = "AccountingYearClosedError";
+  }
+}
+
+export class AccountingYearClosingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AccountingYearClosingError";
+  }
+}
 
 export type CreateVerificationInput = {
   domain: string;
@@ -79,8 +101,44 @@ const normalizeInput = (input: CreateVerificationInput) => {
   };
 };
 
+const accountingYearState = async (
+  domain: string,
+  year: number,
+  session?: ClientSession
+) => {
+  const query = AccountingYears.findOne({ domain, year });
+  if (session) query.session(session);
+  return query.exec();
+};
+
+const ensureAccountingYearState = async (domain: string, year: number) => {
+  await AccountingYears.updateOne(
+    { domain, year },
+    { $setOnInsert: { domain, year, status: "open", revision: 0 } },
+    { upsert: true }
+  );
+};
+
+const touchOpenAccountingYear = async (
+  domain: string,
+  year: number,
+  session: ClientSession
+) => {
+  const state = await accountingYearState(domain, year, session);
+  if (!state) throw new Error("Bokföringsåret kunde inte förberedas");
+  if (state.status !== "open") throw new AccountingYearClosedError(year);
+  state.revision = Number(state.revision || 0) + 1;
+  await state.save({ session });
+  return state;
+};
+
 export async function createVerification(input: CreateVerificationInput) {
   const normalized = normalizeInput(input);
+  const sourceYear = accountingYear(normalized.verificationDate);
+  if (!sourceYear) throw new Error("Verifikationen saknar bokföringsår");
+  if (normalized.recordType !== "incomingBalance") {
+    await ensureAccountingYearState(normalized.domain, sourceYear);
+  }
   const session = await mongoose.startSession();
   let createdVerification: any = null;
 
@@ -95,6 +153,10 @@ export async function createVerification(input: CreateVerificationInput) {
           createdVerification = existing;
           return;
         }
+      }
+
+      if (normalized.recordType !== "incomingBalance") {
+        await touchOpenAccountingYear(normalized.domain, sourceYear, session);
       }
 
       const latest = await Verifications.findOne({ domain: normalized.domain })
@@ -129,29 +191,20 @@ export async function createVerification(input: CreateVerificationInput) {
         { session }
       );
       createdVerification = documents[0];
+
+      if (normalized.recordType !== "incomingBalance") {
+        await refreshIncomingBalanceForFollowingYear(
+          normalized.domain,
+          sourceYear,
+          session
+        );
+      }
     });
   } finally {
     await session.endSession();
   }
 
   if (!createdVerification) throw new Error("Verifikationen kunde inte sparas");
-  const isIncomingBalance = normalized.metadata.some(
-    (entry) => entry.key === "IB"
-  );
-  if (!isIncomingBalance) {
-    try {
-      const sourceYear = accountingYear(normalized.verificationDate);
-      if (!sourceYear) throw new Error("Verifikationen saknar bokföringsår");
-      await refreshIncomingBalanceForFollowingYear(
-        normalized.domain,
-        sourceYear
-      );
-    } catch (error) {
-      // Själva verifikationen är redan sparad. Nästa bokning eller manuell
-      // omladdning försöker uppdatera IB igen utan att skapa en dubblett.
-      console.error("Kunde inte uppdatera nästa års ingående balans", error);
-    }
-  }
   return createdVerification;
 }
 
@@ -168,6 +221,18 @@ export async function createVerificationsBatch(inputs: CreateVerificationInput[]
   }
 
   const domain = normalizedInputs[0].domain;
+  const sourceYears = new Set<number>();
+  for (const normalized of normalizedInputs) {
+    if (normalized.recordType === "incomingBalance") continue;
+    const sourceYear = accountingYear(normalized.verificationDate);
+    if (!sourceYear) throw new Error("Verifikationen saknar bokföringsår");
+    sourceYears.add(sourceYear);
+  }
+  await Promise.all(
+    Array.from(sourceYears, (sourceYear) =>
+      ensureAccountingYearState(domain, sourceYear)
+    )
+  );
   const session = await mongoose.startSession();
   let savedVerifications: any[] = [];
 
@@ -204,6 +269,7 @@ export async function createVerificationsBatch(inputs: CreateVerificationInput[]
       );
 
       const result: any[] = [];
+      const changedSourceYears = new Set<number>();
       for (const normalized of normalizedInputs) {
         const alreadySaved = normalized.idempotencyKey
           ? existingByKey.get(normalized.idempotencyKey)
@@ -211,6 +277,13 @@ export async function createVerificationsBatch(inputs: CreateVerificationInput[]
         if (alreadySaved) {
           result.push(alreadySaved);
           continue;
+        }
+
+        const sourceYear = accountingYear(normalized.verificationDate);
+        if (!sourceYear) throw new Error("Verifikationen saknar bokföringsår");
+        if (normalized.recordType !== "incomingBalance") {
+          await touchOpenAccountingYear(domain, sourceYear, session);
+          changedSourceYears.add(sourceYear);
         }
 
         const counter = await VerificationCounters.findOneAndUpdate(
@@ -229,6 +302,13 @@ export async function createVerificationsBatch(inputs: CreateVerificationInput[]
           existingByKey.set(normalized.idempotencyKey, created);
         }
       }
+      for (const sourceYear of changedSourceYears) {
+        await refreshIncomingBalanceForFollowingYear(
+          domain,
+          sourceYear,
+          session
+        );
+      }
       savedVerifications = result;
     });
   } finally {
@@ -238,22 +318,6 @@ export async function createVerificationsBatch(inputs: CreateVerificationInput[]
   if (savedVerifications.length !== normalizedInputs.length) {
     throw new Error("Alla verifikationer kunde inte sparas");
   }
-
-  const sourceYears = Array.from(
-    new Set(
-      normalizedInputs
-        .filter((input) => !input.metadata.some((entry) => entry.key === "IB"))
-        .map((input) => accountingYear(input.verificationDate))
-        .filter((year): year is number => Boolean(year))
-    )
-  );
-  await Promise.all(
-    sourceYears.map((sourceYear) =>
-      refreshIncomingBalanceForFollowingYear(domain, sourceYear).catch((error) =>
-        console.error("Kunde inte uppdatera nästa års ingående balans", error)
-      )
-    )
-  );
 
   return savedVerifications;
 }
@@ -265,8 +329,59 @@ const incomingBalanceQuery = (domain: string, year: number) => ({
 
 type MutableIncomingBalance = {
   journalEntries: unknown;
+  metadata?: unknown;
   recordType?: string;
-  save: () => Promise<unknown>;
+  save: (options?: { session?: ClientSession }) => Promise<unknown>;
+};
+
+type IncomingBalanceState = "preliminary" | "final";
+
+const plainMetadata = (metadata: unknown) =>
+  Array.isArray(metadata)
+    ? metadata
+        .map((entry) => {
+          if (!entry || typeof entry !== "object") return null;
+          const source = entry as {
+            key?: unknown;
+            value?: unknown;
+            toObject?: () => { key?: unknown; value?: unknown };
+          };
+          const value = source.toObject ? source.toObject() : source;
+          return {
+            key: String(value.key ?? ""),
+            value: String(value.value ?? ""),
+          };
+        })
+        .filter((entry): entry is { key: string; value: string } => Boolean(entry?.key))
+    : [];
+
+const withIncomingBalanceMetadata = (
+  metadata: unknown,
+  {
+    sourceYear,
+    sourceRevision,
+    state,
+    calculatedAt,
+  }: {
+    sourceYear: number;
+    sourceRevision: number;
+    state: IncomingBalanceState;
+    calculatedAt: Date;
+  }
+) => {
+  const managedKeys = new Set([
+    "IBStatus",
+    "IBSourceYear",
+    "IBSourceRevision",
+    "IBCalculatedAt",
+  ]);
+  return [
+    ...plainMetadata(metadata).filter((entry) => !managedKeys.has(entry.key)),
+    { key: "IBStatus", value: state },
+    { key: "IBSourceYear", value: String(sourceYear) },
+    { key: "IBSourceRevision", value: String(sourceRevision) },
+    { key: "IBCalculatedAt", value: calculatedAt.toISOString() },
+  ];
 };
 
 export async function synchronizeIncomingBalance(
@@ -275,43 +390,268 @@ export async function synchronizeIncomingBalance(
     account: number;
     debit: number;
     credit: number;
-  }>
+  }>,
+  options?: {
+    sourceYear: number;
+    sourceRevision: number;
+    state: IncomingBalanceState;
+    calculatedAt?: Date;
+    session?: ClientSession;
+  }
 ) {
   incomingBalance.recordType = "incomingBalance";
   incomingBalance.journalEntries = journalEntries;
-  await incomingBalance.save();
+  if (options) {
+    incomingBalance.metadata = withIncomingBalanceMetadata(
+      incomingBalance.metadata,
+      {
+        sourceYear: options.sourceYear,
+        sourceRevision: options.sourceRevision,
+        state: options.state,
+        calculatedAt: options.calculatedAt ?? new Date(),
+      }
+    );
+  }
+  await incomingBalance.save(options?.session ? { session: options.session } : undefined);
   return incomingBalance;
 }
 
 export async function refreshIncomingBalanceForFollowingYear(
   domain: string,
-  sourceYear: number
+  sourceYear: number,
+  session?: ClientSession
 ) {
-  const incomingBalance = await Verifications.findOne(
+  const targetYearState = await accountingYearState(
+    domain,
+    sourceYear + 1,
+    session
+  );
+  if (targetYearState?.status === "closed") {
+    throw new AccountingYearClosedError(sourceYear + 1);
+  }
+  const incomingBalanceQueryBuilder = Verifications.findOne(
     incomingBalanceQuery(domain, sourceYear + 1)
   );
+  if (session) incomingBalanceQueryBuilder.session(session);
+  const incomingBalance = await incomingBalanceQueryBuilder.exec();
   if (!incomingBalance) return null;
 
-  const journalEntries = await getIBJournalEntries(domain, sourceYear);
-  return synchronizeIncomingBalance(incomingBalance, journalEntries);
+  const sourceState = await accountingYearState(domain, sourceYear, session);
+  const journalEntries = await getIBJournalEntries(domain, sourceYear, session);
+  return synchronizeIncomingBalance(incomingBalance, journalEntries, {
+    sourceYear,
+    sourceRevision: Number(sourceState?.revision || 0),
+    state: sourceState?.status === "closed" ? "final" : "preliminary",
+    session,
+  });
 }
 
 export async function ensureIncomingBalance(domain: string, year: number) {
   const existing = await Verifications.findOne(incomingBalanceQuery(domain, year));
+  const targetState = await accountingYearState(domain, year);
+  if (targetState?.status === "closed") {
+    if (existing) return existing;
+    throw new AccountingYearClosedError(year);
+  }
+  const sourceState = await accountingYearState(domain, year - 1);
+  const synchronizationOptions = {
+    sourceYear: year - 1,
+    sourceRevision: Number(sourceState?.revision || 0),
+    state: (sourceState?.status === "closed" ? "final" : "preliminary") as IncomingBalanceState,
+  };
   if (existing) {
     const journalEntries = await getIBJournalEntries(domain, year - 1);
-    return synchronizeIncomingBalance(existing, journalEntries);
+    return synchronizeIncomingBalance(existing, journalEntries, synchronizationOptions);
   }
 
   const journalEntries = await getIBJournalEntries(domain, year - 1);
-  if (journalEntries.length < 2) return null;
   return createVerification({
     domain,
     idempotencyKey: `ib:${year}`,
     description: "Ingående balans",
     verificationDate: new Date(Date.UTC(year, 0, 1, 12)),
     recordType: "incomingBalance",
-    metadata: [{ key: "IB", value: year }],
+    metadata: [
+      { key: "IB", value: year },
+      { key: "IBStatus", value: synchronizationOptions.state },
+      { key: "IBSourceYear", value: synchronizationOptions.sourceYear },
+      { key: "IBSourceRevision", value: synchronizationOptions.sourceRevision },
+      { key: "IBCalculatedAt", value: new Date().toISOString() },
+    ],
     journalEntries,
   });
+}
+
+const metadataValue = (
+  metadata: Array<{ key?: unknown; value?: unknown }> | undefined,
+  key: string
+) => {
+  const value = metadata?.find((entry) => entry.key === key)?.value;
+  return value === undefined ? null : String(value);
+};
+
+const loadClosingVatReports = async (
+  domain: string,
+  year: number,
+  session?: ClientSession
+) => {
+  const query = Verifications.find({
+    domain,
+    metadata: {
+      $elemMatch: {
+        key: "vatReport",
+        value: { $regex: `^${year}-(0[1-9]|1[0-2])$` },
+      },
+    },
+  })
+    .select("metadata journalEntries")
+    .lean();
+  if (session) query.session(session);
+  const reports = await query.exec();
+  return reports.map((report: any) => ({
+    period: metadataValue(report.metadata, "vatReport") || "",
+    metadata: plainMetadata(report.metadata),
+    journalEntries: (report.journalEntries ?? []).map((entry: any) => ({
+      account: Number(entry.account),
+      debit: Number(entry.debit || 0),
+      credit: Number(entry.credit || 0),
+    })),
+  })) satisfies ClosingVatReport[];
+};
+
+const incomingBalanceSummary = (incomingBalance: any) =>
+  incomingBalance
+    ? {
+        verificationNumber: Number(incomingBalance.verificationNumber),
+        state:
+          metadataValue(incomingBalance.metadata, "IBStatus") ||
+          "preliminary",
+        calculatedAt: metadataValue(incomingBalance.metadata, "IBCalculatedAt"),
+      }
+    : null;
+
+export async function getAccountingYearClosingReadiness(
+  domain: string,
+  year: number,
+  now = new Date()
+) {
+  const [state, vatReports, incomingBalance] = await Promise.all([
+    accountingYearState(domain, year),
+    loadClosingVatReports(domain, year),
+    Verifications.findOne(incomingBalanceQuery(domain, year + 1))
+      .select("verificationNumber metadata")
+      .lean()
+      .exec(),
+  ]);
+  const currentYear = accountingYear(now);
+  if (!currentYear) throw new Error("Kunde inte fastställa aktuellt bokföringsår");
+  const readiness = evaluateAccountingYearClosing({
+    year,
+    currentYear,
+    status: (state?.status || "open") as AccountingYearStatus,
+    vatReports,
+  });
+  return {
+    ...readiness,
+    closedAt: state?.closedAt?.toISOString?.() || null,
+    incomingBalance: incomingBalanceSummary(incomingBalance),
+  };
+}
+
+export async function getAccountingYearStatus(domain: string, year: number) {
+  const state = await accountingYearState(domain, year);
+  return (state?.status || "open") as AccountingYearStatus;
+}
+
+export async function closeAccountingYear({
+  domain,
+  year,
+  now = new Date(),
+}: {
+  domain: string;
+  year: number;
+  now?: Date;
+}) {
+  const initialReadiness = await getAccountingYearClosingReadiness(
+    domain,
+    year,
+    now
+  );
+  if (initialReadiness.status === "closed") return initialReadiness;
+  if (!initialReadiness.canClose) {
+    if (!initialReadiness.yearHasPassed) {
+      throw new AccountingYearClosingError(
+        `Bokföringsår ${year} kan avslutas först när året har passerat.`
+      );
+    }
+    if (initialReadiness.missingVatMonths.length) {
+      throw new AccountingYearClosingError(
+        `Registrera momsrapport för ${initialReadiness.missingVatMonths.join(", ")} innan årsavslutet.`
+      );
+    }
+    throw new AccountingYearClosingError(
+      `Registrera momshändelsen på skattekontot för ${initialReadiness.unsettledVatMonths.join(", ")} innan årsavslutet.`
+    );
+  }
+
+  const followingYearStatus = await getAccountingYearStatus(domain, year + 1);
+  if (followingYearStatus === "closed") {
+    throw new AccountingYearClosingError(
+      `Bokföringsår ${year + 1} är redan avslutat och dess IB kan därför inte ändras.`
+    );
+  }
+
+  await ensureAccountingYearState(domain, year);
+  await ensureIncomingBalance(domain, year + 1);
+
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const state = await accountingYearState(domain, year, session);
+      if (!state) throw new Error("Bokföringsåret kunde inte förberedas");
+      if (state.status === "closed") return;
+
+      const currentYear = accountingYear(now);
+      if (!currentYear) throw new Error("Kunde inte fastställa aktuellt bokföringsår");
+      const vatReports = await loadClosingVatReports(domain, year, session);
+      const readiness = evaluateAccountingYearClosing({
+        year,
+        currentYear,
+        status: state.status as AccountingYearStatus,
+        vatReports,
+      });
+      if (!readiness.canClose) {
+        throw new AccountingYearClosingError(
+          "Förutsättningarna för årsavslutet har ändrats. Ladda om och kontrollera året igen."
+        );
+      }
+
+      const incomingBalanceQueryBuilder = Verifications.findOne(
+        incomingBalanceQuery(domain, year + 1)
+      ).session(session);
+      const incomingBalance = await incomingBalanceQueryBuilder.exec();
+      if (!incomingBalance) {
+        throw new Error("Nästa års ingående balans kunde inte skapas");
+      }
+      const journalEntries = await getIBJournalEntries(domain, year, session);
+      await synchronizeIncomingBalance(incomingBalance, journalEntries, {
+        sourceYear: year,
+        sourceRevision: Number(state.revision || 0),
+        state: "final",
+        calculatedAt: now,
+        session,
+      });
+
+      state.status = "closed";
+      state.closedAt = now;
+      state.finalIncomingBalanceVerificationNumber = Number(
+        incomingBalance.verificationNumber
+      );
+      await state.save({ session });
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  return getAccountingYearClosingReadiness(domain, year, now);
 }

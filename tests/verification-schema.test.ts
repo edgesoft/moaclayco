@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Verifications } from "../app/schemas/verifications";
+import { AccountingYears } from "../app/schemas/accounting-years";
 
 const baseVerification = {
   domain: "moaclayco",
@@ -56,4 +57,20 @@ test("still rejects an empty ordinary journal verification", async () => {
   });
 
   await assert.rejects(() => verification.validate(), /minst två konteringsrader/);
+});
+
+test("accounting years only accept controlled open and closed states", async () => {
+  const openYear = new AccountingYears({
+    domain: "moaclayco",
+    year: 2025,
+    status: "open",
+  });
+  await openYear.validate();
+
+  const invalidYear = new AccountingYears({
+    domain: "moaclayco",
+    year: 2025,
+    status: "archived",
+  });
+  await assert.rejects(() => invalidYear.validate(), /not a valid enum value/);
 });

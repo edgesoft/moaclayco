@@ -25,7 +25,11 @@ import { Verifications } from "~/schemas/verifications";
 import ClientOnly from "~/components/ClientOnly";
 import { getDomain } from "~/utils/domain";
 import { auth } from "~/services/auth.server";
-import { createVerification, ensureIncomingBalance } from "~/services/verification.server";
+import {
+  AccountingYearClosedError,
+  createVerification,
+  ensureIncomingBalance,
+} from "~/services/verification.server";
 import {
   accountingDateKey,
   accountingMonthKey,
@@ -457,6 +461,12 @@ export const action: ActionFunction = async ({ request }) => {
       throw error;
     }
   } catch (e) {
+    if (e instanceof AccountingYearClosedError) {
+      return json(
+        { success: false, errors: { yearError: { message: e.message } } },
+        { status: 409 }
+      );
+    }
     if (e instanceof VerificationValidationError) {
       return json(
         { success: false, errors: { journalEntries: e.message } },
