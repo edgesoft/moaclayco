@@ -157,9 +157,8 @@ is covered by the unit-level rollout tests.
 Stripe request and webhook versions are allowlisted separately instead of
 accepting arbitrary environment values. Missing request configuration defaults
 to `2023-08-16`, while the existing production webhook remains supported at
-`2020-08-27`. Local development and stage use
-`2026-07-29.dahlia`; production remains explicitly pinned to `2023-08-16`
-for requests and `2020-08-27` for webhooks until the final rollout.
+`2020-08-27` for rollback compatibility. Local development, stage and
+production use `2026-07-29.dahlia` for both requests and the active webhook.
 
 When one environment has a single webhook endpoint, `STRIPE_WEBHOOK` remains a
 supported fallback. For a parallel rollout, configure two endpoints and their
