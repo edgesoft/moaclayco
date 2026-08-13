@@ -39,7 +39,6 @@
     "react-hook-form": "^7.85.0",
     "react-router": "^8.3.0",
     "react-select": "^5.10.2",
-    "react-swipeable": "^7.0.2",
     "react-toastify": "^11.1.0",
     "react-use-cart": "^1.14.0",
     "sharp": "^0.35.3",

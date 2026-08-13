@@ -1702,33 +1702,6 @@ input[type="search"]::-ms-reveal {
   min-width: 3.25rem;
 }
 
-.accounting-row-toggle {
-  align-items: center;
-  background: #fffdf9 !important;
-  border: 1px solid var(--accounting-line);
-  border-radius: 0.65rem;
-  color: #aaa69e;
-  display: inline-flex;
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  font-size: 1.05rem;
-  font-weight: 500;
-  height: 2.5rem;
-  justify-content: center;
-  transition: background-color 160ms ease, border-color 160ms ease,
-    color 160ms ease;
-  width: 2.5rem;
-}
-
-.accounting-row-toggle:hover {
-  background: #fbf3ef !important;
-  border-color: #c58a79;
-  color: var(--accounting-accent-dark);
-}
-
-.accounting-row-toggle--open {
-  color: var(--accounting-accent);
-}
-
 .accounting-inline-action {
   align-items: center;
   color: var(--accounting-accent-dark);
@@ -3349,8 +3322,8 @@ input[type="search"]::-ms-reveal {
 .mcc-collection-hero__footer a:focus-visible,
 .mcc-shop-item button:focus-visible,
 .mcc-shop-item a:focus-visible,
-.mcc-collection-closing a:focus-visible,
-.mcc-image-viewer button:focus-visible {
+.mcc-shop-item__image-stage:focus-visible,
+.mcc-collection-closing a:focus-visible {
   outline: 2px solid #9d5743;
   outline-offset: 3px;
 }
@@ -3528,11 +3501,31 @@ input[type="search"]::-ms-reveal {
   background-image: radial-gradient(
     circle at 24% 18%,
     rgba(255, 255, 255, 0.58),
-    transparent 34%
+      transparent 34%
   );
+  contain: paint;
+  isolation: isolate;
   overflow: hidden;
   position: relative;
+  touch-action: pan-y;
   user-select: none;
+}
+
+.mcc-shop-item__image-stage:focus-visible {
+  outline-offset: -3px;
+}
+
+.mcc-shop-item__image-stage[data-focus-origin="pointer"]:focus-visible {
+  outline: none;
+}
+
+.mcc-shop-item__image-stage.is-zoomed {
+  cursor: grab;
+  touch-action: none;
+}
+
+.mcc-shop-item__image-stage.is-interacting {
+  cursor: grabbing;
 }
 
 .mcc-shop-item__image-stage::after {
@@ -3584,11 +3577,13 @@ input[type="search"]::-ms-reveal {
   height: 100%;
   inset: 0;
   object-fit: cover;
+  object-position: center;
   opacity: 0;
+  pointer-events: none;
   position: absolute;
-  transform: scale(1.025);
+  transform-origin: center;
   transition: filter 620ms cubic-bezier(0.22, 1, 0.36, 1), opacity 440ms ease,
-    transform 850ms cubic-bezier(0.22, 1, 0.36, 1);
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
   width: 100%;
 }
 
@@ -3599,7 +3594,15 @@ input[type="search"]::-ms-reveal {
 .mcc-shop-item__image-stage > img.is-loaded {
   filter: blur(0);
   opacity: 1;
-  transform: scale(1);
+}
+
+.mcc-shop-item__image-stage.is-interacting > img {
+  transition: filter 620ms cubic-bezier(0.22, 1, 0.36, 1), opacity 440ms ease;
+}
+
+.mcc-shop-item__image-stage.is-hover-preview > img,
+.mcc-shop-item__image-stage.is-zoomed > img {
+  will-change: transform;
 }
 
 .mcc-shop-item__number {
@@ -3622,8 +3625,7 @@ input[type="search"]::-ms-reveal {
   z-index: 2;
 }
 
-.mcc-shop-item__edit,
-.mcc-shop-item__zoom {
+.mcc-shop-item__edit {
   align-items: center;
   backdrop-filter: blur(12px);
   background: rgba(250, 248, 243, 0.9);
@@ -3647,24 +3649,7 @@ input[type="search"]::-ms-reveal {
   top: 0.8rem;
 }
 
-.mcc-shop-item__zoom {
-  bottom: 0.8rem;
-  cursor: pointer;
-  left: 0.8rem;
-}
-
-.mcc-shop-item__zoom svg {
-  color: var(--mcc-accent);
-  fill: none;
-  height: 1rem;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-width: 1.6;
-  width: 1rem;
-}
-
-.mcc-shop-item__edit:hover,
-.mcc-shop-item__zoom:hover {
+.mcc-shop-item__edit:hover {
   background: #fffdf8;
   border-color: rgba(70, 62, 56, 0.36);
 }
@@ -3751,22 +3736,12 @@ input[type="search"]::-ms-reveal {
 }
 
 .mcc-shop-item__gallery-meta .mcc-shop-item__edit,
-.mcc-shop-item__gallery-meta .mcc-shop-item__zoom,
 .mcc-shop-item__gallery-meta .mcc-shop-item__arrows button {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
   height: 2.25rem;
   min-height: 2.25rem;
-}
-
-.mcc-shop-item__gallery-meta .mcc-shop-item__zoom {
-  bottom: auto;
-  justify-content: center;
-  left: auto;
-  padding: 0;
-  position: static;
-  width: 2.25rem;
 }
 
 .mcc-shop-item__gallery-meta .mcc-shop-item__arrows {
@@ -4224,291 +4199,6 @@ input[type="search"]::-ms-reveal {
   gap: 2.4rem;
 }
 
-.mcc-image-viewer {
-  background: #ede9e2;
-  color: #2f2a27;
-  inset: 0;
-  isolation: isolate;
-  overflow: hidden;
-  overscroll-behavior: contain;
-  position: fixed;
-  touch-action: none;
-  z-index: 2147483000;
-}
-
-.mcc-image-viewer::before {
-  background-image: linear-gradient(
-      118deg,
-      rgba(255, 255, 255, 0.38),
-      transparent 42%
-    ),
-    radial-gradient(
-      circle at 82% 88%,
-      rgba(184, 110, 89, 0.09),
-      transparent 31%
-    );
-  content: "";
-  inset: 0;
-  pointer-events: none;
-  position: absolute;
-  z-index: 0;
-}
-
-.mcc-image-viewer__backdrop {
-  background: transparent;
-  border: 0;
-  cursor: zoom-out;
-  inset: 0;
-  padding: 0;
-  position: absolute;
-  width: 100%;
-  z-index: 0;
-}
-
-.mcc-image-viewer__frame {
-  align-items: center;
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  overflow: hidden;
-  padding: clamp(4.75rem, 9vh, 6.75rem) clamp(1rem, 4.5vw, 5rem)
-    clamp(5.75rem, 10vh, 7.5rem);
-  pointer-events: none;
-  position: absolute;
-  z-index: 1;
-}
-
-.mcc-image-viewer__stage {
-  align-items: center;
-  background: rgba(248, 245, 239, 0.58);
-  border: 1px solid rgba(79, 68, 60, 0.14);
-  box-shadow: 0 1.4rem 4rem rgba(69, 57, 48, 0.1);
-  cursor: zoom-in;
-  display: flex;
-  height: 100%;
-  justify-content: center;
-  max-height: 68rem;
-  max-width: 110rem;
-  overflow: hidden;
-  pointer-events: auto;
-  position: relative;
-  touch-action: none;
-  user-select: none;
-  width: 100%;
-}
-
-.mcc-image-viewer.is-zoomed .mcc-image-viewer__stage {
-  cursor: grab;
-}
-
-.mcc-image-viewer.is-zoomed .mcc-image-viewer__stage.is-interacting {
-  cursor: grabbing;
-}
-
-.mcc-image-viewer__image {
-  display: block;
-  filter: blur(14px) drop-shadow(0 1.15rem 1.8rem rgba(62, 48, 40, 0.16));
-  height: 100%;
-  max-height: 100%;
-  max-width: 100%;
-  object-fit: contain;
-  opacity: 0;
-  pointer-events: none;
-  transform-origin: center;
-  transition: filter 420ms ease, opacity 260ms ease,
-    transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
-  width: 100%;
-  will-change: transform;
-}
-
-.mcc-image-viewer__image.is-loaded {
-  filter: blur(0) drop-shadow(0 1.15rem 1.8rem rgba(62, 48, 40, 0.16));
-  opacity: 1;
-}
-
-.mcc-image-viewer__stage.is-interacting .mcc-image-viewer__image {
-  transition: filter 420ms ease, opacity 260ms ease;
-}
-
-.mcc-image-viewer .mcc-image-viewer__close,
-.mcc-image-viewer .mcc-image-viewer__toolbar {
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  background: rgba(249, 246, 240, 0.86);
-  border: 1px solid rgba(74, 62, 54, 0.16);
-  box-shadow: 0 0.75rem 2rem rgba(49, 40, 35, 0.12);
-}
-
-.mcc-image-viewer .mcc-image-viewer__close {
-  align-items: center;
-  border-radius: 999px;
-  color: #302b28;
-  cursor: pointer;
-  display: flex;
-  font-size: 0.59rem;
-  font-weight: 750;
-  gap: 0.65rem;
-  justify-content: center;
-  letter-spacing: 0.1em;
-  min-height: 2.9rem;
-  padding: 0 0.9rem 0 1.05rem;
-  position: fixed;
-  right: max(1rem, env(safe-area-inset-right));
-  text-transform: uppercase;
-  top: max(1rem, env(safe-area-inset-top));
-  transition: background-color 180ms ease, border-color 180ms ease,
-    transform 180ms ease;
-  z-index: 5;
-}
-
-.mcc-image-viewer .mcc-image-viewer__close:hover {
-  background: #fbf8f2;
-  border-color: rgba(157, 87, 67, 0.42);
-  transform: translateY(-1px);
-}
-
-.mcc-image-viewer__close svg,
-.mcc-image-viewer__toolbar svg {
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.45;
-}
-
-.mcc-image-viewer__close svg {
-  color: var(--mcc-accent, #b86e59);
-  height: 1.05rem;
-  width: 1.05rem;
-}
-
-.mcc-image-viewer__help {
-  bottom: max(4.75rem, calc(3.8rem + env(safe-area-inset-bottom)));
-  color: rgba(49, 43, 39, 0.66);
-  font-size: 0.57rem;
-  font-weight: 700;
-  left: 50%;
-  letter-spacing: 0.105em;
-  margin: 0;
-  pointer-events: none;
-  position: fixed;
-  text-align: center;
-  text-transform: uppercase;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  z-index: 3;
-}
-
-.mcc-image-viewer .mcc-image-viewer__toolbar {
-  align-items: center;
-  border-radius: 999px;
-  bottom: max(1rem, env(safe-area-inset-bottom));
-  color: #514942;
-  display: flex;
-  font-size: 0.55rem;
-  font-variant-numeric: tabular-nums;
-  gap: 0.1rem;
-  left: 50%;
-  letter-spacing: 0.11em;
-  padding: 0.2rem;
-  position: fixed;
-  text-transform: uppercase;
-  transform: translateX(-50%);
-  z-index: 4;
-}
-
-.mcc-image-viewer__toolbar button {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  color: #342f2b;
-  cursor: pointer;
-  display: flex;
-  height: 2.55rem;
-  justify-content: center;
-  padding: 0;
-  transition: background-color 160ms ease, color 160ms ease,
-    opacity 160ms ease;
-  width: 2.55rem;
-}
-
-.mcc-image-viewer__toolbar button:hover:not(:disabled) {
-  background: rgba(184, 110, 89, 0.1);
-  border-radius: 999px;
-  color: var(--mcc-accent, #b86e59);
-}
-
-.mcc-image-viewer__toolbar button:disabled {
-  cursor: default;
-  opacity: 0.34;
-}
-
-.mcc-image-viewer__toolbar button svg {
-  height: 1.05rem;
-  width: 1.05rem;
-}
-
-.mcc-image-viewer__count {
-  min-width: 3.65rem;
-  text-align: center;
-}
-
-.mcc-image-viewer__divider {
-  background: rgba(74, 62, 54, 0.18);
-  height: 1.25rem;
-  margin: 0 0.3rem;
-  width: 1px;
-}
-
-.mcc-image-viewer .mcc-image-viewer__zoom-level {
-  font-size: 0.53rem;
-  font-variant-numeric: tabular-nums;
-  font-weight: 720;
-  letter-spacing: 0.06em;
-  min-width: 3.1rem;
-  width: auto;
-}
-
-@media (max-width: 640px) {
-  .mcc-image-viewer__frame {
-    padding: max(4.5rem, calc(3.8rem + env(safe-area-inset-top))) 0.55rem
-      max(5.65rem, calc(4.9rem + env(safe-area-inset-bottom)));
-  }
-
-  .mcc-image-viewer__stage {
-    box-shadow: 0 1rem 2.4rem rgba(69, 57, 48, 0.09);
-  }
-
-  .mcc-image-viewer .mcc-image-viewer__close {
-    min-height: 2.75rem;
-    right: max(0.7rem, env(safe-area-inset-right));
-    top: max(0.7rem, env(safe-area-inset-top));
-  }
-
-  .mcc-image-viewer .mcc-image-viewer__toolbar {
-    bottom: max(0.7rem, env(safe-area-inset-bottom));
-    max-width: calc(100vw - 1.4rem);
-  }
-
-  .mcc-image-viewer__help {
-    bottom: max(4.35rem, calc(3.6rem + env(safe-area-inset-bottom)));
-    max-width: calc(100vw - 2rem);
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-}
-
-@media (max-height: 540px) {
-  .mcc-image-viewer__frame {
-    padding-bottom: 4.5rem;
-    padding-top: 4rem;
-  }
-
-  .mcc-image-viewer__help {
-    display: none;
-  }
-}
-
 @media (max-width: 1023px) {
   .mcc-collection-hero {
     gap: 3rem;
@@ -4843,13 +4533,11 @@ input[type="search"]::-ms-reveal {
   }
 
   .mcc-shop-item__gallery-meta .mcc-shop-item__edit,
-  .mcc-shop-item__gallery-meta .mcc-shop-item__zoom,
   .mcc-shop-item__gallery-meta .mcc-shop-item__arrows button {
     height: 2.35rem;
     min-height: 2.35rem;
   }
 
-  .mcc-shop-item__gallery-meta .mcc-shop-item__zoom,
   .mcc-shop-item__gallery-meta .mcc-shop-item__arrows button {
     width: 2.35rem;
   }
@@ -4873,16 +4561,12 @@ input[type="search"]::-ms-reveal {
     font-size: clamp(4rem, 17vw, 6.5rem);
   }
 
-  .mcc-image-viewer__frame img {
-    max-height: none;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .collection-page *,
   .collection-page *::before,
-  .collection-page *::after,
-  .mcc-image-viewer * {
+  .collection-page *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
@@ -8381,7 +8065,6 @@ input[type="search"]::-ms-reveal {
   }
 
   .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__edit,
-  .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__zoom,
   .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__arrows button {
     font-size: 1.32rem;
     height: 2.65rem;
@@ -8390,15 +8073,9 @@ input[type="search"]::-ms-reveal {
   }
 
   .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__edit svg,
-  .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__zoom svg,
   .collection-page .mcc-shop-item__gallery-meta .mcc-shop-item__arrows svg {
     height: 1.1rem;
     width: 1.1rem;
-  }
-
-  .mcc-image-viewer__toolbar button {
-    height: 2.75rem;
-    width: 2.75rem;
   }
 
   .collection-page .mcc-shop-item__copy .mcc-kicker {
