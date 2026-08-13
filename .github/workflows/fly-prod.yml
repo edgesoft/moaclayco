@@ -36,7 +36,7 @@ jobs:
       - name: Deploy production
         run: flyctl deploy -a moaclayco --remote-only --config fly-prod.toml --dockerfile Dockerfile-prod
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.FLY_PROD_API_TOKEN }}
 
       - name: Smoke test production
         run: node tools/smoke-check.mjs --url=https://moaclayco.com --timeout=30000
