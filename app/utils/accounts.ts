@@ -1,28 +1,150 @@
 import { ReportType, VerificationProps } from "~/types";
 
-export const accounts = [
-    { value: 1510, label: "1510 - Kundfordringar", reportType: ReportType.BALANCE, isIncomingBalance: true  },
-    { value: 1580, label: "1580 - Fordran på Stripe", reportType: ReportType.BALANCE, isIncomingBalance: true  },
-    { value: 1910, label: "1910 - Kassa", reportType: ReportType.BALANCE, isIncomingBalance: true  },
-    { value: 1930, label: "1930 - Bank", reportType: ReportType.BALANCE, isIncomingBalance: true },
-    { value: 2010, label: "2010 - Eget kapital", reportType: ReportType.LIABILITIES, isIncomingBalance: true },
-    { value: 2012, label: "2012 - Avräkning för skatter och avgifter", reportType:ReportType.LIABILITIES, isIncomingBalance: true  },
-    { value: 2013, label: "2013 - Eget uttag", reportType: ReportType.LIABILITIES, isIncomingBalance: true },
-    { value: 2018, label: "2018 - Egen insättning", reportType: ReportType.LIABILITIES, isIncomingBalance: true },
-    { value: 2440, label: "2440 - Leverantörsskulder", reportType: ReportType.LIABILITIES, isIncomingBalance: true  },
-    { value: 2611, label: "2611 - Utgående moms på varor och frakt", reportType: ReportType.LIABILITIES, isIncomingBalance: true  },
-    { value: 2640, label: "2640 - Ingående moms", reportType: ReportType.BALANCE, isIncomingBalance: true  },
-    { value: 2650, label: "2650 - Momsskuld", reportType: ReportType.LIABILITIES, isIncomingBalance: true  },
-    { value: 2999, label: "2999 - Balanserat resultat från IB", reportType: ReportType.LIABILITIES },
-    { value: 3001, label: "3001 - Försäljning av varor", vatAccount: 2611, reportType: ReportType.INCOME}, 
-    { value: 3740, label: "3740 - Öres- och kronutjämning", reportType:  ReportType.INCOME }, 
-    { value: 4000, label: "4000 - Material/Varukostnader", vatAccount: 2640, reportType: ReportType.EXPENSE },
-    { value: 5410, label: "5410 - Förbrukningsinventarier", reportType: ReportType.EXPENSE },
-    { value: 6570, label: "6570 - Kostnader för betalningsförmedling", reportType: ReportType.EXPENSE },
-    { value: 6990, label: "6990 - Övriga externa kostnader", reportType: ReportType.EXPENSE }, 
-    { value: 8313, label: "8313 - Ränteintäkter bank", reportType:  ReportType.INCOME },
-    { value: 8314, label: "8314 - Skattefria ränteintäkter", reportType: ReportType.INCOME },
-  ];
+export type BalanceGroup = "assets" | "equity" | "liabilities" | "taxAccount";
+
+export type AccountDefinition = {
+  value: number;
+  label: string;
+  reportType: ReportType;
+  balanceGroup?: BalanceGroup;
+  isIncomingBalance?: boolean;
+  vatAccount?: number;
+};
+
+export const accounts: AccountDefinition[] = [
+  {
+    value: 1510,
+    label: "1510 - Kundfordringar",
+    reportType: ReportType.BALANCE,
+    balanceGroup: "assets",
+    isIncomingBalance: true,
+  },
+  {
+    value: 1580,
+    label: "1580 - Fordran på Stripe",
+    reportType: ReportType.BALANCE,
+    balanceGroup: "assets",
+    isIncomingBalance: true,
+  },
+  {
+    value: 1910,
+    label: "1910 - Kassa",
+    reportType: ReportType.BALANCE,
+    balanceGroup: "assets",
+    isIncomingBalance: true,
+  },
+  {
+    value: 1930,
+    label: "1930 - Bank",
+    reportType: ReportType.BALANCE,
+    balanceGroup: "assets",
+    isIncomingBalance: true,
+  },
+  {
+    value: 2010,
+    label: "2010 - Eget kapital",
+    reportType: ReportType.LIABILITIES,
+    balanceGroup: "equity",
+    isIncomingBalance: true,
+  },
+  {
+    value: 2012,
+    label: "2012 - Avräkning för skatter och avgifter",
+    reportType: ReportType.LIABILITIES,
+    balanceGroup: "taxAccount",
+    isIncomingBalance: true,
+  },
+  {
+    value: 2013,
+    label: "2013 - Eget uttag",
+    reportType: ReportType.LIABILITIES,
+    balanceGroup: "equity",
+    isIncomingBalance: true,
+  },
+  {
+    value: 2018,
+    label: "2018 - Egen insättning",
+    reportType: ReportType.LIABILITIES,
+    balanceGroup: "equity",
+    isIncomingBalance: true,
+  },
+  {
+    value: 2440,
+    label: "2440 - Leverantörsskulder",
+    reportType: ReportType.LIABILITIES,
+    balanceGroup: "liabilities",
+    isIncomingBalance: true,
+  },
+  {
+    value: 2611,
+    label: "2611 - Utgående moms på varor och frakt",
+    reportType: ReportType.LIABILITIES,
+    balanceGroup: "liabilities",
+    isIncomingBalance: true,
+  },
+  {
+    value: 2640,
+    label: "2640 - Ingående moms",
+    reportType: ReportType.BALANCE,
+    balanceGroup: "assets",
+    isIncomingBalance: true,
+  },
+  {
+    value: 2650,
+    label: "2650 - Momsskuld",
+    reportType: ReportType.LIABILITIES,
+    balanceGroup: "liabilities",
+    isIncomingBalance: true,
+  },
+  {
+    value: 2999,
+    label: "2999 - Balanserat resultat från IB",
+    reportType: ReportType.LIABILITIES,
+    balanceGroup: "equity",
+  },
+  {
+    value: 3001,
+    label: "3001 - Försäljning av varor",
+    vatAccount: 2611,
+    reportType: ReportType.INCOME,
+  },
+  {
+    value: 3740,
+    label: "3740 - Öres- och kronutjämning",
+    reportType: ReportType.INCOME,
+  },
+  {
+    value: 4000,
+    label: "4000 - Material/Varukostnader",
+    vatAccount: 2640,
+    reportType: ReportType.EXPENSE,
+  },
+  {
+    value: 5410,
+    label: "5410 - Förbrukningsinventarier",
+    reportType: ReportType.EXPENSE,
+  },
+  {
+    value: 6570,
+    label: "6570 - Kostnader för betalningsförmedling",
+    reportType: ReportType.EXPENSE,
+  },
+  {
+    value: 6990,
+    label: "6990 - Övriga externa kostnader",
+    reportType: ReportType.EXPENSE,
+  },
+  {
+    value: 8313,
+    label: "8313 - Ränteintäkter bank",
+    reportType: ReportType.INCOME,
+  },
+  {
+    value: 8314,
+    label: "8314 - Skattefria ränteintäkter",
+    reportType: ReportType.INCOME,
+  },
+];
 
   export const sumAccounts = (verifications: VerificationProps[], accounts: any[]) => {
     return accounts

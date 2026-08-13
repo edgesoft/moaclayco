@@ -17,12 +17,18 @@ import {
 } from "../app/utils/accountingDates";
 import { buildTaxAccountJournalEntries } from "../app/utils/taxAccount";
 import { synchronizeIncomingBalance } from "../app/services/verification.server";
-import { buildIncomingBalanceEntries } from "../app/utils/accounts";
+import { accounts, buildIncomingBalanceEntries } from "../app/utils/accounts";
 import {
   accountingYearMonthKeys,
   evaluateAccountingYearClosing,
 } from "../app/utils/accountingYearClosing";
 import { evaluateVerificationEditPolicy } from "../app/utils/verificationEditing";
+import {
+  financialAccountAmount,
+  financialAccountsTotal,
+  isAccountingBalance,
+  taxAccountStatus,
+} from "../app/utils/financialReports";
 
 const totals = (entries: Array<{ debit: number; credit: number }>) => ({
   debit: entries.reduce((sum, entry) => sum + entry.debit, 0),
@@ -289,6 +295,71 @@ test("tax-account events use separate, sole-trader postings", () => {
       { account: 2018, debit: 0, credit: 399 },
     ]
   );
+});
+
+test("the financial report separates equity from actual liabilities", () => {
+  assert.deepEqual(
+    accounts
+      .filter((account) => account.balanceGroup === "equity")
+      .map((account) => account.value),
+    [2010, 2013, 2018, 2999]
+  );
+  assert.deepEqual(
+    accounts
+      .filter((account) => account.balanceGroup === "liabilities")
+      .map((account) => account.value),
+    [2440, 2611, 2650]
+  );
+  assert.deepEqual(
+    accounts
+      .filter((account) => account.balanceGroup === "taxAccount")
+      .map((account) => account.value),
+    [2012]
+  );
+});
+
+test("a debit balance on 2012 is presented as money to the user's credit", () => {
+  const taxAccount = accounts.find((account) => account.value === 2012);
+  assert.ok(taxAccount);
+
+  assert.equal(financialAccountAmount(171, taxAccount), -171);
+  assert.deepEqual(taxAccountStatus(171), {
+    kind: "surplus",
+    label: "Pengar tillgodo på skattekontot",
+    amount: 171,
+  });
+});
+
+test("a credit balance on 2012 is presented as a tax-account deficit", () => {
+  assert.deepEqual(taxAccountStatus(-239), {
+    kind: "deficit",
+    label: "Underskott på skattekontot",
+    amount: 239,
+  });
+});
+
+test("the balance check treats only a zero difference as reconciled", () => {
+  const assetAccounts = accounts.filter(
+    (account) => account.balanceGroup === "assets"
+  );
+  const equityAccounts = accounts.filter(
+    (account) => account.balanceGroup === "equity"
+  );
+  const liabilityAccounts = accounts.filter(
+    (account) => account.balanceGroup === "liabilities"
+  );
+  const amountByAccount = {
+    1930: 1_000,
+    2018: -1_000,
+  };
+  const difference =
+    financialAccountsTotal(amountByAccount, assetAccounts) -
+    financialAccountsTotal(amountByAccount, equityAccounts) -
+    financialAccountsTotal(amountByAccount, liabilityAccounts);
+
+  assert.equal(difference, 0);
+  assert.equal(isAccountingBalance(difference), true);
+  assert.equal(isAccountingBalance(10), false);
 });
 
 test("VAT reports are grouped by submission month while retaining their period metadata", () => {

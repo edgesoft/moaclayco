@@ -11,13 +11,23 @@ import { useState } from "react";
 import { Verifications } from "~/schemas/verifications";
 import { auth } from "~/services/auth.server";
 import { ReportType } from "~/types";
-import { accounts } from "~/utils/accounts";
+import {
+  accounts,
+  type AccountDefinition,
+  type BalanceGroup,
+} from "~/utils/accounts";
 import { AccountingDateField } from "~/components/admin/AccountingDateField";
 import ArrowIcon from "~/components/ArrowIcon";
 import {
   getAccountingDateBounds,
   parseAccountingDate,
 } from "~/utils/accountingDates";
+import {
+  financialAccountAmount,
+  financialAccountsTotal,
+  isAccountingBalance,
+  taxAccountStatus,
+} from "~/utils/financialReports";
 
 const normalizeDateParameter = (value: string | null, fallback: string) => {
   if (!value) return fallback;
@@ -136,52 +146,42 @@ const dateLabel = (value: string) =>
 const reportAccounts = (type: ReportType) =>
   accounts.filter((account) => account.reportType === type);
 
-const accountAmount = (
-  amountByAccount: Record<number, number>,
-  account: (typeof accounts)[number]
-) => {
-  const rawAmount = amountByAccount[account.value] || 0;
-  return account.reportType === ReportType.INCOME ||
-    account.reportType === ReportType.LIABILITIES
-    ? -rawAmount
-    : rawAmount;
-};
-
-const totalFor = (
-  amountByAccount: Record<number, number>,
-  reportType: ReportType
-) =>
-  reportAccounts(reportType).reduce(
-    (total, account) => total + accountAmount(amountByAccount, account),
-    0
-  );
+const balanceAccounts = (group: BalanceGroup) =>
+  accounts.filter((account) => account.balanceGroup === group);
 
 function SummaryCard({
   label,
   value,
-  emphasis = false,
+  tone = "neutral",
 }: {
   label: string;
   value: number;
-  emphasis?: boolean;
+  tone?: "neutral" | "result" | "balance";
 }) {
+  const balanced = isAccountingBalance(value);
+  const emphasized = tone !== "neutral";
+  const valueTone =
+    tone === "balance"
+      ? balanced
+        ? "text-[#66705a]"
+        : "text-red-900"
+      : tone === "result"
+      ? value >= 0
+        ? "text-[#66705a]"
+        : "text-red-900"
+      : "text-slate-950";
+
   return (
     <div
       className={`accounting-report-summary-item p-4 sm:p-5 ${
-        emphasis ? "accounting-report-summary-item--emphasis" : ""
+        emphasized ? "accounting-report-summary-item--emphasis" : ""
       }`}
     >
       <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 sm:text-xs">
         {label}
       </p>
       <p
-        className={`mt-2 text-lg font-bold tabular-nums sm:text-2xl ${
-          emphasis
-            ? value >= 0
-              ? "text-emerald-900"
-              : "text-red-900"
-            : "text-slate-950"
-        }`}
+        className={`mt-2 text-lg font-bold tabular-nums sm:text-2xl ${valueTone}`}
       >
         {money.format(value)}
       </p>
@@ -192,23 +192,27 @@ function SummaryCard({
 function ReportSection({
   title,
   description,
-  reportType,
+  sectionAccounts,
   amountByAccount,
   showZeroAccounts,
   adjustment,
 }: {
   title: string;
   description: string;
-  reportType: ReportType;
+  sectionAccounts: AccountDefinition[];
   amountByAccount: Record<number, number>;
   showZeroAccounts: boolean;
   adjustment?: { label: string; value: number };
 }) {
-  const rows = reportAccounts(reportType)
-    .map((account) => ({
-      ...account,
-      amount: accountAmount(amountByAccount, account),
-    }))
+  const rows = sectionAccounts
+    .map((account) => {
+      const rawAmount = amountByAccount[account.value] || 0;
+      return {
+        ...account,
+        rawAmount,
+        amount: financialAccountAmount(rawAmount, account),
+      };
+    })
     .filter((account) => showZeroAccounts || Math.abs(account.amount) >= 0.005);
   const total =
     rows.reduce((sum, account) => sum + account.amount, 0) +
@@ -240,20 +244,26 @@ function ReportSection({
               separatorIndex >= 0
                 ? account.label.slice(separatorIndex + 3)
                 : account.label;
+            const taxStatus =
+              account.value === 2012
+                ? taxAccountStatus(account.rawAmount)
+                : null;
 
             return (
               <div
                 key={account.value}
-                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5 sm:px-6"
+                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 px-4 py-3.5 sm:px-6"
               >
                 <span className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600">
                   {number}
                 </span>
-                <span className="min-w-0 truncate text-sm font-medium text-slate-700">
-                  {name}
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium leading-5 text-slate-700">
+                    {taxStatus?.label ?? name}
+                  </span>
                 </span>
-                <span className="text-sm font-semibold tabular-nums text-slate-900">
-                  {money.format(account.amount)}
+                <span className="text-right text-sm font-semibold tabular-nums text-slate-900">
+                  {money.format(taxStatus?.amount ?? account.amount)}
                 </span>
               </div>
             );
@@ -282,12 +292,17 @@ function ReportSection({
   );
 }
 
-export default function FinancialOverview() {
-  const { accountTotals, from, to } = useLoaderData<{
-    accountTotals: Array<{ account: number; amount: number }>;
-    from: string;
-    to: string;
-  }>();
+type FinancialOverviewData = {
+  accountTotals: Array<{ account: number; amount: number }>;
+  from: string;
+  to: string;
+};
+
+export function FinancialOverviewView({
+  accountTotals,
+  from,
+  to,
+}: FinancialOverviewData) {
   const [searchParams] = useSearchParams();
   const [showZeroAccounts, setShowZeroAccounts] = useState(false);
   const selectedReport = searchParams.get("report") || "income";
@@ -296,12 +311,43 @@ export default function FinancialOverview() {
     accountTotals.map(({ account, amount }) => [account, amount])
   ) as Record<number, number>;
 
-  const income = totalFor(amountByAccount, ReportType.INCOME);
-  const expenses = totalFor(amountByAccount, ReportType.EXPENSE);
-  const assets = totalFor(amountByAccount, ReportType.BALANCE);
-  const liabilities = totalFor(amountByAccount, ReportType.LIABILITIES);
+  const incomeAccounts = reportAccounts(ReportType.INCOME);
+  const expenseAccounts = reportAccounts(ReportType.EXPENSE);
+  const baseAssetAccounts = balanceAccounts("assets");
+  const equityAccounts = balanceAccounts("equity");
+  const baseLiabilityAccounts = balanceAccounts("liabilities");
+  const taxAccount = balanceAccounts("taxAccount")[0];
+  if (!taxAccount) throw new Error("Konto 2012 saknas i rapportkonfigurationen");
+  const taxStatus = taxAccountStatus(amountByAccount[2012] || 0);
+  const displayedTaxAccount = {
+    ...taxAccount,
+    reportType:
+      taxStatus.kind === "deficit"
+        ? ReportType.LIABILITIES
+        : ReportType.BALANCE,
+  };
+  const assetAccounts =
+    taxStatus.kind === "deficit"
+      ? baseAssetAccounts
+      : [...baseAssetAccounts, displayedTaxAccount];
+  const liabilityAccounts =
+    taxStatus.kind === "deficit"
+      ? [...baseLiabilityAccounts, displayedTaxAccount]
+      : baseLiabilityAccounts;
+  const income = financialAccountsTotal(amountByAccount, incomeAccounts);
+  const expenses = financialAccountsTotal(amountByAccount, expenseAccounts);
+  const assets = financialAccountsTotal(amountByAccount, assetAccounts);
+  const equityBeforeResult = financialAccountsTotal(
+    amountByAccount,
+    equityAccounts
+  );
+  const liabilities = financialAccountsTotal(
+    amountByAccount,
+    liabilityAccounts
+  );
   const result = income - expenses;
-  const equityAndLiabilities = liabilities + result;
+  const equity = equityBeforeResult + result;
+  const equityAndLiabilities = equity + liabilities;
   const balance = assets - equityAndLiabilities;
   const currentFrom = dateForInput(from);
   const currentTo = dateForInput(to);
@@ -410,13 +456,21 @@ export default function FinancialOverview() {
           <>
             <SummaryCard label="Intäkter" value={income} />
             <SummaryCard label="Kostnader" value={expenses} />
-            <SummaryCard label="Periodens resultat" value={result} emphasis />
+            <SummaryCard
+              label="Periodens resultat"
+              value={result}
+              tone="result"
+            />
           </>
         ) : (
           <>
             <SummaryCard label="Tillgångar" value={assets} />
-            <SummaryCard label="Skulder/eget kapital" value={equityAndLiabilities} />
-            <SummaryCard label="Balans" value={balance} emphasis />
+            <SummaryCard label="Eget kapital och skulder" value={equityAndLiabilities} />
+            <SummaryCard
+              label="Balanskontroll"
+              value={balance}
+              tone="balance"
+            />
           </>
         )}
       </section>
@@ -463,14 +517,14 @@ export default function FinancialOverview() {
             <ReportSection
               title="Intäkter"
               description="Försäljning och övriga intäkter under perioden."
-              reportType={ReportType.INCOME}
+              sectionAccounts={incomeAccounts}
               amountByAccount={amountByAccount}
               showZeroAccounts={showZeroAccounts}
             />
             <ReportSection
               title="Kostnader"
               description="Inköp och övriga kostnader under perioden."
-              reportType={ReportType.EXPENSE}
+              sectionAccounts={expenseAccounts}
               amountByAccount={amountByAccount}
               showZeroAccounts={showZeroAccounts}
             />
@@ -480,21 +534,35 @@ export default function FinancialOverview() {
             <ReportSection
               title="Tillgångar"
               description="Det företaget äger eller har rätt till."
-              reportType={ReportType.BALANCE}
+              sectionAccounts={assetAccounts}
               amountByAccount={amountByAccount}
               showZeroAccounts={showZeroAccounts}
             />
-            <ReportSection
-              title="Skulder"
-              description="Skulder, eget kapital och avräkningskonton."
-              reportType={ReportType.LIABILITIES}
-              amountByAccount={amountByAccount}
-              showZeroAccounts={showZeroAccounts}
-              adjustment={{ label: "Beräknat resultat", value: result }}
-            />
+            <div className="space-y-5">
+              <ReportSection
+                title="Eget kapital"
+                description="Eget kapital efter egna insättningar, uttag och periodens resultat."
+                sectionAccounts={equityAccounts}
+                amountByAccount={amountByAccount}
+                showZeroAccounts={showZeroAccounts}
+                adjustment={{ label: "Beräknat resultat", value: result }}
+              />
+              <ReportSection
+                title="Skulder"
+                description="Belopp som verksamheten ska betala till andra."
+                sectionAccounts={liabilityAccounts}
+                amountByAccount={amountByAccount}
+                showZeroAccounts={showZeroAccounts}
+              />
+            </div>
           </>
         )}
       </div>
     </div>
   );
+}
+
+export default function FinancialOverviewRoute() {
+  const data = useLoaderData<FinancialOverviewData>();
+  return <FinancialOverviewView {...data} />;
 }
