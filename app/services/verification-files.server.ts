@@ -18,13 +18,19 @@ const supportedDeclaredTypes = new Set([
   "image/heif",
   "image/jpeg",
   "image/jpg",
+  "image/pjpeg",
   "image/png",
+  "image/x-png",
   "image/tiff",
+  "image/x-tiff",
   "image/webp",
 ]);
 
+const genericDeclaredTypes = new Set(["", "application/octet-stream"]);
+
 export const isSupportedVerificationFile = (file: File) =>
-  supportedDeclaredTypes.has(file.type.toLowerCase());
+  supportedDeclaredTypes.has(file.type.toLowerCase()) ||
+  genericDeclaredTypes.has(file.type.toLowerCase());
 
 export class VerificationFileValidationError extends Error {
   constructor(message: string) {
@@ -41,7 +47,11 @@ export function validateVerificationFile(file: File) {
 
 const normalizeMimeType = (mimeType: string) => {
   if (mimeType === "application/x-pdf") return "application/pdf";
-  if (mimeType === "image/jpg") return "image/jpeg";
+  if (mimeType === "image/jpg" || mimeType === "image/pjpeg") {
+    return "image/jpeg";
+  }
+  if (mimeType === "image/x-png") return "image/png";
+  if (mimeType === "image/x-tiff") return "image/tiff";
   return mimeType;
 };
 
@@ -101,9 +111,11 @@ export async function readVerifiedVerificationFile(
   }
 
   const declaredMimeType = normalizeMimeType(file.type.toLowerCase());
+  const hasOnlyGenericDeclaredType = genericDeclaredTypes.has(declaredMimeType);
   const compatibleHeifTypes =
     declaredMimeType === "image/heic" && mimeType === "image/heif";
   if (
+    !hasOnlyGenericDeclaredType &&
     declaredMimeType !== mimeType &&
     !compatibleHeifTypes
   ) {

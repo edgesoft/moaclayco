@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  isEmptyJournalEntry,
   normalizeJournalEntries,
   VerificationValidationError,
+  withoutEmptyJournalEntries,
 } from "../app/utils/verificationValidation";
 import {
   journalEntryAmountsForSide,
@@ -34,6 +36,24 @@ test("normalizes and accepts a balanced verification", () => {
       { account: 2611, debit: 0, credit: 25.1 },
     ]
   );
+});
+
+test("ignores a completely empty trailing draft row", () => {
+  const entries = [
+    { account: 1930, debit: 100, credit: 0 },
+    { account: 3001, debit: 0, credit: 100 },
+    { account: 0, debit: 0, credit: 0 },
+  ];
+
+  assert.equal(isEmptyJournalEntry(entries[2]), true);
+  assert.deepEqual(withoutEmptyJournalEntries(entries), entries.slice(0, 2));
+});
+
+test("keeps a partially completed draft row for validation", () => {
+  const partialEntry = { account: 3001, debit: 0, credit: 0 };
+
+  assert.equal(isEmptyJournalEntry(partialEntry), false);
+  assert.deepEqual(withoutEmptyJournalEntries([partialEntry]), [partialEntry]);
 });
 
 test("rejects an unbalanced verification", () => {

@@ -10,6 +10,7 @@ import { auth } from "~/services/auth.server";
 import {
   MAX_VERIFICATION_FILE_SIZE,
   MAX_VERIFICATION_REQUEST_SIZE,
+  VerificationFileValidationError,
   isSupportedVerificationFile,
   readVerifiedVerificationFile,
 } from "~/services/verification-files.server";
@@ -18,6 +19,13 @@ import {
   RequestBodyTooLargeError,
 } from "~/utils/requestBody.server";
 
+const failedInterpretation = (error: string) =>
+  json({
+    uuid: uuidv4(),
+    verificationData: null,
+    status: "failed",
+    error,
+  });
 
 const getSafeErrorMetadata = (error: unknown) => {
   if (!(error instanceof Error)) {
@@ -45,43 +53,38 @@ export const action: ActionFunction = async ({ request }) => {
     );
   } catch (error) {
     if (error instanceof RequestBodyTooLargeError) {
-      return json(
-        { uuid: uuidv4(), verificationData: null, status: "failed" },
-        { status: 413 }
-      );
+      return failedInterpretation("Filen är större än 20 MB.");
     }
     throw error;
   }
   const file = formData.get("file");
 
   if (!file || typeof file === "string") {
-    return json(
-      { uuid: uuidv4(), verificationData: null, status: "failed" },
-      { status: 400 }
+    return failedInterpretation(
+      "Ingen fil kom fram. Välj filen igen och försök en gång till."
     );
   }
 
   if (!isSupportedVerificationFile(file)) {
-    return json(
-      { uuid: uuidv4(), verificationData: null, status: "failed" },
-      { status: 415 }
+    return failedInterpretation(
+      "Filtypen stöds inte. Välj en PDF eller en vanlig bildfil."
     );
   }
 
   if (file.size <= 0 || file.size > MAX_VERIFICATION_FILE_SIZE) {
-    return json(
-      { uuid: uuidv4(), verificationData: null, status: "failed" },
-      { status: 413 }
+    return failedInterpretation(
+      file.size <= 0 ? "Filen är tom." : "Filen är större än 20 MB."
     );
   }
 
   let verifiedFile: Awaited<ReturnType<typeof readVerifiedVerificationFile>>;
   try {
     verifiedFile = await readVerifiedVerificationFile(file);
-  } catch {
-    return json(
-      { uuid: uuidv4(), verificationData: null, status: "failed" },
-      { status: 415 }
+  } catch (error) {
+    return failedInterpretation(
+      error instanceof VerificationFileValidationError
+        ? error.message
+        : "Filen kunde inte läsas. Välj en PDF eller en vanlig bildfil."
     );
   }
 
@@ -97,9 +100,8 @@ export const action: ActionFunction = async ({ request }) => {
       "Accounting document interpretation failed",
       getSafeErrorMetadata(error)
     );
-    return json(
-      { uuid: uuidv4(), verificationData: null, status: "failed" },
-      { status: 422 }
+    return failedInterpretation(
+      "Filen gick att läsa, men innehållet kunde inte tolkas. Prova igen eller fyll i manuellt."
     );
   }
 

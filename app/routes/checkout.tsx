@@ -29,6 +29,7 @@ import { orderCookie } from "~/services/order-cookie.server";
 import { Order } from "~/types";
 import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
+import { checkoutOrderProjection } from "~/utils/queryProjections.server";
 
 let stripePromise: Stripe | PromiseLike<Stripe | null> | null = null;
 if (typeof document !== "undefined") {
@@ -60,7 +61,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     _id: requestedOrderId,
     domain: domain.domain,
     status: { $in: ["OPENED", "PENDING"] },
-  }).lean()) as Order | null;
+  })
+    .select(checkoutOrderProjection)
+    .lean()
+    .exec()) as Order | null;
 
   if (!order?.paymentIntent?.client_secret) {
     return redirect("/cart");

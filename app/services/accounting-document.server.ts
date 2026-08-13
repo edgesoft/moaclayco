@@ -133,6 +133,25 @@ Grundregler:
   inbetalning till skattekontot med en senare moms- eller skattedebitering, även
   om beloppen råkar vara lika eller ligger nära varandra i tid.
 
+Dokumentstruktur, bilagor och vidarefakturering:
+- Sidantal är aldrig samma sak som antal bokföringsposter. Avgör först vilka
+  sidor som hör till samma huvudunderlag och vilka som bara är bilagor.
+- En fil kan innehålla en huvudfaktura tillsammans med en bakomliggande
+  leverantörsfaktura, ett kvitto eller en specifikation som visar kostnaden som
+  vidarefaktureras. Bilagan är då bevis för huvudfakturans innehåll och ska inte
+  bli en egen entry.
+- När huvudfakturan hänvisar till "bilaga", "enligt bilaga", "underlag" eller
+  liknande och bilagan visar samma netto, moms och totalsumma i ett tidigare led
+  av fakturakedjan, returnera bara huvudfakturan som entry. Använd bilagan för
+  att förstå beskrivning och belopp, men skapa ingen separat bokföringspost för
+  den.
+- Följ säljare- och kundkedjan: en faktura från A till B som bifogas en faktura
+  från B till C är normalt ett vidarefaktureringsunderlag, inte två oberoende
+  transaktioner för samma bokföring.
+- Returnera flera entries endast när dokumentet faktiskt innehåller flera
+  självständiga affärshändelser som ska bokföras var för sig, exempelvis raderna
+  i ett bank- eller skattekontoutdrag.
+
 Vanliga konteringsregler för denna enskilda firma:
 - Egen insättning från privat konto till verksamheten: debit 1930, credit 2018.
 - Eget uttag från verksamhetens bank: debit 2013, credit 1930.
@@ -167,6 +186,9 @@ Vanliga konteringsregler för denna enskilda firma:
 - För kvitton ska dokumentets tryckta totalsumma och faktiska momsuppdelning
   följas. Räkna inte om hela köpet som 25 procent om kvittot visar flera
   momssatser, rabatter eller en annan momsberäkning.
+- Om delbelopp, moms och att-betala-belopp på en faktura eller ett kvitto
+  avviker med högst 1 krona ska skillnaden bokföras på 3740 som avrundning.
+  Lägg alltid en tydlig varning om avvikelsen; underkänn inte hela dokumentet.
 - När ett kvitto bara visar ett maskerat kort och inte identifierar vilket konto
   som belastats, använd sourceAccount unknown och credit 2018 som försiktig
   hantering av privat utlägg. Använd credit 1930 endast när företagskontot eller
@@ -224,6 +246,56 @@ transaktionsreferens.
 `;
 
 const roundCurrency = (value: number) => Math.round(value * 100) / 100;
+const toCurrencyCents = (value: number) => Math.round(value * 100);
+
+const repairMinorDocumentRounding = (
+  analysis: AccountingDocumentAnalysis
+) => {
+  if (
+    analysis.documentType === "bank_statement" ||
+    analysis.documentType === "tax_account_statement"
+  ) {
+    return;
+  }
+
+  analysis.entries.forEach((entry) => {
+    const debitCents = entry.accounts.reduce(
+      (sum, line) => sum + toCurrencyCents(line.debit),
+      0
+    );
+    const creditCents = entry.accounts.reduce(
+      (sum, line) => sum + toCurrencyCents(line.credit),
+      0
+    );
+    const imbalanceCents = debitCents - creditCents;
+
+    if (
+      imbalanceCents === 0 ||
+      Math.abs(imbalanceCents) > 100 ||
+      entry.accounts.length >= 12 ||
+      entry.accounts.some((line) => line.account === "3740")
+    ) {
+      return;
+    }
+
+    const roundingAmount = Math.abs(imbalanceCents) / 100;
+    entry.accounts.push({
+      account: "3740",
+      debit: imbalanceCents < 0 ? roundingAmount : 0,
+      credit: imbalanceCents > 0 ? roundingAmount : 0,
+    });
+    entry.warnings = Array.from(
+      new Set([
+        ...entry.warnings,
+        `Underlagets delbelopp avviker med ${roundingAmount.toLocaleString(
+          "sv-SE",
+          { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+        )} kr. En avrundningsrad på konto 3740 har lagts till; kontrollera underlaget.`,
+      ])
+    );
+    entry.confidence = Math.min(entry.confidence, 0.8);
+  });
+};
 
 const isRealDate = (date: string) => {
   const parsed = new Date(`${date}T00:00:00.000Z`);
@@ -334,6 +406,8 @@ const assertBankStatementAccountPattern = (
 export const validateAccountingAnalysis = (
   analysis: AccountingDocumentAnalysis
 ) => {
+  repairMinorDocumentRounding(analysis);
+
   analysis.entries.forEach((entry, entryIndex) => {
     if (!isRealDate(entry.date)) {
       throw new Error(`Entry ${entryIndex + 1} has an invalid date`);
@@ -396,7 +470,15 @@ export const validateAccountingAnalysis = (
     }
 
     const roundedTotal = roundCurrency(Math.abs(entry.total));
-    if (Math.abs(entry.total) !== roundedTotal || roundedTotal !== debitTotal) {
+    const hasRoundingAccount = entry.accounts.some(
+      (line) => line.account === "3740"
+    );
+    const hasPermittedRoundingDifference =
+      hasRoundingAccount && Math.abs(roundedTotal - debitTotal) <= 1;
+    if (
+      Math.abs(entry.total) !== roundedTotal ||
+      (roundedTotal !== debitTotal && !hasPermittedRoundingDifference)
+    ) {
       throw new Error(
         `Entry ${entryIndex + 1} total does not match its journal entry`
       );

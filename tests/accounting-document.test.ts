@@ -32,9 +32,48 @@ test("accepts a balanced accounting analysis", () => {
   assert.equal(validateAccountingAnalysis(validAnalysis), validAnalysis);
 });
 
+test("repairs a small invoice rounding discrepancy and keeps it reviewable", () => {
+  const analysis: AccountingDocumentAnalysis = {
+    documentType: "supplier_invoice",
+    warnings: [],
+    entries: [
+      {
+        date: "2024-10-30",
+        description: "Löpande kostnader och material, faktura 108",
+        total: 10998,
+        sourceReference: "108",
+        sourceAccount: "unknown",
+        confidence: 0.95,
+        warnings: [],
+        accounts: [
+          { account: "6990", debit: 8798.4, credit: 0 },
+          { account: "2640", debit: 2199.66, credit: 0 },
+          { account: "2440", debit: 0, credit: 10998 },
+        ],
+      },
+    ],
+  };
+
+  assert.equal(validateAccountingAnalysis(analysis), analysis);
+  assert.deepEqual(analysis.entries[0].accounts.at(-1), {
+    account: "3740",
+    debit: 0,
+    credit: 0.06,
+  });
+  assert.match(analysis.entries[0].warnings[0], /avviker med 0,06 kr/);
+  assert.equal(analysis.entries[0].confidence, 0.8);
+});
+
+test("still rejects material invoice imbalances", () => {
+  const invalid = structuredClone(validAnalysis);
+  invalid.entries[0].accounts[2].credit = 1240;
+
+  assert.throws(() => validateAccountingAnalysis(invalid), /not balanced/);
+});
+
 test("rejects an unbalanced accounting analysis", () => {
   const invalid = structuredClone(validAnalysis);
-  invalid.entries[0].accounts[2].credit = 1249;
+  invalid.entries[0].accounts[2].credit = 1248;
 
   assert.throws(
     () => validateAccountingAnalysis(invalid),

@@ -18,6 +18,7 @@ import stripeClient from "~/stripeClient";
 import { Order } from "~/types";
 import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
+import { orderConfirmationProjection } from "~/utils/queryProjections.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -39,7 +40,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     _id: cookieOrderId,
     domain: domain.domain,
     "paymentIntent.id": paymentIntentId,
-  }).lean()) as Order | null;
+  })
+    .select(orderConfirmationProjection)
+    .lean()
+    .exec()) as Order | null;
 
   if (!order) return redirect("/");
 

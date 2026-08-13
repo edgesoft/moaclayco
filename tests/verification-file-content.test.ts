@@ -51,9 +51,18 @@ test("verification files reject arbitrary data disguised as an image", async () 
   );
 });
 
-test("verification files require an explicitly supported browser MIME type", async () => {
-  const file = new File([await validPng()], "kvitto.bin", {
+test("verification files accept a generic browser MIME type after content inspection", async () => {
+  const file = new File([await validPng()], "kvitto.png", {
     type: "application/octet-stream",
+  });
+
+  const verified = await readVerifiedVerificationFile(file);
+  assert.equal(verified.mimeType, "image/png");
+});
+
+test("verification files reject an explicitly unsupported browser MIME type", async () => {
+  const file = new File([await validPng()], "kvitto.txt", {
+    type: "text/plain",
   });
 
   await assert.rejects(readVerifiedVerificationFile(file), /Filtypen stöds inte/);

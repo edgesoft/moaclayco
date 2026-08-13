@@ -27,6 +27,7 @@ import {
 import { AccountingDateField } from "~/components/admin/AccountingDateField";
 import ArrowIcon from "~/components/ArrowIcon";
 import { buildVatTaxAccountEntries } from "~/utils/vat";
+import { vatPaymentVerificationProjection } from "~/utils/queryProjections.server";
 
 type VatReportVerification = {
   _id: string;
@@ -52,7 +53,10 @@ export const loader: LoaderFunction = async ({ request }) => {
   const verification = (await Verifications.findOne({
     domain: domain.domain,
     metadata: { $elemMatch: { key: "vatReport", value: month } },
-  }).lean()) as unknown as VatReportVerification | null;
+  })
+    .select(vatPaymentVerificationProjection)
+    .lean()
+    .exec()) as unknown as VatReportVerification | null;
   if (!verification) throw new Response("Momsrapporten hittades inte", { status: 404 });
 
   return json(toLoaderData({ verification }));
@@ -80,7 +84,10 @@ export const action: ActionFunction = async ({ request }) => {
   const verification = (await Verifications.findOne({
     metadata: { $elemMatch: { key: "vatReport", value: month } },
     domain: domain.domain,
-  }).lean()) as unknown as VatReportVerification | null;
+  })
+    .select(vatPaymentVerificationProjection)
+    .lean()
+    .exec()) as unknown as VatReportVerification | null;
   if (!verification) return json({ error: "Momsrapporten hittades inte" }, { status: 404 });
   const isRegistered = verification.metadata?.some(
     (entry) => entry.key === "vatRegisteredAtAccount" && entry.value === "true"

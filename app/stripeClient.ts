@@ -1,9 +1,20 @@
 import Stripe from "stripe";
+import {
+  getConfiguredStripeApiVersion,
+  toStripeSdkApiVersion,
+  type SupportedStripeRequestApiVersion,
+} from "~/services/stripe-config.server";
 
-const stripeClient = new Stripe(process.env.STRIPE_SRV || "", {
-  // Keep requests aligned with the separately versioned production webhook.
-  // Upgrade both in Stripe Workbench before adopting the SDK's pinned API version.
-  apiVersion: "2023-08-16" as Stripe.LatestApiVersion,
-});
+export const stripeApiVersion = getConfiguredStripeApiVersion();
+
+export const createStripeClient = (
+  secretKey = process.env.STRIPE_SRV || "",
+  apiVersion: SupportedStripeRequestApiVersion = stripeApiVersion
+) =>
+  new Stripe(secretKey, {
+    apiVersion: toStripeSdkApiVersion(apiVersion),
+  });
+
+const stripeClient = createStripeClient();
 
 export default stripeClient;

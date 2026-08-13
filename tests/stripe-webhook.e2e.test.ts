@@ -11,12 +11,19 @@ import { Verifications } from "../app/schemas/verifications";
 import { WebhookEvents } from "../app/schemas/webhook-events";
 import { connectToDatabase } from "../app/services/database.server";
 import { buildCheckoutPaymentIntent } from "../app/services/checkout-payment.server";
-import stripeClient from "../app/stripeClient";
+import {
+  STRIPE_TARGET_API_VERSION,
+  STRIPE_WEBHOOK_VERSION_PARAMETER,
+} from "../app/services/stripe-config.server";
+import stripeClient, { stripeApiVersion } from "../app/stripeClient";
 
 const databaseName = process.env.STRIPE_E2E_DATABASE;
 const appBaseUrl = process.env.STRIPE_E2E_BASE_URL;
 const mailpitUrl = process.env.STRIPE_E2E_MAILPIT_URL;
 const webhookSecret = process.env.STRIPE_WEBHOOK;
+const webhookUrl = `${appBaseUrl}/webhook?${STRIPE_WEBHOOK_VERSION_PARAMETER}=${encodeURIComponent(
+  stripeApiVersion
+)}`;
 
 const waitFor = async <T>(
   description: string,
@@ -59,6 +66,7 @@ const messagesForOrder = async (orderId: string) =>
 
 const webhookFor = async (eventType: string, after: Date) =>
   WebhookEvents.findOne({
+    apiVersion: stripeApiVersion,
     createdAt: { $gte: after },
     eventType,
     provider: "stripe",
@@ -177,6 +185,7 @@ test(
     assert.ok(appBaseUrl);
     assert.ok(mailpitUrl);
     assert.equal(databaseName, "moaclayco-stripe-e2e");
+    assert.equal(stripeApiVersion, STRIPE_TARGET_API_VERSION);
 
     await connectToDatabase();
     context.after(async () => {
@@ -208,7 +217,7 @@ test(
     });
 
     await context.test("rejects an invalid signature", async () => {
-      const response = await fetch(`${appBaseUrl}/webhook`, {
+      const response = await fetch(webhookUrl, {
         body: "{}",
         headers: { "Stripe-Signature": "invalid" },
         method: "POST",
@@ -229,6 +238,7 @@ test(
           { payment_method: "pm_card_visa" }
         );
         assert.equal(confirmed.status, "succeeded");
+        assert.equal(confirmed.capture_method, "automatic");
 
         await waitFor("completed payment_intent.succeeded webhook", () =>
           webhookFor("payment_intent.succeeded", startedAt)
@@ -282,12 +292,16 @@ test(
             scenario.paymentIntent.id
         );
         assert.ok(event, "Stripe did not expose the succeeded event for replay");
-        const payload = JSON.stringify(event);
+        const replayEvent = {
+          ...event,
+          api_version: stripeApiVersion,
+        } as Stripe.Event;
+        const payload = JSON.stringify(replayEvent);
         const signature = stripeClient.webhooks.generateTestHeaderString({
           payload,
           secret: webhookSecret as string,
         });
-        const replay = await fetch(`${appBaseUrl}/webhook`, {
+        const replay = await fetch(webhookUrl, {
           body: payload,
           headers: { "Stripe-Signature": signature },
           method: "POST",

@@ -50,6 +50,7 @@ export const buildCheckoutPaymentIntent = ({
   return {
     params: {
       amount,
+      capture_method: "automatic",
       currency: "sek",
       payment_method_types: paymentMethods,
       metadata: {

@@ -9,6 +9,7 @@ type AccountingDateFieldProps = {
   onChange?: (value: string) => void;
   label?: string;
   error?: boolean;
+  allowedYear?: number;
 };
 
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
@@ -56,17 +57,22 @@ export function AccountingDateField({
   onChange,
   label = "Välj datum",
   error = false,
+  allowedYear,
 }: AccountingDateFieldProps) {
   const [internalValue, setInternalValue] = useState(defaultValue);
   const selectedValue = value ?? internalValue;
   const selectedDate = useMemo(() => parseDate(selectedValue), [selectedValue]);
   const todayDate = parseDate(stockholmToday())!;
+  const fallbackDate =
+    allowedYear && allowedYear !== todayDate.getUTCFullYear()
+      ? new Date(Date.UTC(allowedYear, 0, 1, 12))
+      : todayDate;
   const [open, setOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(() =>
     new Date(
       Date.UTC(
-        (selectedDate ?? todayDate).getUTCFullYear(),
-        (selectedDate ?? todayDate).getUTCMonth(),
+        (selectedDate ?? fallbackDate).getUTCFullYear(),
+        (selectedDate ?? fallbackDate).getUTCMonth(),
         1
       )
     )
@@ -90,9 +96,15 @@ export function AccountingDateField({
   }, [open]);
 
   const toggleCalendar = () => {
-    if (!open && selectedDate) {
+    if (!open) {
       setVisibleMonth(
-        new Date(Date.UTC(selectedDate.getUTCFullYear(), selectedDate.getUTCMonth(), 1))
+        new Date(
+          Date.UTC(
+            (selectedDate ?? fallbackDate).getUTCFullYear(),
+            (selectedDate ?? fallbackDate).getUTCMonth(),
+            1
+          )
+        )
       );
     }
     setOpen((current) => !current);
@@ -125,15 +137,15 @@ export function AccountingDateField({
   };
 
   const moveMonth = (direction: number) => {
-    setVisibleMonth(
-      new Date(
-        Date.UTC(
-          visibleMonth.getUTCFullYear(),
-          visibleMonth.getUTCMonth() + direction,
-          1
-        )
+    const nextMonth = new Date(
+      Date.UTC(
+        visibleMonth.getUTCFullYear(),
+        visibleMonth.getUTCMonth() + direction,
+        1
       )
     );
+    if (allowedYear && nextMonth.getUTCFullYear() !== allowedYear) return;
+    setVisibleMonth(nextMonth);
   };
 
   return (
@@ -183,7 +195,12 @@ export function AccountingDateField({
               type="button"
               onClick={() => moveMonth(-1)}
               aria-label="Föregående månad"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-stone-600 hover:bg-[#f3e4de] hover:text-[#985744]"
+              disabled={
+                Boolean(allowedYear) &&
+                visibleMonth.getUTCFullYear() === allowedYear &&
+                visibleMonth.getUTCMonth() === 0
+              }
+              className="flex h-9 w-9 items-center justify-center rounded-full text-stone-600 hover:bg-[#f3e4de] hover:text-[#985744] disabled:cursor-not-allowed disabled:opacity-25"
             >
               <ArrowIcon direction="left" />
             </button>
@@ -194,7 +211,12 @@ export function AccountingDateField({
               type="button"
               onClick={() => moveMonth(1)}
               aria-label="Nästa månad"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-stone-600 hover:bg-[#f3e4de] hover:text-[#985744]"
+              disabled={
+                Boolean(allowedYear) &&
+                visibleMonth.getUTCFullYear() === allowedYear &&
+                visibleMonth.getUTCMonth() === 11
+              }
+              className="flex h-9 w-9 items-center justify-center rounded-full text-stone-600 hover:bg-[#f3e4de] hover:text-[#985744] disabled:cursor-not-allowed disabled:opacity-25"
             >
               <ArrowIcon />
             </button>
@@ -239,13 +261,15 @@ export function AccountingDateField({
             >
               Rensa
             </button>
-            <button
-              type="button"
-              onClick={() => selectDate(stockholmToday())}
-              className="rounded-lg bg-[#f3e4de] px-3 py-2 text-xs font-bold text-[#985744]"
-            >
-              Idag
-            </button>
+            {!allowedYear || allowedYear === todayDate.getUTCFullYear() ? (
+              <button
+                type="button"
+                onClick={() => selectDate(stockholmToday())}
+                className="rounded-lg bg-[#f3e4de] px-3 py-2 text-xs font-bold text-[#985744]"
+              >
+                Idag
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}

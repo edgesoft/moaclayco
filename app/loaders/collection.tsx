@@ -5,6 +5,7 @@ import { Items } from "~/schemas/items";
 import { auth } from "~/services/auth.server";
 import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
+import { collectionEditorProjection } from "~/utils/queryProjections.server";
 
 export const CollectionLoader: LoaderFunction = async ({ params, request }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
@@ -15,17 +16,23 @@ export const CollectionLoader: LoaderFunction = async ({ params, request }) => {
     return json({ collection: null, itemCount: 0 });
   }
 
-  const collection = await Collections.findOne({
-    domain: domain.domain,
-    shortUrl: params.collection,
-  }).lean();
+  const [collection, itemCount] = await Promise.all([
+    Collections.findOne({
+      domain: domain.domain,
+      shortUrl: params.collection,
+    })
+      .select(collectionEditorProjection)
+      .lean()
+      .exec(),
+    Items.countDocuments({
+      collectionRef: params.collection,
+      domain: domain.domain,
+    }),
+  ]);
   if (!collection) return redirect("/");
 
   return json({
     collection: toLoaderData(collection),
-    itemCount: await Items.countDocuments({
-      collectionRef: params.collection,
-      domain: domain.domain,
-    }),
+    itemCount,
   });
 };

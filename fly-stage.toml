@@ -5,6 +5,8 @@ primary_region = "fra"
 
 [env]
   PORT = "8080"
+  STRIPE_API_VERSION = "2026-07-29.dahlia"
+  STRIPE_WEBHOOK_ACTIVE_VERSION = "2026-07-29.dahlia"
 
 [http_service]
   internal_port = 8080

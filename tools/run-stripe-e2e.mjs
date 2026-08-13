@@ -45,10 +45,26 @@ if (!stripeSecretKey?.startsWith("sk_test_")) {
   );
 }
 
+const stripeApiVersion =
+  process.env.STRIPE_API_VERSION ??
+  fileEnvironment.STRIPE_API_VERSION ??
+  "2026-07-29.dahlia";
+if (stripeApiVersion !== "2026-07-29.dahlia") {
+  throw new Error(
+    "Stripe E2E is intentionally pinned to the Dahlia migration target. " +
+      `Received: ${stripeApiVersion}`
+  );
+}
+const stripeWebhookSecretEnvironmentName = "STRIPE_WEBHOOK_DAHLIA";
+
 const baseEnvironment = {
   ...process.env,
+  STRIPE_API_VERSION: stripeApiVersion,
   STRIPE_SRV: stripeSecretKey,
   STRIPE_WEBHOOK: "whsec_stripe_e2e_startup_placeholder",
+  STRIPE_WEBHOOK_ACTIVE_VERSION: stripeApiVersion,
+  [stripeWebhookSecretEnvironmentName]:
+    "whsec_stripe_e2e_startup_placeholder",
 };
 const composeArguments = ["compose", "-f", composeFile];
 const redact = (value) =>
@@ -161,6 +177,7 @@ try {
   activeEnvironment = {
     ...baseEnvironment,
     STRIPE_WEBHOOK: webhookSecret,
+    [stripeWebhookSecretEnvironmentName]: webhookSecret,
   };
 
   console.log("Starting the isolated app and Stripe event listener...");

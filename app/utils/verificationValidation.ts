@@ -4,6 +4,23 @@ export type NormalizedJournalEntry = {
   credit: number;
 };
 
+export type DraftJournalEntry = {
+  account?: unknown;
+  debit?: unknown;
+  credit?: unknown;
+};
+
+export const isEmptyJournalEntry = (entry: DraftJournalEntry) =>
+  Number(entry.account ?? 0) === 0 &&
+  Number(entry.debit ?? 0) === 0 &&
+  Number(entry.credit ?? 0) === 0;
+
+export function withoutEmptyJournalEntries<T extends DraftJournalEntry>(
+  entries: readonly T[]
+): T[] {
+  return entries.filter((entry) => !isEmptyJournalEntry(entry));
+}
+
 export class VerificationValidationError extends Error {
   constructor(message: string) {
     super(message);

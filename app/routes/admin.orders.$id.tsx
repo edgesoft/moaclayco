@@ -26,6 +26,7 @@ import {
   readTextWithinLimit,
   RequestBodyTooLargeError,
 } from "~/utils/requestBody.server";
+import { orderDetailProjection } from "~/utils/queryProjections.server";
 
 type OrderDetailLoaderData = {
   order: Order;
@@ -79,7 +80,10 @@ export let loader: LoaderFunction = async ({ request, params }) => {
   const order = (await Orders.findOne({
     _id: params.id,
     domain: domain?.domain,
-  }).lean()) as unknown as Order | null;
+  })
+    .select(orderDetailProjection)
+    .lean()
+    .exec()) as unknown as Order | null;
 
   if (!order) throw new Response("Order not found", { status: 404 });
 

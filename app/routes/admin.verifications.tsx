@@ -331,7 +331,7 @@ export default function VerificationsPage() {
           </nav>
         </header>
 
-        <Outlet context={{ latestVerificationNumber }} />
+        <Outlet context={{ latestVerificationNumber, year }} />
 
         {isOverview ? (
           <div className="space-y-5">

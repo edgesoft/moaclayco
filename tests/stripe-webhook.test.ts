@@ -11,6 +11,12 @@ import {
   resolveSucceededOrder,
   type StripeWebhookDependencies,
 } from "../app/services/stripe-webhook.server";
+import {
+  STRIPE_LEGACY_API_VERSION,
+  STRIPE_TARGET_API_VERSION,
+  STRIPE_WEBHOOK_VERSION_PARAMETER,
+  type SupportedStripeWebhookApiVersion,
+} from "../app/services/stripe-config.server";
 
 const fixedNow = new Date("2026-08-12T12:00:00.000Z");
 const itemId = "64f10123456789abcdef0123";
@@ -61,10 +67,11 @@ const paymentIntent = {
 const stripeEvent = (
   type: Stripe.Event.Type,
   object: Stripe.Event.Data.Object = paymentIntent,
-  id = "evt_test"
+  id = "evt_test",
+  apiVersion: SupportedStripeWebhookApiVersion = STRIPE_LEGACY_API_VERSION
 ) =>
   ({
-    api_version: "2023-08-16",
+    api_version: apiVersion,
     created: Math.floor(fixedNow.getTime() / 1000),
     data: { object },
     id,
@@ -118,10 +125,12 @@ const signedRequest = ({
   event,
   secret,
   stripe,
+  url = "http://localhost/webhook",
 }: {
   event: Stripe.Event;
   secret: string;
   stripe: Stripe;
+  url?: string;
 }) => {
   const payload = JSON.stringify(event);
   const signature = stripe.webhooks.generateTestHeaderString({
@@ -129,11 +138,33 @@ const signedRequest = ({
     secret,
     timestamp: Math.floor(Date.now() / 1000),
   });
-  return new Request("http://localhost/webhook", {
+  return new Request(url, {
     body: payload,
     headers: { "Stripe-Signature": signature },
     method: "POST",
   });
+};
+
+const withStripeEnvironment = async (
+  values: Record<string, string | undefined>,
+  callback: () => Promise<void>
+) => {
+  const previous = new Map(
+    Object.keys(values).map((key) => [key, process.env[key]])
+  );
+  for (const [key, value] of Object.entries(values)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+
+  try {
+    await callback();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 };
 
 const runAction = async (
@@ -278,6 +309,124 @@ test("webhook rejects missing, invalid and oversized signatures before processin
     if (previousSecret === undefined) delete process.env.STRIPE_WEBHOOK;
     else process.env.STRIPE_WEBHOOK = previousSecret;
   }
+});
+
+test("Dahlia webhook uses its version-specific secret and records the API version", async () => {
+  const signer = new Stripe("sk_test_local");
+  const secret = "whsec_dahlia_test";
+  const createdEvents: Array<Record<string, unknown>> = [];
+  const dependencies = makeDependencies({
+    stripe: { webhooks: signer.webhooks } as never,
+    webhookEvents: {
+      create: async (event: Record<string, unknown>) => {
+        createdEvents.push(event);
+        return {};
+      },
+      updateOne: async () => ({ modifiedCount: 1 }),
+    } as never,
+  });
+
+  await withStripeEnvironment(
+    {
+      STRIPE_API_VERSION: STRIPE_TARGET_API_VERSION,
+      STRIPE_WEBHOOK: "whsec_wrong_generic_secret",
+      STRIPE_WEBHOOK_ACTIVE_VERSION: STRIPE_TARGET_API_VERSION,
+      STRIPE_WEBHOOK_DAHLIA: secret,
+    },
+    async () => {
+      const event = stripeEvent(
+        "account.updated",
+        paymentIntent,
+        "evt_dahlia",
+        STRIPE_TARGET_API_VERSION
+      );
+      const response = await runAction(
+        createStripeWebhookAction(dependencies),
+        signedRequest({
+          event,
+          secret,
+          stripe: signer,
+          url: `http://localhost/webhook?${STRIPE_WEBHOOK_VERSION_PARAMETER}=${STRIPE_TARGET_API_VERSION}`,
+        })
+      );
+
+      assert.equal(response.status, 200);
+      assert.equal(await response.text(), "OK");
+      assert.equal(createdEvents.length, 1);
+      assert.equal(
+        createdEvents[0].apiVersion,
+        STRIPE_TARGET_API_VERSION
+      );
+    }
+  );
+});
+
+test("webhook verifies but ignores an inactive rollout version", async () => {
+  const signer = new Stripe("sk_test_local");
+  const secret = "whsec_dahlia_inactive";
+  const dependencies = makeDependencies({
+    stripe: { webhooks: signer.webhooks } as never,
+  });
+
+  await withStripeEnvironment(
+    {
+      STRIPE_API_VERSION: STRIPE_TARGET_API_VERSION,
+      STRIPE_WEBHOOK_ACTIVE_VERSION: STRIPE_LEGACY_API_VERSION,
+      STRIPE_WEBHOOK_DAHLIA: secret,
+    },
+    async () => {
+      const response = await runAction(
+        createStripeWebhookAction(dependencies),
+        signedRequest({
+          event: stripeEvent(
+            "account.updated",
+            paymentIntent,
+            "evt_inactive",
+            STRIPE_TARGET_API_VERSION
+          ),
+          secret,
+          stripe: signer,
+          url: `http://localhost/webhook?${STRIPE_WEBHOOK_VERSION_PARAMETER}=${STRIPE_TARGET_API_VERSION}`,
+        })
+      );
+
+      assert.equal(response.status, 200);
+      assert.equal(await response.text(), "Inactive Stripe webhook version");
+    }
+  );
+});
+
+test("webhook rejects an event rendered for another API version", async () => {
+  const signer = new Stripe("sk_test_local");
+  const secret = "whsec_dahlia_mismatch";
+  const dependencies = makeDependencies({
+    stripe: { webhooks: signer.webhooks } as never,
+  });
+
+  await withStripeEnvironment(
+    {
+      STRIPE_API_VERSION: STRIPE_TARGET_API_VERSION,
+      STRIPE_WEBHOOK_ACTIVE_VERSION: STRIPE_TARGET_API_VERSION,
+      STRIPE_WEBHOOK_DAHLIA: secret,
+    },
+    async () => {
+      const response = await runAction(
+        createStripeWebhookAction(dependencies),
+        signedRequest({
+          event: stripeEvent("account.updated"),
+          secret,
+          stripe: signer,
+          url: `http://localhost/webhook?${STRIPE_WEBHOOK_VERSION_PARAMETER}=${STRIPE_TARGET_API_VERSION}`,
+        })
+      );
+
+      assert.equal(response.status, 400);
+      assert.equal(
+        await response.text(),
+        "Stripe webhook API version does not match endpoint"
+      );
+    }
+  );
 });
 
 test("duplicate completed webhook events are acknowledged without side effects", async () => {
@@ -589,6 +738,31 @@ test("accounting uses the Stripe balance transaction amounts and stable idempote
   assert.equal(verifications.length, 2);
   assert.equal(verifications[0].idempotencyKey, "stripe:payment:pi_test");
   assert.deepEqual(verifications[1].journalEntries, verifications[0].journalEntries);
+});
+
+test("accounting waits for Stripe when a balance transaction is not available", async () => {
+  let verifications = 0;
+  const dependencies = makeDependencies({
+    createVerification: async () => {
+      verifications += 1;
+      return {} as never;
+    },
+    stripe: {
+      charges: {
+        retrieve: async () => ({
+          balance_transaction: null,
+          created: 1_786_536_000,
+          id: "ch_test",
+        }),
+      },
+    } as never,
+  });
+
+  await assert.rejects(
+    () => makeAccountTransaction(paymentIntent, order, dependencies),
+    /has no balance transaction/
+  );
+  assert.equal(verifications, 0);
 });
 
 test("successful intent metadata can safely attach a missing order PaymentIntent", async () => {

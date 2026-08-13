@@ -65,7 +65,7 @@ export default function JournalEntryAmountField({
   };
 
   return (
-    <div className="min-w-0">
+    <div className="w-full min-w-0 max-w-full overflow-hidden">
       <div className="flex min-h-9 flex-wrap items-center gap-1">
         <div
           role="group"
@@ -101,12 +101,12 @@ export default function JournalEntryAmountField({
 
       <label
         htmlFor={amountInputId}
-        className="mt-1 block border-b border-stone-300 pb-2 transition focus-within:border-[#ad644f]"
+        className="mt-1 block w-full min-w-0 max-w-full overflow-hidden border-b border-stone-300 pb-2 transition focus-within:border-[#ad644f]"
       >
         <span className="text-[10px] font-bold uppercase tracking-[0.13em] text-stone-500">
           Belopp
         </span>
-        <span className="mt-1.5 flex items-baseline gap-2">
+        <span className="mt-1.5 flex w-full min-w-0 max-w-full items-baseline gap-2 overflow-hidden">
           <input
             id={amountInputId}
             type="number"
@@ -116,7 +116,7 @@ export default function JournalEntryAmountField({
             value={amount || ""}
             onChange={(event) => updateAmount(event.target.value)}
             placeholder="0,00"
-            className="verification-amount-input min-w-0 flex-1 border-0 bg-transparent p-0 text-right text-xl font-semibold leading-none tabular-nums text-stone-900 outline-none placeholder:text-stone-300"
+            className="verification-amount-input w-0 min-w-0 max-w-full flex-1 border-0 bg-transparent p-0 text-right text-xl font-semibold leading-none tabular-nums text-stone-900 outline-none placeholder:text-stone-300"
           />
           <span className="shrink-0 text-[11px] font-bold uppercase text-stone-400">
             kr

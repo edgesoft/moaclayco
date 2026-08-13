@@ -51,7 +51,15 @@ import {
   hasMeaningfulVerificationInput,
   sanitizeVerificationFileLabel,
 } from "~/utils/verificationFiles";
-import { VerificationValidationError } from "~/utils/verificationValidation";
+import {
+  isEmptyJournalEntry,
+  VerificationValidationError,
+  withoutEmptyJournalEntries,
+} from "~/utils/verificationValidation";
+import {
+  getVerificationSuggestionDateNotice,
+  type VerificationSuggestionDateNotice,
+} from "~/utils/verificationSuggestionDates";
 import {
   parseFormDataWithinLimit,
   RequestBodyTooLargeError,
@@ -82,6 +90,19 @@ const formSchema = z.object({
     ),
 });
 
+const clientFormSchema = formSchema.extend({
+  journalEntries: z
+    .array(
+      z.object({
+        account: z.number(),
+        debit: z.number(),
+        credit: z.number(),
+      })
+    )
+    .transform((entries) => withoutEmptyJournalEntries(entries))
+    .pipe(formSchema.shape.journalEntries),
+});
+
 type FormData = z.infer<typeof formSchema>;
 
 type AccountEntry = {
@@ -105,6 +126,61 @@ type ReviewSuggestion = SuggestedVerificationData & {
   uiId: string;
 };
 
+const ReviewWarnings = ({
+  label = "Saker att kontrollera",
+  warnings,
+}: {
+  label?: string;
+  warnings?: string[];
+}) => {
+  const uniqueWarnings = Array.from(
+    new Set(warnings?.map((warning) => warning.trim()).filter(Boolean) ?? [])
+  );
+  if (!uniqueWarnings.length) return null;
+
+  return (
+    <details className="mt-2 border-t border-[#ead8d1] pt-2 text-[#8d4b39]">
+      <summary className="flex min-h-8 list-none cursor-pointer items-center justify-between gap-3 text-[11px] font-bold marker:content-none">
+        <span>
+          {label} · {uniqueWarnings.length}
+        </span>
+        <span aria-hidden="true" className="text-base font-normal">
+          +
+        </span>
+      </summary>
+      <ul className="mt-1 space-y-1.5 pb-1 text-[11px] font-normal leading-4 text-stone-600">
+        {uniqueWarnings.map((warning) => (
+          <li key={warning} className="border-l border-[#d7b0a3] pl-2.5">
+            {warning}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+};
+
+const SuggestedDateNotice = ({
+  notice,
+}: {
+  notice: VerificationSuggestionDateNotice | null;
+}) => {
+  if (!notice) return null;
+
+  return (
+    <div
+      role={notice.blocksAutomaticDate ? "alert" : "status"}
+      className="mt-3 border-l-2 border-[#a85f4b] bg-[#fbf1ed] px-3 py-2 text-[11px] font-medium leading-5 text-[#7c4435]"
+    >
+      <strong className="block text-[10px] uppercase tracking-[0.12em]">
+        {notice.blocksAutomaticDate
+          ? "Datum utanför bokföringsåret"
+          : "Gammalt underlag"}
+      </strong>
+      {notice.message}
+    </div>
+  );
+};
+
 type SuggestionProps = {
   status: string;
   verificationData: SuggestedVerificationData | null;
@@ -112,36 +188,18 @@ type SuggestionProps = {
   file?: { label: string };
   document?: { type: string; warnings: string[] };
   uuid: string;
+  error?: string;
 };
 
 const FileUpload = ({
-  onSuggestionsReceived,
   onFileSelected,
 }: {
-  onSuggestionsReceived: (suggestions: SuggestionProps) => void;
-  onFileSelected: (file: File) => void; // Definiera en typ för callback-funktionen
+  onFileSelected: (file: File) => void;
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const fetcher = useFetcher<SuggestionProps>();
-  const handledUuidRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const response = fetcher.data;
-    if (!response || handledUuidRef.current === response.uuid) return;
-
-    handledUuidRef.current = response.uuid;
-    onSuggestionsReceived(response);
-  }, [fetcher.data, onSuggestionsReceived]);
 
   const submitFile = (file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
     onFileSelected(file);
-    fetcher.submit(formData, {
-      action: "/admin/verifications/files/parse",
-      method: "post",
-      encType: "multipart/form-data",
-    });
   };
 
   const handleFileInputClick = (e: MouseEvent<HTMLButtonElement>) => {
@@ -168,9 +226,9 @@ const FileUpload = ({
         const file = event.dataTransfer.files[0];
         if (file) submitFile(file);
       }}
-      className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center transition hover:border-emerald-400 hover:bg-emerald-50/40 sm:p-7"
+      className="rounded-2xl border border-dashed border-stone-300 bg-[#fcfaf7] p-5 text-center transition hover:border-[#c58a79] hover:bg-[#fbf1ed] sm:p-7"
     >
-      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-lg font-bold text-emerald-800" aria-hidden="true">
+      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[#f3e4de] text-lg font-bold text-[#985744]" aria-hidden="true">
         <ArrowIcon direction="up" />
       </div>
       <p className="mt-3 text-sm font-bold text-slate-900">
@@ -197,7 +255,7 @@ const FileUpload = ({
         ref={fileInputRef}
         onChange={handleFileChange}
         className="hidden"
-        accept="application/pdf,image/*"
+        accept=".pdf,.avif,.gif,.heic,.heif,.jpeg,.jpg,.png,.tif,.tiff,.webp,application/pdf,image/avif,image/gif,image/heic,image/heif,image/jpeg,image/png,image/tiff,image/webp"
       />
     </div>
   );
@@ -301,9 +359,11 @@ export const action: ActionFunction = async ({ request }) => {
   const rawJournalEntries = requestFormData.get("journalEntries");
   let journalEntries: FormData["journalEntries"];
   try {
-    journalEntries = JSON.parse(
-      typeof rawJournalEntries === "string" ? rawJournalEntries : ""
-    ) as FormData["journalEntries"];
+    journalEntries = withoutEmptyJournalEntries(
+      JSON.parse(
+        typeof rawJournalEntries === "string" ? rawJournalEntries : ""
+      ) as FormData["journalEntries"]
+    );
   } catch {
     return json(
       {
@@ -399,7 +459,10 @@ export const action: ActionFunction = async ({ request }) => {
       ? await Verifications.findOne({
       domain: domain?.domain,
       metadata: { $elemMatch: { key: "vatReport", value: monthKey } },
-    }).exec()
+    })
+        .select("_id")
+        .lean()
+        .exec()
       : null;
 
     if (isVatRegistered) {
@@ -489,6 +552,7 @@ export const action: ActionFunction = async ({ request }) => {
 
 type ContextType = {
   latestVerificationNumber: number;
+  year: number;
 };
 
 enum UploadingState {
@@ -503,11 +567,26 @@ export default function Verification() {
   const actionData = useActionData<ActionData>();
   const data = useOutletContext<ContextType>();
   const submit = useSubmit();
+  const interpretationFetcher = useFetcher<SuggestionProps>();
+  const handledInterpretationUuidRef = useRef<string | null>(null);
+  const preUploadFormValuesRef = useRef<FormData | null>(null);
+  const handleSuggestionsRef = useRef<(data: SuggestionProps) => void>(
+    () => undefined
+  );
   const [uploadedFile, setUploadedFile] = useState<{ label: string } | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [reviewSuggestions, setReviewSuggestions] = useState<ReviewSuggestion[]>([]);
   const [interpretationWarnings, setInterpretationWarnings] = useState<string[]>([]);
   const [protectingManualInput, setProtectingManualInput] = useState(false);
+  const [suggestedDateNotice, setSuggestedDateNotice] =
+    useState<VerificationSuggestionDateNotice | null>(null);
+  const saveSummaryRef = useRef<HTMLDivElement>(null);
+  const journalSectionRef = useRef<HTMLElement>(null);
+  const journalBottomRef = useRef<HTMLButtonElement>(null);
+  const [isSaveSummaryVisible, setIsSaveSummaryVisible] = useState(false);
+  const [isJournalSectionVisible, setIsJournalSectionVisible] = useState(false);
+  const [isJournalBottomVisible, setIsJournalBottomVisible] = useState(false);
   const navigate = useNavigate();
   const previousVerificationRef = useRef<number | null>(null);
   const [uploadingState, setUploadingState] = useState<UploadingState>(
@@ -518,7 +597,8 @@ export default function Verification() {
   );
   const [initialVerificationDate] = useState(() => {
     const now = new Date();
-    return accountingDateKey(now) ?? now.toISOString().split("T")[0];
+    const today = accountingDateKey(now) ?? now.toISOString().split("T")[0];
+    return Number(today.slice(0, 4)) === data.year ? today : "";
   });
 
   const {
@@ -531,7 +611,7 @@ export default function Verification() {
     watch,
     formState: { errors },
   } = useForm<FormData>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(clientFormSchema),
     defaultValues: {
       description: "",
       verificationDate: initialVerificationDate,
@@ -604,9 +684,17 @@ export default function Verification() {
     suggestion: SuggestedVerificationData,
     documentWarnings: string[] = interpretationWarnings
   ) => {
+    const dateNotice = getVerificationSuggestionDateNotice({
+      dateKey: suggestion.date,
+      fiscalYear: data.year,
+    });
     remove(fields.map((_, index) => index));
     setValue("description", suggestion.description || "");
-    setValue("verificationDate", suggestion.date || "");
+    setValue(
+      "verificationDate",
+      dateNotice?.blocksAutomaticDate ? "" : suggestion.date || ""
+    );
+    setSuggestedDateNotice(dateNotice);
     Object.entries(suggestion.accounts).forEach(([accountNumber, values]) => {
       append({
         account: Number(accountNumber),
@@ -618,14 +706,38 @@ export default function Verification() {
       Array.from(new Set([...documentWarnings, ...(suggestion.warnings ?? [])]))
     );
     setReviewSuggestions([]);
+    setUploadError(null);
     setProtectingManualInput(false);
     setUploadingState(UploadingState.SUCCESS);
+  };
+
+  const removeUploadedMaterial = () => {
+    const previousManualValues = preUploadFormValuesRef.current;
+
+    reset(
+      previousManualValues ?? {
+        description: "",
+        verificationDate: initialVerificationDate,
+        journalEntries: [{ account: 0, debit: 0, credit: 0 }],
+      }
+    );
+    preUploadFormValuesRef.current = null;
+    setUploadedFile(null);
+    setSelectedFile(null);
+    setUploadError(null);
+    setReviewSuggestions([]);
+    setInterpretationWarnings([]);
+    setSuggestedDateNotice(null);
+    setProtectingManualInput(false);
+    setUploadingState(UploadingState.IDLE);
+    setEntryMode(previousManualValues ? "manual" : "choose");
   };
 
   function handleSuggestions(data: SuggestionProps): void {
     if (data.status === "success" && data.verificationData && data.file) {
       if (data && data.verificationData && data.verificationData.accounts) {
         setUploadedFile(data.file);
+        setUploadError(null);
         if (protectingManualInput) {
           setReviewSuggestions([
             { ...data.verificationData, uiId: `${data.uuid}:suggestion:1` },
@@ -646,6 +758,7 @@ export default function Verification() {
       data.suggestions.length > 0
     ) {
       setUploadedFile(data.file);
+      setUploadError(null);
       setReviewSuggestions(
         data.suggestions.map((suggestion, suggestionPosition) => ({
           ...suggestion,
@@ -655,10 +768,29 @@ export default function Verification() {
       setInterpretationWarnings(data.document?.warnings ?? []);
       setUploadingState(UploadingState.REVIEW);
     } else {
+      setUploadError(
+        data.error ??
+          "Underlaget kunde inte tolkas. Prova igen eller fyll i manuellt."
+      );
       setUploadingState(UploadingState.FAILED);
       if (fields.length === 0) append({ account: 0, debit: 0, credit: 0 });
     }
   }
+
+  handleSuggestionsRef.current = handleSuggestions;
+
+  useEffect(() => {
+    const response = interpretationFetcher.data;
+    if (
+      !response ||
+      handledInterpretationUuidRef.current === response.uuid
+    ) {
+      return;
+    }
+
+    handledInterpretationUuidRef.current = response.uuid;
+    handleSuggestionsRef.current(response);
+  }, [interpretationFetcher.data]);
 
   const showToast = (message: string) => {
     toast.warn(message, {
@@ -714,8 +846,10 @@ export default function Verification() {
         previousVerificationRef.current = verificationNumber;
         setUploadedFile(null);
         setSelectedFile(null);
+        preUploadFormValuesRef.current = null;
         setReviewSuggestions([]);
         setInterpretationWarnings([]);
+        setSuggestedDateNotice(null);
         setProtectingManualInput(false);
         reset();
         // Visa toast
@@ -735,9 +869,10 @@ export default function Verification() {
   }, [actionData, navigate, previousVerificationRef, reset]);
 
   const currentEntries = watch("journalEntries") || [];
+  const currentEntriesForSaving = withoutEmptyJournalEntries(currentEntries);
   const currentDescription = watch("description") || "";
   const currentVerificationDate = watch("verificationDate") || "";
-  const currentSums = currentEntries.reduce(
+  const currentSums = currentEntriesForSaving.reduce(
     (sum, entry) => ({
       debit: sum.debit + Number(entry?.debit || 0),
       credit: sum.credit + Number(entry?.credit || 0),
@@ -757,14 +892,85 @@ export default function Verification() {
       verificationDate: currentVerificationDate,
       initialVerificationDate,
     });
+  const interpretationBlocksForm =
+    uploadingState === UploadingState.UPLOADING ||
+    uploadingState === UploadingState.REVIEW ||
+    uploadingState === UploadingState.FAILED;
+  const showVerificationActions =
+    hasStartedVerification && !interpretationBlocksForm;
+  const hasIncompleteJournalEntry = currentEntries.some((entry) => {
+    if (isEmptyJournalEntry(entry)) return false;
+
+    const debit = Number(entry?.debit || 0);
+    const credit = Number(entry?.credit || 0);
+    return (
+      Number(entry?.account || 0) <= 0 ||
+      !((debit > 0 && credit === 0) || (credit > 0 && debit === 0))
+    );
+  });
+  const saveBlockReason = !currentDescription.trim()
+    ? "Skriv en beskrivning för att kunna spara."
+    : !currentVerificationDate
+      ? "Välj bokföringsdatum för att kunna spara."
+      : currentEntriesForSaving.length < 2
+        ? "Minst två kompletta konteringsrader krävs."
+        : hasIncompleteJournalEntry
+          ? "Fyll i den påbörjade konteringsraden."
+          : !isBalanced
+            ? "Debet och kredit måste balansera."
+            : null;
   const isReadyToSave =
-    uploadingState !== UploadingState.UPLOADING &&
-    isBalanced &&
+    showVerificationActions &&
+    !saveBlockReason &&
     formSchema.safeParse({
       description: currentDescription,
       verificationDate: currentVerificationDate,
-      journalEntries: currentEntries,
+      journalEntries: currentEntriesForSaving,
     }).success;
+
+  useEffect(() => {
+    const saveSummary = saveSummaryRef.current;
+    if (!saveSummary || typeof IntersectionObserver === "undefined") {
+      setIsSaveSummaryVisible(false);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsSaveSummaryVisible(entry.isIntersecting),
+      { threshold: 0.05 }
+    );
+    observer.observe(saveSummary);
+    return () => observer.disconnect();
+  }, [showVerificationActions]);
+
+  useEffect(() => {
+    const journalSection = journalSectionRef.current;
+    const journalBottom = journalBottomRef.current;
+    if (
+      !showVerificationActions ||
+      !journalSection ||
+      !journalBottom ||
+      typeof IntersectionObserver === "undefined"
+    ) {
+      return;
+    }
+
+    const sectionObserver = new IntersectionObserver(
+      ([entry]) => setIsJournalSectionVisible(entry.isIntersecting),
+      { threshold: 0 }
+    );
+    const bottomObserver = new IntersectionObserver(
+      ([entry]) => setIsJournalBottomVisible(entry.isIntersecting),
+      { threshold: 0.01 }
+    );
+    sectionObserver.observe(journalSection);
+    bottomObserver.observe(journalBottom);
+
+    return () => {
+      sectionObserver.disconnect();
+      bottomObserver.disconnect();
+    };
+  }, [showVerificationActions]);
   const showMobileModeChoice =
     entryMode === "choose" && !hasStartedVerification;
   const showMobileUpload =
@@ -776,9 +982,26 @@ export default function Verification() {
     (hasStartedVerification && !selectedFile) ||
     uploadingState === UploadingState.SUCCESS ||
     protectingManualInput;
+  const singleReviewSuggestion =
+    reviewSuggestions.length === 1 ? reviewSuggestions[0] : null;
+  const singleReviewWarnings = singleReviewSuggestion
+    ? Array.from(
+        new Set([
+          ...(singleReviewSuggestion.warnings ?? []),
+          ...interpretationWarnings,
+        ])
+      )
+    : [];
+  const singleReviewDateNotice = singleReviewSuggestion
+    ? getVerificationSuggestionDateNotice({
+        dateKey: singleReviewSuggestion.date,
+        fiscalYear: data.year,
+      })
+    : null;
 
   const submitVerification = handleSubmit((formValues) => {
-    const sums = formValues.journalEntries.reduce(
+    const journalEntries = withoutEmptyJournalEntries(formValues.journalEntries);
+    const sums = journalEntries.reduce(
       (sum, { debit = 0, credit = 0 }) => ({
         debit: sum.debit + Number(debit),
         credit: sum.credit + Number(credit),
@@ -811,7 +1034,7 @@ export default function Verification() {
     const submission = new FormData();
     submission.append("description", formValues.description);
     submission.append("verificationDate", formValues.verificationDate);
-    submission.append("journalEntries", JSON.stringify(formValues.journalEntries));
+    submission.append("journalEntries", JSON.stringify(journalEntries));
     if (selectedFile) {
       submission.append("supportingFile", selectedFile);
       if (uploadedFile?.label) {
@@ -822,7 +1045,10 @@ export default function Verification() {
   });
 
   return (
-    <section aria-labelledby="new-verification-title">
+    <section
+      aria-labelledby="new-verification-title"
+      className="verification-page w-full min-w-0 max-w-full"
+    >
       <div className="mb-5 flex items-center justify-between gap-4">
         <div>
           <button
@@ -845,8 +1071,11 @@ export default function Verification() {
         </div>
       </div>
 
-      <form onSubmit={submitVerification} className="space-y-5">
-        <div className="lg:hidden">
+      <form
+        onSubmit={submitVerification}
+        className="w-full min-w-0 max-w-full space-y-5"
+      >
+        <div className="verification-mobile-mode">
           {showMobileModeChoice ? (
             <section aria-labelledby="verification-mode-title" className="border-y border-stone-300 py-5">
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#985744]">
@@ -906,15 +1135,15 @@ export default function Verification() {
           ) : null}
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+        <div className="verification-layout grid w-full min-w-0 max-w-full gap-5">
           <div
-            className={`${showMobileManual ? "block" : "hidden"} order-2 space-y-5 lg:order-1 lg:block ${
+            className={`${showMobileManual ? "block" : "hidden"} verification-manual min-w-0 space-y-5 ${
               uploadingState === UploadingState.UPLOADING ? "opacity-60" : ""
             }`}
           >
             <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
               <div className="mb-5">
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#985744]">
                   Grunduppgifter
                 </p>
                 <h3 className="mt-1 text-lg font-bold text-slate-950">
@@ -939,7 +1168,7 @@ export default function Verification() {
                     className={`h-12 w-full rounded-xl border bg-white px-4 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-2 sm:text-sm ${
                       errors.description
                         ? "border-red-400 focus:border-red-500 focus:ring-red-100"
-                        : "border-slate-300 focus:border-emerald-600 focus:ring-emerald-100"
+                        : "border-slate-300 focus:border-[#ad644f] focus:ring-[#f3e4de]"
                     }`}
                   />
                 </div>
@@ -957,20 +1186,31 @@ export default function Verification() {
                       <AccountingDateField
                         id="verificationDate"
                         value={field.value}
-                        onChange={field.onChange}
+                        onChange={(value) => {
+                          field.onChange(value);
+                          setSuggestedDateNotice(null);
+                        }}
                         label="Välj bokföringsdatum"
-                        error={Boolean(errors.verificationDate)}
+                        error={
+                          Boolean(errors.verificationDate) ||
+                          Boolean(suggestedDateNotice?.blocksAutomaticDate)
+                        }
+                        allowedYear={data.year}
                       />
                     )}
                   />
+                  <SuggestedDateNotice notice={suggestedDateNotice} />
                 </div>
               </div>
             </section>
 
-            <section className="overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <section
+              ref={journalSectionRef}
+              className="min-w-0 max-w-full overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm"
+            >
               <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-4 sm:p-6">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#985744]">
                     Kontering
                   </p>
                   <h3 className="mt-1 text-lg font-bold text-slate-950">
@@ -985,32 +1225,94 @@ export default function Verification() {
                 </span>
               </div>
 
-              <div className="space-y-4 p-4 sm:p-6">
+              <div className="min-w-0 max-w-full p-4 sm:p-6">
+                <div
+                  data-testid="verification-journal-rows"
+                  className="min-w-0 max-w-full space-y-4"
+                >
+                {showVerificationActions &&
+                fields.length > 2 &&
+                isJournalSectionVisible &&
+                !isJournalBottomVisible &&
+                !isSaveSummaryVisible ? (
+                <div
+                  data-testid="verification-balance-dock"
+                  role="status"
+                  aria-live="polite"
+                  aria-label={
+                    isBalanced
+                      ? "Konteringen balanserar"
+                      : `Konteringen skiljer ${balanceDifference.toLocaleString("sv-SE", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })} kronor`
+                  }
+                  className="verification-balance-dock pointer-events-none z-20"
+                >
+                  <div
+                    className={`verification-balance-dock-panel grid grid-cols-3 divide-x border-t px-4 pt-2.5 shadow-[0_-8px_24px_rgba(78,55,47,0.1)] backdrop-blur-md sm:px-6 ${
+                      isBalanced
+                        ? "divide-stone-200 border-stone-300 bg-[#fffdf9]/98"
+                        : "divide-[#e4c8bf] border-[#c98773] bg-[#fbf1ed]/98"
+                    }`}
+                  >
+                    <div className="min-w-0 px-2 sm:px-3">
+                      <p className="text-[8px] font-bold uppercase tracking-[0.12em] text-stone-400 sm:text-[9px]">
+                        Debet
+                      </p>
+                      <p className="mt-0.5 truncate text-[11px] font-bold tabular-nums text-stone-900 sm:text-xs">
+                        {currentSums.debit.toLocaleString("sv-SE", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </p>
+                    </div>
+                    <div className="min-w-0 px-2 sm:px-3">
+                      <p className="text-[8px] font-bold uppercase tracking-[0.12em] text-stone-400 sm:text-[9px]">
+                        Kredit
+                      </p>
+                      <p className="mt-0.5 truncate text-[11px] font-bold tabular-nums text-stone-900 sm:text-xs">
+                        {currentSums.credit.toLocaleString("sv-SE", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </p>
+                    </div>
+                    <div className="min-w-0 px-2 text-right sm:px-3">
+                      <p
+                        className={`text-[8px] font-bold uppercase tracking-[0.12em] sm:text-[9px] ${
+                          isBalanced ? "text-stone-400" : "text-[#985744]"
+                        }`}
+                      >
+                        Diff
+                      </p>
+                      <p
+                        className={`mt-0.5 truncate text-[11px] font-bold tabular-nums sm:text-xs ${
+                          isBalanced ? "text-stone-700" : "text-[#985744]"
+                        }`}
+                      >
+                        {balanceDifference.toLocaleString("sv-SE", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                ) : null}
+
                 {fields.map((entry, index) => (
                   <div
                     key={entry.id}
-                    className="rounded-[1.25rem] border border-stone-200 bg-[#fbfaf8] p-4 shadow-[0_1px_0_rgba(41,37,36,0.03)] sm:p-5"
+                    className="verification-entry-card w-full min-w-0 max-w-full rounded-[1.25rem] border border-stone-200 bg-[#fbfaf8] p-4 shadow-[0_1px_0_rgba(41,37,36,0.03)] sm:p-5"
                   >
-                    <div className="mb-4 flex min-h-[2rem] items-center justify-between gap-3 border-b border-stone-200 pb-3">
+                    <div className="mb-4 flex min-h-[2rem] items-center border-b border-stone-200 pb-3">
                       <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-stone-500">
                         Konteringsrad {index + 1}
                       </p>
-                      {fields.length > 1 ? (
-                        <button
-                          type="button"
-                          onClick={() => remove(index)}
-                          aria-label={`Ta bort konteringsrad ${index + 1}`}
-                          className="inline-flex h-9 items-center justify-center rounded-lg px-2.5 text-[11px] font-bold text-stone-400 transition hover:bg-red-50 hover:text-red-700"
-                        >
-                          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="mr-1.5 h-3.5 w-3.5">
-                            <path d="M5 7h14M9 7V4.5h6V7M8 10.5v6M12 10.5v6M16 10.5v6M7 7l1 13h8l1-13" />
-                          </svg>
-                          Ta bort
-                        </button>
-                      ) : null}
                     </div>
 
-                    <div className="grid gap-3 md:grid-cols-[minmax(220px,1.2fr)_minmax(250px,.8fr)]">
+                    <div className="verification-entry-grid grid w-full min-w-0 max-w-full gap-3">
                       <div className="min-w-0">
                         <label
                           className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.13em] text-stone-500"
@@ -1036,7 +1338,7 @@ export default function Verification() {
                                     (account) => account.value === field.value
                                   )}
                                   placeholder="Sök eller välj konto"
-                                  className="text-sm"
+                                  className="min-w-0 max-w-full text-sm"
                                   classNamePrefix="verification-account"
                                 />
                               )}
@@ -1063,11 +1365,13 @@ export default function Verification() {
                     </div>
                   </div>
                 ))}
+                </div>
 
                 <button
+                  ref={journalBottomRef}
                   type="button"
                   onClick={handleAddRow}
-                  className="inline-flex h-12 w-full items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-[#fffdf9] px-5 text-sm font-bold text-stone-600 transition hover:border-[#c58a79] hover:bg-[#fbf3ef] hover:text-[#985744] sm:w-auto"
+                  className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-[#fffdf9] px-5 text-sm font-bold text-stone-600 transition hover:border-[#c58a79] hover:bg-[#fbf3ef] hover:text-[#985744] sm:w-auto"
                 >
                   <span aria-hidden="true" className="mr-2 text-lg"><PlusMinusIcon /></span>
                   Lägg till konteringsrad
@@ -1076,10 +1380,10 @@ export default function Verification() {
             </section>
           </div>
 
-          <aside className={`${showMobileUpload ? "block" : "hidden"} order-1 space-y-3 lg:order-2 lg:block lg:sticky lg:top-28`}>
+          <aside className={`${showMobileUpload ? "block" : "hidden"} verification-aside min-w-0 max-w-full space-y-3`}>
             <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="mb-3">
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#985744]">
                   Underlag
                 </p>
                 <h3 className="mt-1 text-base font-bold text-slate-950">
@@ -1088,54 +1392,110 @@ export default function Verification() {
               </div>
 
               {uploadingState === UploadingState.UPLOADING ? (
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
-                  <div className="h-2 overflow-hidden rounded-full bg-emerald-100">
-                    <div className="h-full w-full animate-stripe bg-[repeating-linear-gradient(45deg,_#047857_0px,_#047857_10px,_#34d399_10px,_#34d399_20px)] bg-[length:120%_100%]" />
+                <div
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className="border-y border-stone-200 py-4"
+                >
+                  <div className="flex items-start gap-3.5">
+                    <span
+                      aria-hidden="true"
+                      className="relative mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center"
+                    >
+                      <span className="absolute h-8 w-8 animate-ping rounded-full bg-[#c98773]/15 motion-reduce:animate-none" />
+                      <span className="relative h-2.5 w-2.5 rounded-full bg-[#a85f4b]" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#985744]">
+                        Läser underlag
+                      </p>
+                      <p className="mt-1 truncate font-serif text-lg leading-tight text-stone-950">
+                        {selectedFile?.name ?? "Vald fil"}
+                      </p>
+                      {protectingManualInput ? (
+                        <p className="mt-1 text-xs leading-5 text-stone-500">
+                          Dina ifyllda uppgifter ligger kvar.
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
-                  <p className="mt-3 text-sm font-bold text-emerald-900">
-                    Tolkar underlaget…
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-emerald-800/70">
-                    {protectingManualInput
-                      ? "Dina ifyllda fält ligger kvar medan förslaget tas fram."
-                      : "Datum, text och kontering fylls i automatiskt."}
-                  </p>
                 </div>
               ) : uploadingState === UploadingState.FAILED ? (
-                <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
-                  <p className="text-sm font-bold text-red-900">
-                    Filen kunde inte tolkas
+                <div
+                  role="alert"
+                  className="border-y border-[#d7b0a3] py-5"
+                >
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#985744]">
+                    Uppladdningen avbröts
                   </p>
-                  <p className="mt-1 text-xs leading-5 text-red-700">
-                    Du kan prova en annan fil eller fylla i verifikationen manuellt. Originalfilen bifogas om du sparar manuellt.
+                  <p className="mt-1 font-serif text-lg leading-tight text-stone-950">
+                    Det gick inte att läsa filen
                   </p>
+                  <p className="mt-2 text-xs leading-5 text-stone-600">
+                    {uploadError ??
+                      "Prova igen med en PDF eller vanlig bildfil."}
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFile(null);
+                        setUploadedFile(null);
+                        setUploadError(null);
+                        setProtectingManualInput(false);
+                        setUploadingState(UploadingState.IDLE);
+                      }}
+                      className="inline-flex h-10 items-center border-b border-[#a85f4b] px-0.5 text-xs font-bold text-[#985744] transition hover:text-[#7c4435]"
+                    >
+                      Välj en annan fil
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFile(null);
+                        setUploadedFile(null);
+                        setUploadError(null);
+                        setReviewSuggestions([]);
+                        setInterpretationWarnings([]);
+                        setProtectingManualInput(false);
+                        setUploadingState(UploadingState.IDLE);
+                        setEntryMode("manual");
+                      }}
+                      className="inline-flex h-10 items-center px-0.5 text-xs font-bold text-stone-500 transition hover:text-stone-900"
+                    >
+                      Fortsätt manuellt
+                    </button>
+                  </div>
+                </div>
+              ) : uploadingState === UploadingState.REVIEW && singleReviewSuggestion ? (
+                <div className="border-y border-[#d7b0a3] py-4">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#985744]">
+                    Kontrollera förslaget
+                  </p>
+                  <SuggestedDateNotice notice={singleReviewDateNotice} />
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedFile(null);
-                      setUploadedFile(null);
-                      setProtectingManualInput(false);
-                      setUploadingState(UploadingState.IDLE);
-                    }}
-                    className="mt-3 h-10 rounded-xl bg-white px-4 text-xs font-bold text-red-800 ring-1 ring-red-200 transition hover:bg-red-100"
+                    onClick={() => applySuggestion(singleReviewSuggestion)}
+                    className="group mt-2 block w-full text-left"
                   >
-                    Försök igen
+                    <span className="line-clamp-2 text-sm font-bold leading-5 text-stone-900">
+                      {singleReviewSuggestion.description}
+                    </span>
+                    <span className="mt-1 block text-[11px] text-stone-500">
+                      {singleReviewSuggestion.date}
+                      {singleReviewSuggestion.sourceReference
+                        ? ` · ${singleReviewSuggestion.sourceReference}`
+                        : ""}
+                    </span>
+                    <span className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-[#985744] transition group-hover:text-[#7c4435]">
+                      {singleReviewDateNotice?.blocksAutomaticDate
+                        ? "Använd och välj datum"
+                        : "Använd förslaget"}
+                      <span aria-hidden="true"><ArrowIcon /></span>
+                    </span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedFile(null);
-                      setUploadedFile(null);
-                      setReviewSuggestions([]);
-                      setInterpretationWarnings([]);
-                      setProtectingManualInput(false);
-                      setUploadingState(UploadingState.IDLE);
-                      setEntryMode("manual");
-                    }}
-                    className="ml-3 mt-3 h-10 px-2 text-xs font-bold text-stone-600 underline decoration-stone-300 underline-offset-4 transition hover:text-[#985744]"
-                  >
-                    Fyll i manuellt
-                  </button>
+                  <ReviewWarnings warnings={singleReviewWarnings} />
                 </div>
               ) : uploadingState === UploadingState.REVIEW ? (
                 <div className="space-y-3 rounded-2xl border border-[#d7b0a3] bg-[#fbf3ef] p-4">
@@ -1147,90 +1507,107 @@ export default function Verification() {
                     </p>
                     <p className="mt-1 text-xs leading-5 text-[#7d493a]">
                       {protectingManualInput
-                        ? "Det du redan fyllt i ligger kvar. Använd förslaget endast om du vill ersätta fälten."
-                        : "Underlaget innehåller flera separata transaktioner. Välj den som ska bli verifikation nu."}
+                        ? "Dina ifyllda uppgifter ligger kvar."
+                        : "Välj posten som ska bokföras."}
                     </p>
                   </div>
-                  {reviewSuggestions.map((suggestion) => (
-                    <button
+                  {reviewSuggestions.map((suggestion) => {
+                    const dateNotice = getVerificationSuggestionDateNotice({
+                      dateKey: suggestion.date,
+                      fiscalYear: data.year,
+                    });
+                    return (
+                    <div
                       key={suggestion.uiId}
-                      type="button"
-                      onClick={() => applySuggestion(suggestion)}
-                      className="block w-full rounded-xl border border-[#dfc1b7] bg-white p-3 text-left transition hover:border-[#b86e59]"
+                      className="rounded-xl border border-[#dfc1b7] bg-white transition hover:border-[#b86e59]"
                     >
-                      <span className="block text-xs font-bold text-stone-900">
-                        {suggestion.description}
-                      </span>
-                      <span className="mt-1 block text-[11px] text-stone-500">
-                        {suggestion.date}{suggestion.sourceReference ? ` · ${suggestion.sourceReference}` : ""}
-                        {typeof suggestion.confidence === "number" ? ` · ${Math.round(suggestion.confidence * 100)} % säkerhet` : ""}
-                      </span>
-                      {suggestion.warnings?.length ? (
-                        <span className="mt-1 block text-[11px] leading-4 text-amber-800">
-                          {suggestion.warnings.join(" · ")}
+                      <button
+                        type="button"
+                        onClick={() => applySuggestion(suggestion)}
+                        className="block w-full p-3 text-left"
+                      >
+                        <span className="line-clamp-2 text-xs font-bold leading-5 text-stone-900">
+                          {suggestion.description}
                         </span>
-                      ) : null}
-                    </button>
-                  ))}
-                  {interpretationWarnings.length ? (
-                    <p className="text-[11px] leading-4 text-amber-800">
-                      {interpretationWarnings.join(" · ")}
-                    </p>
-                  ) : null}
+                        <span className="mt-1 block text-[11px] text-stone-500">
+                          {suggestion.date}{suggestion.sourceReference ? ` · ${suggestion.sourceReference}` : ""}
+                        </span>
+                        <span className="mt-2 block text-[11px] font-bold text-[#985744]">
+                          {dateNotice?.blocksAutomaticDate
+                            ? "Använd och välj datum"
+                            : "Använd förslaget"}
+                        </span>
+                      </button>
+                      <div className="px-3 pb-2">
+                        <SuggestedDateNotice notice={dateNotice} />
+                        <ReviewWarnings warnings={suggestion.warnings} />
+                      </div>
+                    </div>
+                    );
+                  })}
+                  <ReviewWarnings
+                    label="Om dokumentet"
+                    warnings={interpretationWarnings}
+                  />
                 </div>
               ) : uploadedFile ? (
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+                <div className="rounded-2xl border border-[#dfbcae] bg-[#fbf1ed] p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-[#985744]">
                     Underlag kopplat
                   </p>
-                  <p className="mt-1 truncate text-sm font-bold text-emerald-950">
+                  <p className="mt-1 truncate text-sm font-bold text-stone-900">
                     {uploadedFile.label}
                   </p>
-                  {interpretationWarnings.length ? (
-                    <p className="mt-2 text-[11px] leading-4 text-amber-800">
-                      Kontrollera: {interpretationWarnings.join(" · ")}
-                    </p>
-                  ) : null}
+                  <ReviewWarnings warnings={interpretationWarnings} />
                   <button
                     type="button"
-                    onClick={() => {
-                      setUploadedFile(null);
-                      setSelectedFile(null);
-                      setReviewSuggestions([]);
-                      setInterpretationWarnings([]);
-                      setProtectingManualInput(false);
-                      setUploadingState(UploadingState.IDLE);
-                    }}
-                    className="mt-3 text-xs font-bold text-emerald-800 underline decoration-emerald-300 underline-offset-4"
+                    onClick={removeUploadedMaterial}
+                    className="mt-3 inline-flex min-h-10 items-center text-xs font-bold text-[#985744] transition hover:text-[#7c4435]"
                   >
                     Ta bort underlag
                   </button>
                 </div>
               ) : (
                 <FileUpload
-                  onSuggestionsReceived={handleSuggestions}
                   onFileSelected={(file) => {
                     setEntryMode("upload");
                     const currentValues = getValues();
+                    const hasManualInput = hasMeaningfulVerificationInput({
+                      description: currentValues.description,
+                      journalEntries: currentValues.journalEntries,
+                      verificationDate: currentValues.verificationDate,
+                      initialVerificationDate,
+                    });
+                    preUploadFormValuesRef.current = hasManualInput
+                      ? {
+                          description: currentValues.description,
+                          verificationDate: currentValues.verificationDate,
+                          journalEntries: currentValues.journalEntries.map(
+                            (entry) => ({ ...entry })
+                          ),
+                        }
+                      : null;
                     setSelectedFile(file);
                     setUploadedFile({ label: file.name });
+                    setUploadError(null);
                     setReviewSuggestions([]);
                     setInterpretationWarnings([]);
-                    setProtectingManualInput(
-                      hasMeaningfulVerificationInput({
-                        description: currentValues.description,
-                        journalEntries: currentValues.journalEntries,
-                        verificationDate: currentValues.verificationDate,
-                        initialVerificationDate,
-                      })
-                    );
+                    setSuggestedDateNotice(null);
+                    setProtectingManualInput(hasManualInput);
                     setUploadingState(UploadingState.UPLOADING);
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    interpretationFetcher.submit(formData, {
+                      action: "/admin/verifications/files/parse",
+                      method: "post",
+                      encType: "multipart/form-data",
+                    });
                   }}
                 />
               )}
             </section>
 
-            <div className="hidden rounded-2xl border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-500 shadow-sm lg:block">
+            <div className="verification-desktop-note hidden rounded-2xl border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-500 shadow-sm">
               <p className="font-bold text-slate-800">Manuell registrering</p>
               <p className="mt-1">
                 Det går lika bra att fylla i uppgifterna direkt utan underlag.
@@ -1239,9 +1616,21 @@ export default function Verification() {
           </aside>
         </div>
 
-        {hasStartedVerification ? (
-          <div className="sticky bottom-0 z-[5] border-t border-stone-300 bg-[#f5f4f0] px-3 py-2.5 shadow-[0_-10px_28px_rgba(70,60,52,0.08)] sm:p-4">
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 sm:flex sm:items-center sm:justify-between">
+        {showVerificationActions ? (
+          <div
+            ref={saveSummaryRef}
+            className="w-full min-w-0 max-w-full border-t border-stone-300 pt-4"
+          >
+            {saveBlockReason ? (
+              <p
+                id="verification-save-block-reason"
+                role="status"
+                className="mb-3 text-xs font-semibold leading-5 text-[#985744]"
+              >
+                {saveBlockReason}
+              </p>
+            ) : null}
+            <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-end gap-4 sm:flex sm:items-center sm:justify-between">
               <div className="grid grid-cols-2 gap-5 sm:flex sm:gap-6">
                 <div>
                   <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">Debet</p>
@@ -1257,12 +1646,12 @@ export default function Verification() {
                 </div>
                 <div className="hidden sm:block">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Status</p>
-                  <p className={`mt-1 text-sm font-bold ${isBalanced ? "text-emerald-700" : "text-amber-700"}`}>
-                    {isBalanced ? "Balanserar" : balanceDifference ? `Diff ${balanceDifference.toLocaleString("sv-SE")}` : "Ej klar"}
+                  <p className="mt-1 text-sm font-bold text-[#985744]">
+                    {isBalanced ? "Balanserar" : "Inte klar"}
                   </p>
                 </div>
                 <span className="sr-only">
-                  {isBalanced ? "Konteringen balanserar" : balanceDifference ? `Skillnad ${balanceDifference.toLocaleString("sv-SE")}` : "Konteringen är inte klar"}
+                  {isBalanced ? "Konteringen balanserar" : "Konteringen är inte klar"}
                 </span>
               </div>
 
@@ -1277,6 +1666,7 @@ export default function Verification() {
                 <button
                   type="submit"
                   disabled={!isReadyToSave}
+                  aria-describedby={saveBlockReason ? "verification-save-block-reason" : undefined}
                   className="inline-flex h-12 min-w-[7.75rem] items-center justify-center gap-2 rounded-xl border border-[#a85f4b] bg-[#a85f4b] px-4 text-sm font-bold text-white shadow-[0_6px_16px_rgba(126,67,51,0.14)] transition hover:-translate-y-px hover:border-[#8f4f3e] hover:bg-[#8f4f3e] focus:outline-none focus:ring-2 focus:ring-[#d7b0a3] focus:ring-offset-2 disabled:cursor-not-allowed disabled:border-stone-300 disabled:bg-stone-200 disabled:text-stone-500 disabled:shadow-none disabled:hover:translate-y-0 sm:h-14 sm:w-full sm:rounded-2xl sm:px-6"
                 >
                   <span className="sm:hidden">Spara</span>

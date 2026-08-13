@@ -7,6 +7,7 @@ const WebhookEventSchema = new Schema(
     provider: { type: String, required: true },
     eventId: { type: String, required: true },
     eventType: { type: String, required: true },
+    apiVersion: String,
     status: {
       type: String,
       required: true,

@@ -9,3 +9,11 @@
 - Undvik generiska dashboard-mönster, stora KPI-kort och upprepade status-badges om de inte faktiskt gör uppgiften enklare.
 - Huvudappens vyer ska följa Moa Clay Collections redaktionella uttryck: varm papperskänsla, lugn typografi, diskreta linjer och terrakotta som accent.
 - Innan en ny eller ombyggd användarvy lämnas över ska den granskas visuellt i både smal mobilvy och normal desktopvy. Ett lyckat bygge räcker inte som visuell kvalitetssäkring.
+
+## Förbjuden papperskorgsikon
+
+- Använd aldrig en papperskorgsikon i huvudappens UI, varken som inline-SVG, ikonkomponent, Unicode-symbol eller importerad ikon.
+- En borttagningsåtgärd ska i stället skrivas ut med tydlig text, till exempel `Ta bort raden`. I mycket kompakta listor får projektets neutrala stängningsikon användas om den är tydligt etiketterad för skärmläsare.
+- Rita inte en egen papperskorg och ersätt inte förbudet med en annan destruktiv avfallsikon.
+- Konteringsrader får inte ha en permanent borttagningskontroll i radens rubrik. Visa varken `Ta bort`, `Ta bort raden`, papperskorg eller stängningsikon där.
+- Lägg aldrig en sticky sparrad ovanpå ett långt formulär. Sparaåtgärden ska komma efter sista fältet i dokumentflödet. I det färdiga formuläret ska den vara synlig även när något tillfälligt blockerar sparandet, då med en tydlig orsak. Under uppladdning och granskning ska den vara dold.

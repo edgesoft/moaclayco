@@ -30,6 +30,7 @@ import {
   parseFormDataWithinLimit,
   RequestBodyTooLargeError,
 } from "~/utils/requestBody.server";
+import { vatPeriodVerificationProjection } from "~/utils/queryProjections.server";
 
 type VatJournalEntry = {
   _id?: string;
@@ -68,25 +69,13 @@ export const loader: LoaderFunction = async ({ request }) => {
     },
     domain: domain.domain,
     "metadata.key": { $nin: ["vatReport", "IB"] },
-  }).lean()) as unknown as VatVerification[];
-
-  // Filtrera fram relevanta journal entries
-  const vatSales = verifications.filter(
-    (v) => v.journalEntries.some((entry) => entry.account === 3001) // Försäljning av varor
-  );
-
-  const outgoingVAT = verifications.filter(
-    (v) => v.journalEntries.some((entry) => entry.account === 2611) // Utgående moms
-  );
-
-  const ingoingVAT = verifications.filter(
-    (v) => v.journalEntries.some((entry) => entry.account === 2640) // Ingående moms
-  );
+  })
+    .select(vatPeriodVerificationProjection)
+    .lean()
+    .exec()) as unknown as VatVerification[];
 
   return json(toLoaderData({
-    vatSales,
-    outgoingVAT,
-    ingoingVAT,
+    verifications,
   }));
 };
 
@@ -165,7 +154,10 @@ export const action: ActionFunction = async ({ request }) => {
     },
     "metadata.key": { $nin: ["vatReport", "IB"] },
     domain: domain.domain,
-  }).lean()) as unknown as VatVerification[];
+  })
+    .select("journalEntries.account journalEntries.debit journalEntries.credit")
+    .lean()
+    .exec()) as unknown as VatVerification[];
 
   let totalIncomingVat = 0;
   let totalOutgoingVat = 0;
@@ -320,11 +312,18 @@ const Report = ({
 };
 
 export default function VATReportPage() {
-  const { vatSales, outgoingVAT, ingoingVAT } = useLoaderData<{
-    vatSales: VatVerification[];
-    outgoingVAT: VatVerification[];
-    ingoingVAT: VatVerification[];
+  const { verifications } = useLoaderData<{
+    verifications: VatVerification[];
   }>();
+  const vatSales = verifications.filter((verification) =>
+    verification.journalEntries.some((entry) => entry.account === 3001)
+  );
+  const outgoingVAT = verifications.filter((verification) =>
+    verification.journalEntries.some((entry) => entry.account === 2611)
+  );
+  const ingoingVAT = verifications.filter((verification) =>
+    verification.journalEntries.some((entry) => entry.account === 2640)
+  );
   const [searchParams] = useSearchParams();
   const month = searchParams.get("month") || "";
   const submit = useSubmit();

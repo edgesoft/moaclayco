@@ -2,6 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import Stripe from "stripe";
 import {
+  getActiveStripeWebhookApiVersion,
+  getConfiguredStripeApiVersion,
+  getRequestedStripeWebhookApiVersion,
+  getStripeWebhookSecret,
+  parseStripeRequestApiVersion,
+  STRIPE_CURRENT_WEBHOOK_API_VERSION,
+  STRIPE_LEGACY_API_VERSION,
+  STRIPE_TARGET_API_VERSION,
+} from "../app/services/stripe-config.server";
+import {
   assertPaymentIntentMatchesOrder,
   buildCheckoutPaymentIntent,
   checkoutAttemptCookie,
@@ -58,6 +68,7 @@ test("duplicate checkout requests use the same Stripe idempotency key", () => {
 
   assert.deepEqual(duplicate, first);
   assert.equal(first.params.amount, 54_900);
+  assert.equal(first.params.capture_method, "automatic");
   assert.equal(
     first.options.idempotencyKey,
     `checkout:${order.domain}:${checkoutToken}`
@@ -102,7 +113,7 @@ test("Stripe SDK sends the checkout request with amount, metadata and idempotenc
     },
   };
   const stripe = new Stripe("sk_test_local", {
-    apiVersion: "2023-08-16" as Stripe.LatestApiVersion,
+    apiVersion: STRIPE_TARGET_API_VERSION,
     httpClient: httpClient as never,
     maxNetworkRetries: 0,
   });
@@ -122,6 +133,7 @@ test("Stripe SDK sends the checkout request with amount, metadata and idempotenc
   assert.equal(captured?.path, "/v1/payment_intents");
   const params = new URLSearchParams(captured?.requestData);
   assert.equal(params.get("amount"), "54900");
+  assert.equal(params.get("capture_method"), "automatic");
   assert.equal(params.get("currency"), "sek");
   assert.equal(params.get("metadata[domain]"), order.domain);
   assert.equal(params.get("metadata[orderId]"), order._id);
@@ -133,6 +145,59 @@ test("Stripe SDK sends the checkout request with amount, metadata and idempotenc
   assert.equal(
     idempotencyHeader,
     `checkout:${order.domain}:d9428888-122b-4e80-a248-2eae9917c80f`
+  );
+  const apiVersionHeader = Object.entries(captured?.headers ?? {}).find(
+    ([key]) => key.toLowerCase() === "stripe-version"
+  )?.[1];
+  assert.equal(apiVersionHeader, STRIPE_TARGET_API_VERSION);
+});
+
+test("Stripe rollout configuration defaults safely and rejects unknown versions", () => {
+  assert.equal(getConfiguredStripeApiVersion({}), STRIPE_LEGACY_API_VERSION);
+  assert.equal(
+    getConfiguredStripeApiVersion({
+      STRIPE_API_VERSION: STRIPE_TARGET_API_VERSION,
+    }),
+    STRIPE_TARGET_API_VERSION
+  );
+  assert.equal(
+    getActiveStripeWebhookApiVersion({
+      STRIPE_API_VERSION: STRIPE_TARGET_API_VERSION,
+      STRIPE_WEBHOOK_ACTIVE_VERSION: STRIPE_LEGACY_API_VERSION,
+    }),
+    STRIPE_LEGACY_API_VERSION
+  );
+  assert.equal(
+    getRequestedStripeWebhookApiVersion(
+      new Request("http://localhost/webhook"),
+      {
+        STRIPE_API_VERSION: STRIPE_TARGET_API_VERSION,
+        STRIPE_WEBHOOK_ACTIVE_VERSION: STRIPE_LEGACY_API_VERSION,
+      }
+    ),
+    STRIPE_LEGACY_API_VERSION
+  );
+  assert.equal(
+    getRequestedStripeWebhookApiVersion(
+      new Request("http://localhost/webhook"),
+      {
+        STRIPE_API_VERSION: STRIPE_LEGACY_API_VERSION,
+        STRIPE_WEBHOOK_ACTIVE_VERSION:
+          STRIPE_CURRENT_WEBHOOK_API_VERSION,
+      }
+    ),
+    STRIPE_CURRENT_WEBHOOK_API_VERSION
+  );
+  assert.equal(
+    getStripeWebhookSecret(STRIPE_CURRENT_WEBHOOK_API_VERSION, {
+      STRIPE_WEBHOOK_DAHLIA: "whsec_dahlia",
+      STRIPE_WEBHOOK_LEGACY: "whsec_current",
+    }),
+    "whsec_current"
+  );
+  assert.throws(
+    () => parseStripeRequestApiVersion(STRIPE_CURRENT_WEBHOOK_API_VERSION),
+    /Unsupported Stripe request API version/
   );
 });
 

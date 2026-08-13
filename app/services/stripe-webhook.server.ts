@@ -15,6 +15,11 @@ import {
   readTextWithinLimit,
   RequestBodyTooLargeError,
 } from "~/utils/requestBody.server";
+import {
+  getActiveStripeWebhookApiVersion,
+  getRequestedStripeWebhookApiVersion,
+  getStripeWebhookSecret,
+} from "~/services/stripe-config.server";
 
 const MAX_STRIPE_WEBHOOK_SIZE = 1024 * 1024;
 
@@ -399,6 +404,7 @@ export const claimStripeEvent = async (
 ) => {
   try {
     await dependencies.webhookEvents.create({
+      apiVersion: event.api_version,
       provider: "stripe",
       eventId: event.id,
       eventType: event.type,
@@ -421,6 +427,7 @@ export const claimStripeEvent = async (
     },
     {
       $set: {
+        apiVersion: event.api_version,
         status: "processing",
         eventType: event.type,
         lastError: null,
@@ -435,7 +442,28 @@ export const createStripeWebhookAction = (
   dependencies: StripeWebhookDependencies = defaultDependencies
 ): ActionFunction => async ({ request }) => {
   const sig = request.headers.get("Stripe-Signature");
-  const webhookSecret = process.env.STRIPE_WEBHOOK;
+  let webhookApiVersion;
+  try {
+    webhookApiVersion = getRequestedStripeWebhookApiVersion(request);
+  } catch {
+    return new Response("Unsupported Stripe webhook API version", {
+      status: 400,
+    });
+  }
+
+  let activeWebhookApiVersion;
+  try {
+    activeWebhookApiVersion = getActiveStripeWebhookApiVersion();
+  } catch (error) {
+    console.error("Stripe webhook version configuration is invalid", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return new Response("Stripe webhook version is not configured", {
+      status: 500,
+    });
+  }
+
+  const webhookSecret = getStripeWebhookSecret(webhookApiVersion);
 
   if (!webhookSecret) {
     return new Response("Stripe webhook is not configured", { status: 500 });
@@ -461,6 +489,16 @@ export const createStripeWebhookAction = (
     event = dependencies.stripe.webhooks.constructEvent(body, sig, webhookSecret);
   } catch {
     return new Response("Invalid Stripe signature", { status: 400 });
+  }
+
+  if (event.api_version !== webhookApiVersion) {
+    return new Response("Stripe webhook API version does not match endpoint", {
+      status: 400,
+    });
+  }
+
+  if (webhookApiVersion !== activeWebhookApiVersion) {
+    return new Response("Inactive Stripe webhook version", { status: 200 });
   }
 
   const claimed = await claimStripeEvent(event, dependencies);

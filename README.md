@@ -58,7 +58,11 @@ the `.env` file should contain the following keys.
  - NODE_ENV `production` or `development`
  - STRIPE_PUBLIC_KEY `public key` to Stripe
  - STRIPE_SRV `server key` to Stripe
- - STRIPE_WEBHOOK `Webhook key` to Stripe
+ - STRIPE_API_VERSION `2023-08-16` or `2026-07-29.dahlia`; defaults to legacy
+ - STRIPE_WEBHOOK fallback signing secret for a single Stripe endpoint
+ - STRIPE_WEBHOOK_LEGACY signing secret for the versioned legacy endpoint
+ - STRIPE_WEBHOOK_DAHLIA signing secret for the versioned Dahlia endpoint
+ - STRIPE_WEBHOOK_ACTIVE_VERSION the only webhook version allowed to create side effects
  - SESSION_SECRET `a long random session-signing secret`
  - GOOGLE_CLIENT_ID `OAuth Web application client ID`
  - GOOGLE_CLIENT_SECRET `OAuth Web application client secret`
@@ -141,10 +145,37 @@ Add the sandbox key as the repository secret `STRIPE_E2E_SECRET_KEY`, then start
 the workflow from the Actions tab. Keep this key limited to a dedicated Stripe
 sandbox; never use a live `sk_live_...` key.
 
-Stripe CLI delivers events using the sandbox account's configured event API
-version. The application currently creates Stripe requests with API version
-`2023-08-16`; upgrading that version is a separate migration and should be
-verified with this suite before deployment.
+The E2E suite defaults both API requests and Stripe CLI webhook rendering to
+`2026-07-29.dahlia`, independent of the sandbox account's default version. It
+also verifies the event API version received by the application. The real
+sandbox suite is intentionally pinned to this migration target; legacy behavior
+is covered by the unit-level rollout tests.
+
+## Stripe API rollout
+
+Stripe request and webhook versions are allowlisted separately instead of
+accepting arbitrary environment values. Missing request configuration defaults
+to `2023-08-16`, while the existing production webhook remains supported at
+`2020-08-27`. Local development and stage use
+`2026-07-29.dahlia`; production remains explicitly pinned to `2023-08-16`
+for requests and `2020-08-27` for webhooks until the final rollout.
+
+When one environment has a single webhook endpoint, `STRIPE_WEBHOOK` remains a
+supported fallback. For a parallel rollout, configure two endpoints and their
+version-specific secrets:
+
+```text
+/webhook?stripe_api_version=2020-08-27
+/webhook?stripe_api_version=2023-08-16
+/webhook?stripe_api_version=2026-07-29.dahlia
+```
+
+Set each Stripe endpoint to render events with the version in its URL. Both
+signatures and event versions are verified, but only the endpoint matching
+`STRIPE_WEBHOOK_ACTIVE_VERSION` creates side effects. This makes the cutover a
+configuration change after the new endpoint has been verified. Keep
+`capture_method=automatic` during this API migration; adopting asynchronous
+capture is a separate change because balance transactions can arrive later.
 
 Run a real API regression against a synthetic fixture:
 

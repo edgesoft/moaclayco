@@ -83,10 +83,14 @@ services:
       SESSION_SECRET: stripe-e2e-session-secret-only-for-isolated-local-tests
       STRIPE_PUBLIC_KEY: pk_test_stripe_e2e_placeholder
       STRIPE_SRV: ${STRIPE_SRV:?A Stripe sandbox secret key is required}
+      STRIPE_API_VERSION: ${STRIPE_API_VERSION:-2026-07-29.dahlia}
       STRIPE_E2E_BASE_URL: http://app:3000
       STRIPE_E2E_DATABASE: moaclayco-stripe-e2e
       STRIPE_E2E_MAILPIT_URL: http://mailpit:8025
       STRIPE_WEBHOOK: ${STRIPE_WEBHOOK:?Run the Stripe E2E orchestrator instead of starting this compose file directly}
+      STRIPE_WEBHOOK_ACTIVE_VERSION: ${STRIPE_WEBHOOK_ACTIVE_VERSION:-2026-07-29.dahlia}
+      STRIPE_WEBHOOK_DAHLIA: ${STRIPE_WEBHOOK_DAHLIA:-}
+      STRIPE_WEBHOOK_LEGACY: ${STRIPE_WEBHOOK_LEGACY:-}
       __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: app
     depends_on:
       mailpit:
@@ -117,6 +121,7 @@ services:
       STRIPE_API_KEY: ${STRIPE_SRV:?A Stripe sandbox secret key is required}
     command:
       - listen
+      - --latest
       - --print-secret
       - --skip-update
 
@@ -126,10 +131,11 @@ services:
       STRIPE_API_KEY: ${STRIPE_SRV:?A Stripe sandbox secret key is required}
     command:
       - listen
+      - --latest
       - --events
       - payment_intent.succeeded,payment_intent.payment_failed,payment_intent.canceled,payout.paid
       - --forward-to
-      - http://app:3000/webhook
+      - http://app:3000/webhook?stripe_api_version=${STRIPE_API_VERSION:-2026-07-29.dahlia}
       - --skip-update
     depends_on:
       app:

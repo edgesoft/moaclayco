@@ -13,6 +13,7 @@ import {
   ScrollRestoration,
   useLoaderData,
   useLocation,
+  useNavigation,
   isRouteErrorResponse,
   useRouteError,
 } from "react-router";
@@ -191,7 +192,12 @@ function Document({
 function RouteTransition({ data }: { data: IndexProps }) {
   const isFirstRenderRef = useRef(true);
   const location = useLocation();
+  const navigation = useNavigation();
   const shouldReduceMotion = useReducedMotion();
+  const isLeavingRoute =
+    navigation.state === "loading" &&
+    Boolean(navigation.location) &&
+    navigation.location?.pathname !== location.pathname;
   const isAdminWorkspace =
     location.pathname.startsWith("/admin/orders") ||
     location.pathname.startsWith("/admin/verifications");
@@ -205,7 +211,11 @@ function RouteTransition({ data }: { data: IndexProps }) {
 
   return (
     <motion.div
-      animate={{ opacity: 1, y: 0 }}
+      animate={
+        isLeavingRoute
+          ? { opacity: 0.965, scale: 0.998, y: 3 }
+          : { opacity: 1, scale: 1, y: 0 }
+      }
       initial={
         shouldReduceMotion || isFirstRenderRef.current
           ? false
@@ -217,6 +227,11 @@ function RouteTransition({ data }: { data: IndexProps }) {
       transition={
         shouldReduceMotion
           ? { duration: 0 }
+          : isLeavingRoute
+            ? {
+                duration: 0.12,
+                ease: [0.4, 0, 1, 1],
+              }
           : {
               duration: isAdminWorkspace ? 0.26 : 0.18,
               ease: [0.22, 1, 0.36, 1],
