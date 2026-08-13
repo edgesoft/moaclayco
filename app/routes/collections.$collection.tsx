@@ -23,6 +23,10 @@ import { Items } from "~/schemas/items";
 import type { CollectionProps, ItemProps } from "~/types";
 import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
+import {
+  collectionDetailProjection,
+  collectionItemProjection,
+} from "~/utils/queryProjections.server";
 
 type ItemLoaderProps = {
   collection: CollectionProps;
@@ -38,11 +42,15 @@ export const loader: LoaderFunction = async ({ params, request }) => {
     Collections.findOne({
       shortUrl: params.collection,
       domain: domain?.domain,
-    }).lean(),
+    })
+      .select(collectionDetailProjection)
+      .lean()
+      .exec(),
     Items.find({
       collectionRef: params.collection,
       domain: domain?.domain,
     })
+      .select(collectionItemProjection)
       .sort({ _id: -1 })
       .lean(),
   ]);
@@ -103,6 +111,7 @@ function Product({
   const [loadedImage, setLoadedImage] = useState<string | null>(null);
   const [nearViewport, setNearViewport] = useState(position < 2);
   const [selectedAdditions, setSelectedAdditions] = useState<number[]>([]);
+  const [additionGlowKey, setAdditionGlowKey] = useState(0);
   const [showImage, setShowImage] = useState<string>();
   const [added, setAdded] = useState(false);
   const articleRef = useRef<HTMLElement>(null);
@@ -514,7 +523,7 @@ function Product({
           </p>
         </div>
 
-        {item.additionalItems?.length ? (
+        {item.amount > 0 && item.additionalItems?.length ? (
           <div className="mcc-shop-item__additions">
             {item.additionalItems.map((addition, additionIndex) => {
               const selected = selectedAdditions.includes(additionIndex);
@@ -524,13 +533,16 @@ function Product({
                 >
                   <input
                     checked={selected}
-                    onChange={() =>
+                    onChange={() => {
+                      if (!selected) {
+                        setAdditionGlowKey((current) => current + 1);
+                      }
                       setSelectedAdditions((current) =>
                         selected
                           ? current.filter((index) => index !== additionIndex)
                           : [...current, additionIndex]
-                      )
-                    }
+                      );
+                    }}
                     type="checkbox"
                   />
                   <span aria-hidden="true" className="mcc-shop-item__check" />
@@ -542,32 +554,39 @@ function Product({
           </div>
         ) : null}
 
-        <div className="mcc-shop-item__actions">
-          {item.amount > 0 ? (
-            <button
-              aria-live="polite"
-              className={added ? "is-added" : ""}
-              onClick={addToCart}
-              type="button"
-            >
-              <span>
-                {added ? "Tillagd i varukorgen" : "Lägg i varukorgen"}
-              </span>
-              <span>
-                {totalPrice} SEK
-                <ArrowIcon className="mcc-shop-item__buy-arrow" />
-              </span>
-            </button>
-          ) : (
-            <span className="mcc-shop-item__sold-out">Slut för tillfället</span>
-          )}
+        {item.amount > 0 || item.instagram ? (
+          <div className="mcc-shop-item__actions">
+            {item.amount > 0 ? (
+              <button
+                aria-live="polite"
+                className={added ? "is-added" : ""}
+                onClick={addToCart}
+                type="button"
+              >
+                {additionGlowKey > 0 && !reduceMotion ? (
+                  <span
+                    aria-hidden="true"
+                    className="mcc-shop-item__addition-glow"
+                    key={additionGlowKey}
+                  />
+                ) : null}
+                <span>
+                  {added ? "Tillagd i varukorgen" : "Lägg i varukorgen"}
+                </span>
+                <span>
+                  {totalPrice} SEK
+                  <ArrowIcon className="mcc-shop-item__buy-arrow" />
+                </span>
+              </button>
+            ) : null}
 
-          {item.instagram ? (
-            <a href={item.instagram} rel="noreferrer" target="_blank">
-              Se på Instagram <ArrowIcon direction="up-right" />
-            </a>
-          ) : null}
-        </div>
+            {item.instagram ? (
+              <a href={item.instagram} rel="noreferrer" target="_blank">
+                Se på Instagram <ArrowIcon direction="up-right" />
+              </a>
+            ) : null}
+          </div>
+        ) : null}
 
         {item.productInfos?.length ? (
           <details className="mcc-shop-item__details">

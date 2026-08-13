@@ -23,6 +23,10 @@ import { getDomain } from "~/utils/domain";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
 import { getAccountingYearStatus } from "~/services/verification.server";
+import {
+  vatReportListProjection,
+  verificationListProjection,
+} from "~/utils/queryProjections.server";
 
 const normalizePathname = (pathname: string) => pathname.replace(/\/+$/, "");
 const verificationNumberFrom = (verification: unknown) => {
@@ -78,9 +82,7 @@ export const loader: LoaderFunction = async ({ request, url }) => {
     },
     domain: domain.domain,
   })
-    .select(
-      "recordType description verificationNumber verificationDate metadata files journalEntries"
-    )
+    .select(verificationListProjection)
     .sort({ verificationDate: -1 })
     .lean()
     .exec();
@@ -94,7 +96,7 @@ export const loader: LoaderFunction = async ({ request, url }) => {
       },
     },
   })
-    .select("metadata journalEntries")
+    .select(vatReportListProjection)
     .lean()
     .exec();
 

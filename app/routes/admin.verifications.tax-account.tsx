@@ -17,6 +17,7 @@ import {
 import Select from "react-select";
 import { z } from "zod";
 import ClientOnly from "~/components/ClientOnly";
+import JournalEntryAmountField from "~/components/admin/JournalEntryAmountField";
 import ArrowIcon from "~/components/ArrowIcon";
 import { Verifications } from "~/schemas/verifications";
 import { auth } from "~/services/auth.server";
@@ -596,6 +597,16 @@ function TaxAccountRowCard({
     );
     onChange({ ...row, posting: { ...row.posting, journalEntries } });
   };
+  const updatePostingAmount = (
+    index: number,
+    amounts: Pick<TaxAccountJournalEntry, "debit" | "credit">
+  ) => {
+    if (!row.posting) return;
+    const journalEntries = row.posting.journalEntries.map((entry, entryIndex) =>
+      entryIndex === index ? { ...entry, ...amounts } : entry
+    );
+    onChange({ ...row, posting: { ...row.posting, journalEntries } });
+  };
 
   return (
     <article
@@ -786,7 +797,7 @@ function TaxAccountRowCard({
                 {row.posting.journalEntries.map((entry, index) => (
                   <div
                     key={entry.editorId}
-                    className="grid gap-2 sm:grid-cols-[minmax(220px,1fr)_130px_130px]"
+                    className="grid gap-2 md:grid-cols-[minmax(220px,1fr)_minmax(250px,.8fr)]"
                   >
                     <div className="min-w-0">
                       <span className="tax-account-field-label">Konto</span>
@@ -806,34 +817,12 @@ function TaxAccountRowCard({
                         )}
                       </ClientOnly>
                     </div>
-                    <label>
-                      <span className="tax-account-field-label">Debet</span>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
-                        min="0"
-                        value={entry.debit || ""}
-                        onChange={(event) =>
-                          updatePostingEntry(index, "debit", Number(event.target.value || 0))
-                        }
-                        className="tax-account-input text-right tabular-nums"
-                      />
-                    </label>
-                    <label>
-                      <span className="tax-account-field-label">Kredit</span>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
-                        min="0"
-                        value={entry.credit || ""}
-                        onChange={(event) =>
-                          updatePostingEntry(index, "credit", Number(event.target.value || 0))
-                        }
-                        className="tax-account-input text-right tabular-nums"
-                      />
-                    </label>
+                    <JournalEntryAmountField
+                      id={`tax-account-entry-${entry.editorId}`}
+                      debit={entry.debit}
+                      credit={entry.credit}
+                      onChange={(amounts) => updatePostingAmount(index, amounts)}
+                    />
                   </div>
                 ))}
               </div>

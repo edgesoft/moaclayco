@@ -19,6 +19,7 @@ import {
   VerificationEditBlockedError,
 } from "~/services/verification.server";
 import { AccountingDateField } from "~/components/admin/AccountingDateField";
+import JournalEntryAmountField from "~/components/admin/JournalEntryAmountField";
 import ArrowIcon from "~/components/ArrowIcon";
 import ClientOnly from "~/components/ClientOnly";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
@@ -221,6 +222,7 @@ export default function EditVerification() {
     control,
     handleSubmit,
     register,
+    setValue,
     watch,
   } = useForm<EditForm>({
     defaultValues: { ...verification, reason: "" },
@@ -309,7 +311,7 @@ export default function EditVerification() {
         </section>
       ) : (
         <form onSubmit={onSubmit} className="mt-7 space-y-6">
-          <section className="max-w-4xl border-y border-stone-300 py-6 sm:py-8">
+          <section className="max-w-4xl border-b border-stone-300 pb-6 sm:pb-8">
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#985744]">
               Grunduppgifter
             </p>
@@ -375,8 +377,8 @@ export default function EditVerification() {
                       </button>
                     ) : null}
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(16rem,1.35fr)_minmax(9rem,.7fr)_minmax(9rem,.7fr)]">
-                    <div className="min-w-0 sm:col-span-2 lg:col-span-1">
+                  <div className="grid gap-3 md:grid-cols-[minmax(16rem,1.2fr)_minmax(15rem,.8fr)]">
+                    <div className="min-w-0">
                       <label htmlFor={`edit-account-${index}`} className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.13em] text-stone-500">
                         Konto
                       </label>
@@ -402,26 +404,19 @@ export default function EditVerification() {
                       />
                     </div>
 
-                    {(["debit", "credit"] as const).map((side) => (
-                      <label key={side} className="group flex min-h-[4.5rem] flex-col justify-between rounded-xl border border-stone-300 bg-white px-4 py-3 transition focus-within:border-[#ad644f] focus-within:ring-2 focus-within:ring-[#f3e4de]">
-                        <span className="text-[10px] font-bold uppercase tracking-[0.13em] text-stone-500">
-                          {side === "debit" ? "Debet" : "Kredit"}
-                        </span>
-                        <span className="mt-1 flex items-baseline gap-2">
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            step="0.01"
-                            min="0"
-                            {...register(`journalEntries.${index}.${side}`, {
-                              setValueAs: (value) => value === "" ? 0 : Number(value),
-                            })}
-                            className="verification-amount-input min-w-0 flex-1 border-0 bg-transparent p-0 text-right text-xl font-semibold tabular-nums text-stone-900 outline-none"
-                          />
-                          <span className="text-[11px] font-bold uppercase text-stone-400">kr</span>
-                        </span>
-                      </label>
-                    ))}
+                    <JournalEntryAmountField
+                      id={`edit-journal-entry-${index}`}
+                      debit={Number(currentEntries[index]?.debit || 0)}
+                      credit={Number(currentEntries[index]?.credit || 0)}
+                      onChange={({ debit, credit }) => {
+                        setValue(`journalEntries.${index}.debit`, debit, {
+                          shouldDirty: true,
+                        });
+                        setValue(`journalEntries.${index}.credit`, credit, {
+                          shouldDirty: true,
+                        });
+                      }}
+                    />
                   </div>
                 </div>
               ))}

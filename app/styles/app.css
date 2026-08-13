@@ -4061,11 +4061,55 @@ input[type="search"]::-ms-reveal {
   justify-content: space-between;
   letter-spacing: 0.08em;
   min-height: 3.25rem;
+  overflow: hidden;
   padding: 0.78rem 1rem 0.82rem 1.15rem;
+  position: relative;
   text-transform: uppercase;
   transition: background 180ms ease, border-color 180ms ease,
     transform 180ms ease;
   width: min(100%, 25rem);
+}
+
+.mcc-shop-item__actions > button > span:not(.mcc-shop-item__addition-glow) {
+  position: relative;
+  z-index: 2;
+}
+
+.mcc-shop-item__addition-glow {
+  animation: mcc-addition-glow 900ms cubic-bezier(0.4, 0, 0.2, 1)
+    forwards;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 241, 228, 0.72),
+    transparent
+  );
+  bottom: -35%;
+  box-shadow: 0 0 1.15rem rgba(255, 236, 220, 0.24);
+  left: -45%;
+  pointer-events: none;
+  position: absolute;
+  top: -35%;
+  transform: skewX(-18deg);
+  width: 42%;
+  z-index: 1;
+}
+
+@keyframes mcc-addition-glow {
+  0% {
+    opacity: 0;
+    transform: translateX(-20%) skewX(-18deg);
+  }
+
+  14%,
+  78% {
+    opacity: 0.8;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(400%) skewX(-18deg);
+  }
 }
 
 .mcc-shop-item__actions > button:hover {

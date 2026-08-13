@@ -4,6 +4,22 @@ import {
   normalizeJournalEntries,
   VerificationValidationError,
 } from "../app/utils/verificationValidation";
+import {
+  journalEntryAmountsForSide,
+  journalEntrySide,
+} from "../app/components/admin/JournalEntryAmountField";
+
+test("moves the full journal-entry amount when debit or credit is switched", () => {
+  assert.deepEqual(
+    journalEntryAmountsForSide({ debit: 125.5, credit: 0 }, "credit"),
+    { debit: 0, credit: 125.5 }
+  );
+  assert.deepEqual(
+    journalEntryAmountsForSide({ debit: 0, credit: 42 }, "debit"),
+    { debit: 42, credit: 0 }
+  );
+  assert.equal(journalEntrySide({ debit: 0, credit: 42 }), "credit");
+});
 
 test("normalizes and accepts a balanced verification", () => {
   assert.deepEqual(

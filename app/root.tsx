@@ -38,6 +38,7 @@ import { toLoaderData } from "./utils/loaderData";
 import { isGoogleAuthenticationConfigured } from "./services/google-auth.server";
 import { connectToDatabase } from "./services/database.server";
 import { shouldRevalidateRoot } from "./utils/rootRevalidation";
+import { collectionCardProjection } from "./utils/queryProjections.server";
 
 export type IndexProps = {
   hostname: string,
@@ -69,15 +70,10 @@ export const middleware: MiddlewareFunction[] = [
 ];
 
 export const loader: LoaderFunction = async ({ request }) => {
-  let domain = getDomain(request)
-  const collections = toLoaderData(
-    await Collections.find({ domain: domain?.domain })
-      .sort({ sortOrder: 1 })
-      .lean()
-  );
-  let url = new URL(request.url);
-  let hostname = url.hostname;
-  let proto = request.headers.get("X-Forwarded-Proto") ?? url.protocol;
+  const domain = getDomain(request);
+  const url = new URL(request.url);
+  const hostname = url.hostname;
+  const proto = request.headers.get("X-Forwarded-Proto") ?? url.protocol;
 
   url.host =
     request.headers.get("X-Forwarded-Host") ??
@@ -93,8 +89,15 @@ export const loader: LoaderFunction = async ({ request }) => {
     });
   }
 
-  let user = await auth.isAuthenticated(request);
- 
+  const [collectionDocuments, user] = await Promise.all([
+    Collections.find({ domain: domain?.domain })
+      .select(collectionCardProjection)
+      .sort({ sortOrder: 1 })
+      .lean()
+      .exec(),
+    auth.isAuthenticated(request),
+  ]);
+  const collections = toLoaderData(collectionDocuments);
 
   return json(
     {

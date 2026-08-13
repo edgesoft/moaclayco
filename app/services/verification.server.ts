@@ -845,7 +845,10 @@ export async function getAccountingYearClosingReadiness(
 }
 
 export async function getAccountingYearStatus(domain: string, year: number) {
-  const state = await accountingYearState(domain, year);
+  const state = await AccountingYears.findOne({ domain, year })
+    .select("status -_id")
+    .lean()
+    .exec();
   return (state?.status || "open") as AccountingYearStatus;
 }
 

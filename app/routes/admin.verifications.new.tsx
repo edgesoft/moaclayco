@@ -44,6 +44,7 @@ import {
   validateVerificationFile,
 } from "~/services/verification-files.server";
 import { AccountingDateField } from "~/components/admin/AccountingDateField";
+import JournalEntryAmountField from "~/components/admin/JournalEntryAmountField";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
 import {
@@ -1009,8 +1010,8 @@ export default function Verification() {
                       ) : null}
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1.25fr)_minmax(145px,.75fr)_minmax(145px,.75fr)]">
-                      <div className="min-w-0 sm:col-span-2 lg:col-span-1">
+                    <div className="grid gap-3 md:grid-cols-[minmax(220px,1.2fr)_minmax(250px,.8fr)]">
+                      <div className="min-w-0">
                         <label
                           className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.13em] text-stone-500"
                           htmlFor={`account-select-${index}`}
@@ -1044,47 +1045,21 @@ export default function Verification() {
                         />
                       </div>
 
-                      <label className="group flex min-h-[4.75rem] flex-col justify-between rounded-2xl border border-stone-300 bg-white px-4 py-3 transition hover:border-[#c58a79] focus-within:border-[#ad644f] focus-within:ring-2 focus-within:ring-[#f3e4de]">
-                        <span className="text-[10px] font-bold uppercase tracking-[0.13em] text-stone-500 transition group-focus-within:text-[#985744]">
-                          Debet
-                        </span>
-                        <span className="mt-1 flex items-baseline gap-2">
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            step="0.01"
-                            placeholder="0,00"
-                            {...register(`journalEntries.${index}.debit` as const, {
-                              setValueAs: (value) => value === "" ? 0 : Number(value),
-                            })}
-                            className="verification-amount-input min-w-0 flex-1 border-0 bg-transparent p-0 text-right text-xl font-semibold leading-none tabular-nums text-stone-900 outline-none placeholder:text-stone-300"
-                          />
-                          <span className="shrink-0 text-[11px] font-bold uppercase text-stone-400">
-                            kr
-                          </span>
-                        </span>
-                      </label>
-
-                      <label className="group flex min-h-[4.75rem] flex-col justify-between rounded-2xl border border-stone-300 bg-white px-4 py-3 transition hover:border-[#c58a79] focus-within:border-[#ad644f] focus-within:ring-2 focus-within:ring-[#f3e4de]">
-                        <span className="text-[10px] font-bold uppercase tracking-[0.13em] text-stone-500 transition group-focus-within:text-[#985744]">
-                          Kredit
-                        </span>
-                        <span className="mt-1 flex items-baseline gap-2">
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            step="0.01"
-                            placeholder="0,00"
-                            {...register(`journalEntries.${index}.credit` as const, {
-                              setValueAs: (value) => value === "" ? 0 : Number(value),
-                            })}
-                            className="verification-amount-input min-w-0 flex-1 border-0 bg-transparent p-0 text-right text-xl font-semibold leading-none tabular-nums text-stone-900 outline-none placeholder:text-stone-300"
-                          />
-                          <span className="shrink-0 text-[11px] font-bold uppercase text-stone-400">
-                            kr
-                          </span>
-                        </span>
-                      </label>
+                      <JournalEntryAmountField
+                        id={`journal-entry-${index}`}
+                        debit={Number(currentEntries[index]?.debit || 0)}
+                        credit={Number(currentEntries[index]?.credit || 0)}
+                        onChange={({ debit, credit }) => {
+                          setValue(`journalEntries.${index}.debit`, debit, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                          setValue(`journalEntries.${index}.credit`, credit, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                        }}
+                      />
                     </div>
                   </div>
                 ))}

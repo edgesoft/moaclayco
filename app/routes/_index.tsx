@@ -22,6 +22,7 @@ import type { CollectionProps, ItemProps } from "~/types";
 import type { IndexProps } from "~/root";
 import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
+import { landingItemProjection } from "~/utils/queryProjections.server";
 
 type LandingLoaderData = {
   latestItems: ItemProps[];
@@ -34,6 +35,8 @@ export const loader: LoaderFunction = async ({ request }) => {
   const domain = getDomain(request);
   const latestItems = toLoaderData(
     await Items.find({ domain: domain?.domain })
+      .select(landingItemProjection)
+      .slice("images", 2)
       .sort({ _id: -1 })
       .limit(6)
       .lean()
