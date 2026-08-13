@@ -8,6 +8,11 @@ import {
   isGoogleOauthFlow,
 } from "~/services/google-auth.server";
 import { commitSession, getSession } from "~/services/session.server";
+import {
+  DEFAULT_AUTHENTICATED_REDIRECT,
+  getLoginPath,
+  getSafeAuthenticationReturnTo,
+} from "~/utils/authRedirect";
 
 // The trailing underscore in this route's filename keeps the callback from
 // inheriting the /auth/google start loader.
@@ -17,16 +22,24 @@ export const loader: LoaderFunction = async ({ request }) => {
   session.unset(GOOGLE_OAUTH_FLOW_SESSION_KEY);
 
   if (!isGoogleOauthFlow(flow)) {
-    return redirect("/login?error=invalid_flow", {
-      headers: { "Set-Cookie": await commitSession(session) },
-    });
+    return redirect(
+      getLoginPath({
+        error: "invalid_flow",
+        returnTo: DEFAULT_AUTHENTICATED_REDIRECT,
+      }),
+      {
+        headers: { "Set-Cookie": await commitSession(session) },
+      }
+    );
   }
+
+  const returnTo = getSafeAuthenticationReturnTo(flow.returnTo);
 
   try {
     const user = await completeGoogleAuthentication(request, flow);
     session.set(auth.sessionKey, user);
 
-    return redirect("/admin/verifications", {
+    return redirect(returnTo, {
       headers: { "Set-Cookie": await commitSession(session) },
     });
   } catch (error) {
@@ -39,7 +52,7 @@ export const loader: LoaderFunction = async ({ request }) => {
       name: error instanceof Error ? error.name : "UnknownError",
     });
 
-    return redirect(`/login?error=${code}`, {
+    return redirect(getLoginPath({ error: code, returnTo }), {
       headers: { "Set-Cookie": await commitSession(session) },
     });
   }

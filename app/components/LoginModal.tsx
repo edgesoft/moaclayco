@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
 import ArrowIcon from "./ArrowIcon";
 import ViewportPortal from "./ViewportPortal";
+import { getGoogleAuthenticationPath } from "~/utils/authRedirect";
 
 type LoginModalProps = {
   configured: boolean;
   errorMessage?: string | null;
   onClose: () => void;
+  returnTo: string;
 };
 
 function GoogleLogo() {
@@ -35,6 +37,7 @@ export default function LoginModal({
   configured,
   errorMessage,
   onClose,
+  returnTo,
 }: LoginModalProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -132,7 +135,7 @@ export default function LoginModal({
 
         <div className="mcc-login-action">
           {configured ? (
-            <a href="/auth/google">
+            <a href={getGoogleAuthenticationPath(returnTo)}>
               <GoogleLogo />
               Fortsätt med Google
               <span aria-hidden="true" className="mcc-login-action-arrow">

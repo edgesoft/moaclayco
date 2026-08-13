@@ -2,6 +2,10 @@ import * as oidc from "openid-client";
 import { Users } from "~/schemas/user";
 import type { User } from "~/types";
 import { accountingYear } from "~/utils/accountingDates";
+import {
+  DEFAULT_AUTHENTICATED_REDIRECT,
+  getSafeAuthenticationReturnTo,
+} from "~/utils/authRedirect";
 
 const GOOGLE_ISSUER = new URL("https://accounts.google.com");
 const DEFAULT_ALLOWED_EMAILS = [
@@ -15,6 +19,7 @@ export const GOOGLE_OAUTH_FLOW_SESSION_KEY = "google:oauth-flow";
 export type GoogleOauthFlow = {
   codeVerifier: string;
   nonce: string;
+  returnTo: string;
   state: string;
   createdAt: number;
 };
@@ -122,7 +127,9 @@ export const getGoogleAuthorizationParameters = ({
   prompt: "select_account" as const,
 });
 
-export const createGoogleAuthorization = async () => {
+export const createGoogleAuthorization = async (
+  returnTo = DEFAULT_AUTHENTICATED_REDIRECT
+) => {
   const configuration = await getGoogleConfiguration();
   const codeVerifier = oidc.randomPKCECodeVerifier();
   const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
@@ -145,6 +152,7 @@ export const createGoogleAuthorization = async () => {
       codeVerifier,
       state,
       nonce,
+      returnTo: getSafeAuthenticationReturnTo(returnTo),
       createdAt: Date.now(),
     } satisfies GoogleOauthFlow,
   };
@@ -158,6 +166,8 @@ export const isGoogleOauthFlow = (value: unknown): value is GoogleOauthFlow => {
     typeof flow.codeVerifier === "string" &&
     typeof flow.state === "string" &&
     typeof flow.nonce === "string" &&
+    typeof flow.returnTo === "string" &&
+    flow.returnTo === getSafeAuthenticationReturnTo(flow.returnTo) &&
     typeof flow.createdAt === "number" &&
     Date.now() - flow.createdAt < 10 * 60 * 1000
   );

@@ -285,7 +285,6 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
   const pendingAdminTargetRef = useRef<string | null>(null);
   const data = useLoaderData<IndexLoadingType>();
   const location = useLocation();
-  const navigate = useNavigate();
   const navigation = useNavigation();
   const pendingAdminPath =
     navigation.state === "idle" ? undefined : navigation.location?.pathname;
@@ -342,8 +341,7 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
 
   const onAccount = () => {
     closeMenu();
-    if (data.user) navigate("/logout");
-    else onLogin();
+    onLogin();
   };
 
   const closeAfterNavigation = () => closeMenu();
@@ -432,8 +430,9 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
                   <button
                     aria-label={data.user ? "Logga ut" : "Logga in"}
                     className="mcc-navigation-shortcut"
-                    onClick={onAccount}
-                    type="button"
+                    form={data.user ? "mcc-logout-form" : undefined}
+                    onClick={data.user ? undefined : onAccount}
+                    type={data.user ? "submit" : "button"}
                   >
                     <Icon name="account" />
                   </button>
@@ -546,8 +545,9 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
 
                   <button
                     className="mcc-navigation-action"
-                    onClick={onAccount}
-                    type="button"
+                    form={data.user ? "mcc-logout-form" : undefined}
+                    onClick={data.user ? undefined : onAccount}
+                    type={data.user ? "submit" : "button"}
                   >
                     <span className="mcc-navigation-action-icon">
                       <Icon name="account" />
@@ -1022,10 +1022,14 @@ const Header = (): React.ReactElement | null => {
           <Hamburger onLogin={() => setLoginOpen(true)} />
         </div>
       </header>
+      {data.user ? (
+        <form action="/logout" id="mcc-logout-form" method="post" />
+      ) : null}
       {loginOpen ? (
         <LoginModal
           configured={data.googleAuthenticationConfigured}
           onClose={() => setLoginOpen(false)}
+          returnTo={`${location.pathname}${location.search}${location.hash}`}
         />
       ) : null}
     </>

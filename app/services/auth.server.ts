@@ -1,6 +1,7 @@
 import { redirect } from "react-router";
 import { sessionStorage } from "~/services/session.server";
 import type { User } from "~/types";
+import { getLoginPath } from "~/utils/authRedirect";
 
 type RedirectOptions = {
   successRedirect?: string;
@@ -33,7 +34,14 @@ class SessionAuthenticator {
       throw redirect(options.successRedirect, { headers: options.headers });
     }
     if (!user && options.failureRedirect) {
-      throw redirect(options.failureRedirect, { headers: options.headers });
+      const requestUrl = new URL(request.url);
+      const failureRedirect =
+        options.failureRedirect === "/login" && request.method === "GET"
+          ? getLoginPath({
+              returnTo: `${requestUrl.pathname}${requestUrl.search}`,
+            })
+          : options.failureRedirect;
+      throw redirect(failureRedirect, { headers: options.headers });
     }
 
     return user ?? null;

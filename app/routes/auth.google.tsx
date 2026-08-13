@@ -7,14 +7,21 @@ import {
   GOOGLE_OAUTH_FLOW_SESSION_KEY,
 } from "~/services/google-auth.server";
 import { commitSession, getSession } from "~/services/session.server";
+import {
+  getLoginPath,
+  getSafeAuthenticationReturnTo,
+} from "~/utils/authRedirect";
 
 export const loader: LoaderFunction = async ({ request }) => {
+  const returnTo = getSafeAuthenticationReturnTo(
+    new URL(request.url).searchParams.get("returnTo")
+  );
   await auth.isAuthenticated(request, {
-    successRedirect: "/admin/verifications",
+    successRedirect: returnTo,
   });
 
   try {
-    const { url, flow } = await createGoogleAuthorization();
+    const { url, flow } = await createGoogleAuthorization(returnTo);
     const session = await getSession(request.headers.get("Cookie"));
     session.set(GOOGLE_OAUTH_FLOW_SESSION_KEY, flow);
 
@@ -30,6 +37,6 @@ export const loader: LoaderFunction = async ({ request }) => {
       code,
       name: error instanceof Error ? error.name : "UnknownError",
     });
-    return redirect(`/login?error=${code}`);
+    return redirect(getLoginPath({ error: code, returnTo }));
   }
 };
