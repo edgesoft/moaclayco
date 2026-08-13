@@ -250,19 +250,22 @@ test("Collection storytelling scrolls without sticky mobile pauses", async ({
   await firstScene.evaluate((element) => {
     window.scrollTo(0, (element as HTMLElement).offsetTop - innerHeight * 0.45);
   });
-  await page.waitForTimeout(120);
+  await expect
+    .poll(() =>
+      parallax.evaluate((element) => getComputedStyle(element).transform)
+    )
+    .not.toBe("none");
   const enteringTransform = await parallax.evaluate(
     (element) => getComputedStyle(element).transform
   );
   await firstScene.evaluate((element) => {
     window.scrollTo(0, (element as HTMLElement).offsetTop + innerHeight * 0.35);
   });
-  await page.waitForTimeout(120);
-  const leavingTransform = await parallax.evaluate(
-    (element) => getComputedStyle(element).transform
-  );
-  expect(enteringTransform).not.toBe("none");
-  expect(leavingTransform).not.toBe(enteringTransform);
+  await expect
+    .poll(() =>
+      parallax.evaluate((element) => getComputedStyle(element).transform)
+    )
+    .not.toBe(enteringTransform);
 });
 
 test("WebKit keeps every Collection image joined to its text card", async ({
