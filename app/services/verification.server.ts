@@ -66,6 +66,14 @@ export type EditVerificationInput = {
   editedBy?: string;
 };
 
+export type RemoveVerificationFileInput = {
+  domain: string;
+  verificationNumber: number;
+  expectedYear: number;
+  path: string;
+  removedBy?: string;
+};
+
 const normalizeInput = (input: CreateVerificationInput) => {
   const domain = input.domain?.trim();
   const description = input.description?.trim();
@@ -514,6 +522,90 @@ export async function editVerification(input: EditVerificationInput) {
   }
   if (!editedVerification) throw new Error("Verifikationen kunde inte uppdateras");
   return editedVerification;
+}
+
+export async function removeVerificationFileReference(
+  input: RemoveVerificationFileInput
+) {
+  if (!Number.isInteger(input.verificationNumber) || input.verificationNumber < 1) {
+    throw new VerificationValidationError("Ogiltigt verifikationsnummer");
+  }
+  const path = input.path?.trim();
+  if (!path || path.length > 4_096) {
+    throw new VerificationValidationError("Bilagan kunde inte identifieras");
+  }
+  await ensureAccountingYearState(input.domain, input.expectedYear);
+
+  const session = await mongoose.startSession();
+  let removedFile: { name: string; path: string } | null = null;
+  try {
+    await session.withTransaction(async () => {
+      const verification = await Verifications.findOne({
+        domain: input.domain,
+        verificationNumber: input.verificationNumber,
+      }).session(session);
+      if (!verification) {
+        throw new VerificationValidationError("Verifikationen hittades inte");
+      }
+
+      const sourceYear = accountingYear(verification.verificationDate);
+      if (sourceYear !== input.expectedYear) {
+        throw new VerificationEditBlockedError(
+          `Verifikationen tillhör bokföringsår ${sourceYear ?? "okänt"}, inte ${input.expectedYear}.`
+        );
+      }
+      const policy = await getVerificationEditPolicy({
+        domain: input.domain,
+        verification,
+        session,
+      });
+      if (!policy.editable) {
+        throw new VerificationEditBlockedError(
+          policy.reason || "Bilagan kan inte tas bort"
+        );
+      }
+
+      const fileIndex = (verification.files ?? []).findIndex(
+        (file: any) => String(file.path) === path
+      );
+      if (fileIndex < 0) {
+        throw new VerificationValidationError(
+          "Bilagan är redan borttagen eller finns inte längre"
+        );
+      }
+      const file = verification.files[fileIndex] as any;
+      removedFile = {
+        name: String(file.name || "Bilaga"),
+        path: String(file.path),
+      };
+
+      await touchOpenAccountingYear(input.domain, input.expectedYear, session);
+      verification.files.splice(fileIndex, 1);
+      verification.fileHistory = [
+        ...(verification.fileHistory ?? []),
+        {
+          action: "removed",
+          changedAt: new Date(),
+          changedBy: input.removedBy?.trim() || undefined,
+          name: removedFile.name,
+          path: removedFile.path,
+        },
+      ];
+      await verification.save({ session });
+      await refreshIncomingBalanceForFollowingYear(
+        input.domain,
+        input.expectedYear,
+        session
+      );
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  if (!removedFile) {
+    throw new Error("Bilagan kunde inte tas bort från verifikationen");
+  }
+  return removedFile;
 }
 
 const incomingBalanceQuery = (domain: string, year: number) => ({

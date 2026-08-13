@@ -11,17 +11,25 @@ import {
   readVerifiedVerificationFile,
   uploadVerificationFile,
   validateVerificationFile,
+  verificationStorageKeyFromPath,
 } from "~/services/verification-files.server";
+import {
+  getVerificationEditPolicy,
+  removeVerificationFileReference,
+  VerificationEditBlockedError,
+} from "~/services/verification.server";
 import {
   fallbackVerificationFileLabel,
   sanitizeVerificationFileLabel,
 } from "~/utils/verificationFiles";
+import { accountingYear } from "~/utils/accountingDates";
 import { toLoaderData } from "~/utils/loaderData";
 import ArrowIcon from "~/components/ArrowIcon";
 import {
   parseFormDataWithinLimit,
   RequestBodyTooLargeError,
 } from "~/utils/requestBody.server";
+import { VerificationValidationError } from "~/utils/verificationValidation";
 
 type VerificationFile = { name: string; path: string };
 
@@ -32,10 +40,21 @@ type FilesLoaderData = {
     verificationDate: string;
     files: VerificationFile[];
   };
+  removalPolicy: {
+    editable: boolean;
+    reason: string | null;
+  };
 };
 
 type FilesActionData =
-  | { success: true; name: string; path: string }
+  | { success: true; action: "uploaded"; name: string; path: string }
+  | {
+      success: true;
+      action: "removed";
+      name: string;
+      path: string;
+      warning?: string;
+    }
   | { success?: false; error: string };
 
 type FileLabelSuggestion = {
@@ -167,7 +186,12 @@ const synchronizeVerificationFiles = ({
 
   if (next.appliedUploadData !== uploadData) {
     next = { ...next, appliedUploadData: uploadData };
-    if (uploadData && "success" in uploadData && uploadData.success) {
+    if (
+      uploadData &&
+      "success" in uploadData &&
+      uploadData.success &&
+      uploadData.action === "uploaded"
+    ) {
       const uploadedFile = { name: uploadData.name, path: uploadData.path };
       const files = next.files.some((file) => file.path === uploadedFile.path)
         ? next.files
@@ -204,26 +228,49 @@ const synchronizeVerificationFiles = ({
 };
 
 export const loader: LoaderFunction = async ({ params, request }) => {
-  await auth.isAuthenticated(request, { failureRedirect: "/login" });
+  const user = await auth.isAuthenticated(request, { failureRedirect: "/login" });
   const verificationNumber = Number(params.verificationNumber);
   if (!Number.isInteger(verificationNumber)) {
     throw new Response("Ogiltigt verifikationsnummer", { status: 400 });
   }
 
   const domain = getDomain(request);
+  if (!domain) throw new Response("Okänd domän", { status: 404 });
   const verification = (await Verifications.findOne({
-    domain: domain?.domain,
+    domain: domain.domain,
     verificationNumber,
   })
-    .select("verificationNumber description verificationDate files")
+    .select(
+      "recordType verificationNumber description verificationDate metadata files"
+    )
     .lean()) as unknown as {
+      recordType?: string;
       verificationNumber: number;
       description: string;
       verificationDate: Date;
+      metadata?: Array<{ key?: unknown; value?: unknown }>;
       files: VerificationFile[];
     } | null;
 
   if (!verification) throw new Response("Not Found", { status: 404 });
+
+  const verificationDate = new Date(verification.verificationDate);
+  let removalPolicy = await getVerificationEditPolicy({
+    domain: domain.domain,
+    verification: {
+      recordType: verification.recordType,
+      verificationDate,
+      metadata: verification.metadata,
+    },
+  });
+  const verificationYear = accountingYear(verificationDate);
+  if (verificationYear !== user.fiscalYear) {
+    removalPolicy = {
+      editable: false,
+      reportedPeriods: [],
+      reason: `Välj bokföringsår ${verificationYear ?? "för verifikationen"} innan du tar bort en bilaga från A${verificationNumber}.`,
+    };
+  }
 
   return json(toLoaderData({
     verification: {
@@ -232,11 +279,12 @@ export const loader: LoaderFunction = async ({ params, request }) => {
       verificationDate: verification.verificationDate,
       files: verification.files || [],
     },
+    removalPolicy,
   }));
 };
 
 export const action: ActionFunction = async ({ request, params }) => {
-  await auth.isAuthenticated(request, { failureRedirect: "/login" });
+  const user = await auth.isAuthenticated(request, { failureRedirect: "/login" });
   let formData: FormData;
   try {
     formData = await parseFormDataWithinLimit(
@@ -250,10 +298,87 @@ export const action: ActionFunction = async ({ request, params }) => {
     throw error;
   }
   const domain = getDomain(request);
-  const file = formData.get("file");
   const verificationNumber = Number(params.verificationNumber);
+  if (!domain || !Number.isInteger(verificationNumber)) {
+    return json({ error: "Verifikationsnumret saknas" }, { status: 400 });
+  }
+  const intent = formData.get("intent");
 
-  if (!(file instanceof File) || !Number.isInteger(verificationNumber)) {
+  if (intent === "remove") {
+    const path = formData.get("path");
+    if (typeof path !== "string") {
+      return json({ error: "Bilagan kunde inte identifieras" }, { status: 400 });
+    }
+
+    let removedFile: { name: string; path: string };
+    try {
+      removedFile = await removeVerificationFileReference({
+        domain: domain.domain,
+        verificationNumber,
+        expectedYear: user.fiscalYear,
+        path,
+        removedBy: user.email,
+      });
+    } catch (error) {
+      if (error instanceof VerificationEditBlockedError) {
+        return json({ error: error.message }, { status: 409 });
+      }
+      if (error instanceof VerificationValidationError) {
+        return json({ error: error.message }, { status: 400 });
+      }
+      console.error("Verification file removal failed", {
+        verificationNumber,
+        name: error instanceof Error ? error.name : "UnknownError",
+      });
+      return json(
+        { error: "Bilagan kunde inte tas bort. Försök igen." },
+        { status: 500 }
+      );
+    }
+
+    let warning: string | undefined;
+    try {
+      const stillReferenced = await Verifications.exists({
+        files: { $elemMatch: { path: removedFile.path } },
+      });
+      if (!stillReferenced) {
+        const storageKey = verificationStorageKeyFromPath(removedFile.path);
+        if (!storageKey) {
+          warning =
+            "Bilagan kopplades bort, men lagringsfilen kunde inte identifieras för automatisk rensning.";
+        } else {
+          const deleted = await deleteUploadedVerificationFile(storageKey);
+          if (!deleted) {
+            warning =
+              "Bilagan kopplades bort, men lagringsfilen kunde inte rensas automatiskt.";
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Verification storage cleanup failed", {
+        verificationNumber,
+        name: error instanceof Error ? error.name : "UnknownError",
+      });
+      warning =
+        "Bilagan kopplades bort, men lagringsfilen kunde inte rensas automatiskt.";
+    }
+
+    return json({
+      success: true,
+      action: "removed",
+      name: removedFile.name,
+      path: removedFile.path,
+      warning,
+    });
+  }
+
+  if (intent !== null && intent !== "upload") {
+    return json({ error: "Okänd filåtgärd" }, { status: 400 });
+  }
+
+  const file = formData.get("file");
+
+  if (!(file instanceof File)) {
     return json({ error: "Filen eller verifikationsnumret saknas" }, { status: 400 });
   }
 
@@ -283,7 +408,7 @@ export const action: ActionFunction = async ({ request, params }) => {
       verifiedFile
     );
     const updateResult = await Verifications.updateOne(
-      { verificationNumber, domain: domain?.domain },
+      { verificationNumber, domain: domain.domain },
       { $push: { files: { name: label, path: uploadedFile.path } } }
     );
 
@@ -291,7 +416,12 @@ export const action: ActionFunction = async ({ request, params }) => {
       throw new Error("Verifikationen kunde inte uppdateras");
     }
 
-    return json({ success: true, name: label, path: uploadedFile.path });
+    return json({
+      success: true,
+      action: "uploaded",
+      name: label,
+      path: uploadedFile.path,
+    });
   } catch (error) {
     if (uploadedFile) {
       await deleteUploadedVerificationFile(uploadedFile.key).catch((cleanupError) =>
@@ -304,8 +434,9 @@ export const action: ActionFunction = async ({ request, params }) => {
 };
 
 export default function VerificationFiles() {
-  const { verification } = useLoaderData<FilesLoaderData>();
+  const { removalPolicy, verification } = useLoaderData<FilesLoaderData>();
   const uploadFetcher = useFetcher<FilesActionData>();
+  const removalFetcher = useFetcher<FilesActionData>();
   const analysisFetcher = useFetcher<LabelAnalysisData>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileState, setFileState] = useState<VerificationFilesState>(() => ({
@@ -323,6 +454,10 @@ export default function VerificationFiles() {
     uploadError: null,
   }));
   const [isDragging, setIsDragging] = useState(false);
+  const [filePendingRemoval, setFilePendingRemoval] =
+    useState<VerificationFile | null>(null);
+  const [submittedRemovalPath, setSubmittedRemovalPath] =
+    useState<string | null>(null);
 
   const synchronizedFileState = synchronizeVerificationFiles({
     analysisData: analysisFetcher.data,
@@ -418,6 +553,7 @@ export default function VerificationFiles() {
     if (!selectedFile || !label.trim()) return;
     setFileState((current) => ({ ...current, uploadError: null }));
     const formData = new FormData();
+    formData.append("intent", "upload");
     formData.append("file", selectedFile);
     formData.append("label", label);
     uploadFetcher.submit(formData, {
@@ -427,8 +563,36 @@ export default function VerificationFiles() {
     });
   };
 
+  const removeFile = (file: VerificationFile) => {
+    setSubmittedRemovalPath(file.path);
+    const formData = new FormData();
+    formData.append("intent", "remove");
+    formData.append("path", file.path);
+    removalFetcher.submit(formData, {
+      method: "post",
+      action: `/admin/verifications/${verification.verificationNumber}/files`,
+    });
+  };
+
   const isUploading = uploadFetcher.state !== "idle";
   const isAnalyzing = analysisStatus === "loading";
+  const isRemoving = removalFetcher.state !== "idle";
+  const activeRemoval =
+    filePendingRemoval &&
+    files.some((file) => file.path === filePendingRemoval.path)
+      ? filePendingRemoval
+      : null;
+  const removalResult =
+    removalFetcher.data &&
+    "success" in removalFetcher.data &&
+    removalFetcher.data.success &&
+    removalFetcher.data.action === "removed"
+      ? removalFetcher.data
+      : null;
+  const removalError =
+    removalFetcher.data && "error" in removalFetcher.data
+      ? removalFetcher.data.error
+      : null;
   const suggestionMatchesLabel =
     Boolean(suggestion) && suggestion?.label.trim() === label.trim();
 
@@ -483,36 +647,122 @@ export default function VerificationFiles() {
             ) : null}
           </header>
 
+          {removalResult ? (
+            <div
+              role="status"
+              className="border-b border-[#cad8c9] bg-[#f4f8f2] px-4 py-3 text-xs leading-5 text-stone-700 sm:px-6"
+            >
+              <p>
+                <strong>{fallbackVerificationFileLabel(removalResult.name)}</strong> har tagits bort från verifikationen.
+              </p>
+              {removalResult.warning ? (
+                <p className="mt-1 text-amber-800">{removalResult.warning}</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {files.length > 0 && !removalPolicy.editable ? (
+            <p className="border-b border-[#e2d2cb] bg-[#fbf3ef] px-4 py-3 text-xs leading-5 text-stone-600 sm:px-6">
+              Sparade bilagor kan inte tas bort. {removalPolicy.reason}
+            </p>
+          ) : null}
+
           {files.length ? (
             <ul className="divide-y divide-stone-100">
-              {files.map((file) => (
-                <li key={file.path}>
-                  <a
-                    href={file.path}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-center gap-3 px-4 py-4 transition hover:bg-[#fdf8f5] sm:px-6"
-                  >
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#e4cec6] bg-[#fbf1ed] text-[#985744]">
-                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-5 w-5">
-                        <path d="M7 3.5h7l4 4V20H7z" />
-                        <path d="M14 3.5V8h4M9.5 12h6M9.5 15.5h6" />
-                      </svg>
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block break-words text-sm font-semibold leading-5 text-stone-800 group-hover:text-[#985744] sm:truncate">
-                        {fallbackVerificationFileLabel(file.name)}
-                      </span>
-                      <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.13em] text-stone-400">
-                        {fileType(file)} · öppnas i ny flik
-                      </span>
-                    </span>
-                    <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-stone-400 transition group-hover:bg-[#f3e4de] group-hover:text-[#985744]">
-                      <ArrowIcon direction="up-right" />
-                    </span>
-                  </a>
-                </li>
-              ))}
+              {files.map((file, index) => {
+                const label = fallbackVerificationFileLabel(file.name);
+                const asksForConfirmation = activeRemoval?.path === file.path;
+                const confirmationTitle = `remove-file-${verification.verificationNumber}-${index}`;
+
+                return (
+                  <li key={file.path}>
+                    <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:px-6">
+                      <a
+                        href={file.path}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex min-w-0 flex-1 items-center gap-3 py-1 transition"
+                      >
+                        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#e4cec6] bg-[#fbf1ed] text-[#985744]">
+                          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-5 w-5">
+                            <path d="M7 3.5h7l4 4V20H7z" />
+                            <path d="M14 3.5V8h4M9.5 12h6M9.5 15.5h6" />
+                          </svg>
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block break-words text-sm font-semibold leading-5 text-stone-800 group-hover:text-[#985744] sm:truncate">
+                            {label}
+                          </span>
+                          <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.13em] text-stone-400">
+                            {fileType(file)} · öppnas i ny flik
+                          </span>
+                        </span>
+                        <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-stone-400 transition group-hover:bg-[#f3e4de] group-hover:text-[#985744]">
+                          <ArrowIcon direction="up-right" />
+                        </span>
+                      </a>
+                      {removalPolicy.editable ? (
+                        <button
+                          type="button"
+                          onClick={() => setFilePendingRemoval(file)}
+                          aria-expanded={asksForConfirmation}
+                          aria-controls={
+                            asksForConfirmation ? confirmationTitle : undefined
+                          }
+                          className="inline-flex h-10 shrink-0 items-center justify-center self-end rounded-xl border border-stone-200 bg-white px-3 text-xs font-bold text-stone-500 transition hover:border-[#c58a79] hover:bg-[#fffaf7] hover:text-[#985744] sm:self-auto"
+                        >
+                          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="mr-1.5 h-4 w-4">
+                            <path d="M5 7h14M9 7V4h6v3M8 10v7M12 10v7M16 10v7M7 7l1 13h8l1-13" />
+                          </svg>
+                          Ta bort
+                        </button>
+                      ) : null}
+                    </div>
+
+                    {asksForConfirmation ? (
+                      <div
+                        id={confirmationTitle}
+                        role="alertdialog"
+                        aria-labelledby={`${confirmationTitle}-heading`}
+                        className="border-t border-[#e2d2cb] bg-[#fbf3ef] px-4 py-4 sm:px-6"
+                      >
+                        <p
+                          id={`${confirmationTitle}-heading`}
+                          className="text-sm font-bold text-stone-900"
+                        >
+                          Ta bort {label}?
+                        </p>
+                        <p className="mt-1 max-w-xl text-xs leading-5 text-stone-600">
+                          Bilagan kopplas bort och rensas ur lagringen om ingen annan verifikation använder samma fil. Händelsen sparas i revisionshistoriken.
+                        </p>
+                        {removalError && submittedRemovalPath === file.path ? (
+                          <p role="alert" className="mt-3 border-l-2 border-red-500 bg-red-50 px-3 py-2 text-xs text-red-800">
+                            {removalError}
+                          </p>
+                        ) : null}
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => removeFile(file)}
+                            disabled={isRemoving}
+                            className="inline-flex h-10 items-center justify-center rounded-xl border border-[#a85f4b] bg-[#a85f4b] px-4 text-xs font-bold text-white transition hover:border-[#8f4f3e] hover:bg-[#8f4f3e] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isRemoving ? "Tar bort…" : "Ja, ta bort bilagan"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFilePendingRemoval(null)}
+                            disabled={isRemoving}
+                            className="inline-flex h-10 items-center justify-center rounded-xl border border-stone-300 bg-white px-4 text-xs font-bold text-stone-600 transition hover:border-[#c58a79] hover:text-[#985744] disabled:opacity-50"
+                          >
+                            Avbryt
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <div className="px-5 py-10 text-center sm:px-8 sm:py-14">

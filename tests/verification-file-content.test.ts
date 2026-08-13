@@ -4,6 +4,7 @@ import sharp from "sharp";
 import {
   readVerifiedVerificationFile,
   VerificationFileValidationError,
+  verificationStorageKeyFromPath,
 } from "../app/services/verification-files.server";
 
 const validPng = () =>
@@ -56,4 +57,51 @@ test("verification files require an explicitly supported browser MIME type", asy
   });
 
   await assert.rejects(readVerifiedVerificationFile(file), /Filtypen stöds inte/);
+});
+
+test("derives only owned verification storage keys from saved file paths", () => {
+  const config = {
+    prefix: "moaclayco/verifications",
+    bucket: "moaclayco-files",
+  };
+
+  assert.equal(
+    verificationStorageKeyFromPath(
+      "https://moaclayco-files.s3.eu-north-1.amazonaws.com/moaclayco/verifications/216/kvitto.pdf",
+      config
+    ),
+    "moaclayco/verifications/216/kvitto.pdf"
+  );
+  assert.equal(
+    verificationStorageKeyFromPath(
+      "https://s3.eu-north-1.amazonaws.com/moaclayco-files/moaclayco/verifications/documents/faktura.pdf",
+      config
+    ),
+    "moaclayco/verifications/documents/faktura.pdf"
+  );
+  assert.equal(
+    verificationStorageKeyFromPath(
+      "https://example.com/other-prefix/private.pdf",
+      config
+    ),
+    null
+  );
+  assert.equal(
+    verificationStorageKeyFromPath(
+      "https://example.com/moaclayco/verifications/private.pdf",
+      config
+    ),
+    null
+  );
+  assert.equal(
+    verificationStorageKeyFromPath(
+      "https://moaclayco-files.evil.example/moaclayco/verifications/private.pdf",
+      config
+    ),
+    null
+  );
+  assert.equal(
+    verificationStorageKeyFromPath("https://example.com/%E0%A4%A", config),
+    null
+  );
 });

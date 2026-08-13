@@ -58,6 +58,19 @@ const VerificationsSchema = new Schema({
         ],
       },
     ],
+    fileHistory: [
+      {
+        action: {
+          type: String,
+          enum: ["removed"],
+          required: true,
+        },
+        changedAt: { type: Date, required: true },
+        changedBy: String,
+        name: { type: String, required: true },
+        path: { type: String, required: true },
+      },
+    ],
     journalEntries: [
       {
         account: {

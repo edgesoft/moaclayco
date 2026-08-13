@@ -144,6 +144,50 @@ export async function uploadVerificationFile(
 
 export async function deleteUploadedVerificationFile(key: string) {
   const bucket = process.env.AWS_S3_BUCKET_NAME;
-  if (!bucket) return;
+  if (!bucket) return false;
   await s3Client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  return true;
+}
+
+export function verificationStorageKeyFromPath(
+  path: string,
+  config: { prefix?: string; bucket?: string } = {}
+) {
+  const prefix = (
+    config.prefix ?? process.env.AWS_VERIFICATIONS_PATH ?? ""
+  ).replace(/^\/+|\/+$/g, "");
+  const bucket = (
+    config.bucket ?? process.env.AWS_S3_BUCKET_NAME ?? ""
+  ).replace(/^\/+|\/+$/g, "");
+  if (!prefix || !bucket || !path || path.length > 4_096) return null;
+
+  let pathname: string;
+  try {
+    if (path.includes("://")) {
+      const url = new URL(path);
+      pathname = url.pathname;
+      const normalizedPath = pathname.replace(/^\/+/, "");
+      const isAmazonS3Host =
+        url.hostname === "s3.amazonaws.com" ||
+        (url.hostname.startsWith("s3.") &&
+          url.hostname.endsWith(".amazonaws.com"));
+      const usesVirtualHostedBucket =
+        url.hostname.startsWith(`${bucket}.s3`) &&
+        url.hostname.endsWith(".amazonaws.com");
+      const usesPathStyleBucket =
+        isAmazonS3Host && normalizedPath.startsWith(`${bucket}/`);
+      if (!usesVirtualHostedBucket && !usesPathStyleBucket) return null;
+    } else {
+      pathname = path;
+    }
+    pathname = decodeURIComponent(pathname).replace(/^\/+/, "");
+  } catch {
+    return null;
+  }
+
+  const key =
+    bucket && pathname.startsWith(`${bucket}/${prefix}/`)
+      ? pathname.slice(bucket.length + 1)
+      : pathname;
+  return key.startsWith(`${prefix}/`) ? key : null;
 }

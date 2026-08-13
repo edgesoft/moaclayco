@@ -104,6 +104,40 @@ test("keeps the previous values in a verification edit history", async () => {
   );
 });
 
+test("keeps an audit record when a verification file is removed", async () => {
+  const changedAt = new Date("2026-04-21T10:30:00.000Z");
+  const verification = new Verifications({
+    ...baseVerification,
+    recordType: "journal",
+    metadata: [],
+    journalEntries: [
+      { account: 1930, debit: 500, credit: 0 },
+      { account: 3001, debit: 0, credit: 500 },
+    ],
+    fileHistory: [
+      {
+        action: "removed",
+        changedAt,
+        changedBy: "admin@moaclayco.se",
+        name: "Leverantörsfaktura april",
+        path: "https://files.example/verifications/faktura.pdf",
+      },
+    ],
+  });
+
+  await verification.validate();
+  assert.equal(verification.fileHistory.length, 1);
+  assert.equal(verification.fileHistory[0].action, "removed");
+  assert.equal(
+    verification.fileHistory[0].changedAt.toISOString(),
+    changedAt.toISOString()
+  );
+  assert.equal(
+    verification.fileHistory[0].name,
+    "Leverantörsfaktura april"
+  );
+});
+
 test("accounting years only accept controlled open and closed states", async () => {
   const openYear = new AccountingYears({
     domain: "moaclayco",
