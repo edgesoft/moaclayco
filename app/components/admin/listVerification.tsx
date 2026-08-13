@@ -167,7 +167,7 @@ function ListVerificationContent({
                   <th className="px-3 py-3">Beskrivning</th>
                   <th className="w-[15%] px-3 py-3">Bilagor</th>
                   <th className="w-[18%] px-3 py-3 text-right">Debet</th>
-                  <th className="w-12 px-3 py-3"><span className="sr-only">Visa</span></th>
+                  <th className="w-16 py-3 pl-2 pr-6 text-right xl:pr-8"><span className="sr-only">Visa</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">

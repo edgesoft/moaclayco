@@ -1,3 +1,10 @@
+# Branchregler
+
+- Brancher får aldrig ha ett namn som börjar med `agent/` eller `codex/`.
+- Använd korta, neutrala och beskrivande namn utan verktygsprefix.
+- Om den aktiva branchen har något av de förbjudna prefixen ska den byta namn
+  innan nästa commit eller push. Se `BRANCH_NAMING.md`.
+
 # UI-regler
 
 - Använd aldrig webbläsarens vanliga/native `<select>`-dropdown i den användarvända huvudappen, inklusive admin- och bokföringsvyer.

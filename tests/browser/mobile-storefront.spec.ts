@@ -136,18 +136,11 @@ test("a touch user can open a Collection", async ({ page }) => {
   await expect(page).toHaveURL(/\/collections\/wanja$/);
   await expect(page.getByRole("heading", { name: "Wanja", level: 1 })).toBeVisible();
 
-  const galleryZoom = page.locator(
-    ".mcc-shop-item__gallery-meta .mcc-shop-item__zoom"
-  ).first();
   const galleryDot = page.locator(
     ".mcc-shop-item__gallery-meta .mcc-shop-item__dots button"
   ).first();
-  const galleryZoomBox = await galleryZoom.boundingBox();
   const galleryDotBox = await galleryDot.boundingBox();
-  expect(galleryZoomBox).not.toBeNull();
   expect(galleryDotBox).not.toBeNull();
-  expect(galleryZoomBox!.height).toBeGreaterThanOrEqual(42);
-  expect(galleryZoomBox!.width).toBeGreaterThanOrEqual(42);
   expect(galleryDotBox!.height).toBeGreaterThanOrEqual(42);
   expect(galleryDotBox!.width).toBeGreaterThanOrEqual(42);
   await expectNoHorizontalOverflow(page);
@@ -159,9 +152,9 @@ test("collection gallery controls are touch-friendly", async ({ page }) => {
 
   const firstGallery = page.locator(".mcc-shop-item").first();
   const controls = firstGallery.locator(
-    ".mcc-shop-item__dots button, .mcc-shop-item__zoom, .mcc-shop-item__arrows button"
+    ".mcc-shop-item__dots button, .mcc-shop-item__arrows button"
   );
-  await expect(controls).toHaveCount(6);
+  await expect(controls).toHaveCount(5);
 
   for (let index = 0; index < (await controls.count()); index += 1) {
     const controlBox = await controls.nth(index).boundingBox();
@@ -183,27 +176,156 @@ test("collection gallery controls are touch-friendly", async ({ page }) => {
     )
     .not.toBe("rgb(255, 255, 255)");
 
-  await firstGallery
-    .getByRole("button", { name: /Visa .* i större format/ })
-    .tap();
+  const stage = firstGallery.locator(".mcc-shop-item__image-stage");
+  await expect(stage).toHaveAttribute("data-zoom-mode", "base");
+  await expect
+    .poll(() => stage.evaluate((element) => getComputedStyle(element).touchAction))
+    .toBe("pan-y");
   await expect
     .poll(() =>
-      page
-        .locator(".mcc-image-viewer")
-        .evaluate((viewer) => viewer.parentElement === document.body)
+      stage.locator("img").evaluate((image) => {
+        const productImage = image as HTMLImageElement;
+        return productImage.complete && productImage.naturalWidth > 0;
+      })
     )
     .toBe(true);
-  const viewerControls = page.locator(".mcc-image-viewer__toolbar button");
-  await expect(viewerControls).toHaveCount(5);
-  for (let index = 0; index < (await viewerControls.count()); index += 1) {
-    const controlBox = await viewerControls.nth(index).boundingBox();
-    expect(controlBox).not.toBeNull();
-    expect(controlBox!.height).toBeGreaterThanOrEqual(42);
-    expect(controlBox!.width).toBeGreaterThanOrEqual(42);
-  }
+
+  const doubleTapStage = async () =>
+    stage.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const dispatchTap = (pointerId: number) => {
+        const options = {
+          bubbles: true,
+          cancelable: true,
+          clientX: rect.left + rect.width / 2,
+          clientY: rect.top + rect.height / 2,
+          isPrimary: true,
+          pointerId,
+          pointerType: "touch",
+        };
+        element.dispatchEvent(
+          new PointerEvent("pointerdown", { ...options, buttons: 1 })
+        );
+        element.dispatchEvent(
+          new PointerEvent("pointerup", { ...options, buttons: 0 })
+        );
+      };
+      dispatchTap(10);
+      dispatchTap(11);
+    });
+
+  await doubleTapStage();
+  await expect(stage).toHaveAttribute("data-zoom-mode", "zoomed");
+  await expect(stage).toHaveAttribute("data-zoom-scale", "2.00");
+  await expect
+    .poll(() =>
+      stage.locator("img").evaluate((image) => getComputedStyle(image).objectFit)
+    )
+    .toBe("cover");
+  await expect
+    .poll(() =>
+      stage.evaluate((element) => ({
+        contain: getComputedStyle(element).contain,
+        overflow: getComputedStyle(element).overflow,
+      }))
+    )
+    .toEqual({ contain: "paint", overflow: "hidden" });
+  await expect(page.locator(".mcc-image-viewer")).toHaveCount(0);
+  await expect
+    .poll(() => page.evaluate(() => document.body.style.overflow))
+    .not.toBe("hidden");
+  await expect(stage.locator("img")).toHaveAttribute("src", /width=2200/);
+  await expect
+    .poll(() =>
+      stage
+        .locator("img")
+        .evaluate((image) => {
+          const productImage = image as HTMLImageElement;
+          return productImage.complete && productImage.naturalWidth > 0;
+        })
+    )
+    .toBe(true);
+  await page.waitForTimeout(260);
+
+  const imageBoxAtTwo = await stage
+    .locator("img")
+    .evaluate((image) => {
+      const rect = image.getBoundingClientRect();
+      return { height: rect.height, width: rect.width };
+    });
+  const scrollBeforeKeyboardZoom = await page.evaluate(() => window.scrollY);
+  await stage.evaluate((element) =>
+    element.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "-",
+      })
+    )
+  );
+  await expect(stage).toHaveAttribute("data-zoom-scale", "1.65");
+  await page.waitForTimeout(260);
+  const imageBoxAfterMinus = await stage
+    .locator("img")
+    .evaluate((image) => {
+      const rect = image.getBoundingClientRect();
+      return { height: rect.height, width: rect.width };
+    });
+  expect(imageBoxAfterMinus.width).toBeLessThan(imageBoxAtTwo.width);
+  expect(imageBoxAfterMinus.height).toBeLessThan(imageBoxAtTwo.height);
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeKeyboardZoom);
+  await stage.evaluate((element) =>
+    element.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "=",
+      })
+    )
+  );
+  await expect(stage).toHaveAttribute("data-zoom-scale", "2.00");
+
+  await stage.evaluate((element) => {
+    const zoomOut = () =>
+      element.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "-",
+        })
+      );
+    zoomOut();
+    zoomOut();
+    zoomOut();
+  });
+  await expect(stage).toHaveAttribute("data-zoom-mode", "base");
+  await expect(stage).toHaveAttribute("data-zoom-scale", "1.00");
+  await page.waitForTimeout(50);
+  const resetCenterOffset = await stage.evaluate((element) => {
+    const image = element.querySelector("img");
+    if (!image) throw new Error("Gallery image is missing");
+    const stageRect = element.getBoundingClientRect();
+    const imageRect = image.getBoundingClientRect();
+    return {
+      x: Math.abs(
+        imageRect.left + imageRect.width / 2 -
+          (stageRect.left + stageRect.width / 2)
+      ),
+      y: Math.abs(
+        imageRect.top + imageRect.height / 2 -
+          (stageRect.top + stageRect.height / 2)
+      ),
+    };
+  });
+  expect(resetCenterOffset.x).toBeLessThan(2);
+  expect(resetCenterOffset.y).toBeLessThan(2);
+
+  await doubleTapStage();
+  await expect(stage).toHaveAttribute("data-zoom-scale", "2.00");
 
   const wheelWasCancelled = await page
-    .locator(".mcc-image-viewer__stage")
+    .locator(".mcc-shop-item__image-stage")
+    .first()
     .evaluate((stage) => {
       const wheel = new WheelEvent("wheel", {
         bubbles: true,
@@ -213,11 +335,115 @@ test("collection gallery controls are touch-friendly", async ({ page }) => {
       return !stage.dispatchEvent(wheel);
     });
   expect(wheelWasCancelled).toBe(true);
-  await expect(page.getByRole("button", { name: "Återställ zoom" })).toHaveText(
-    "135%"
-  );
+  await expect(stage).toHaveAttribute("data-zoom-scale", "2.30");
 
-  await page.getByRole("button", { name: "Stäng stor bild" }).last().tap();
+  await stage.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const dispatch = (type: string, x: number) =>
+      element.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          buttons: type === "pointerup" ? 0 : 1,
+          cancelable: true,
+          clientX: x,
+          clientY: rect.top + rect.height / 2,
+          isPrimary: true,
+          pointerId: 1,
+          pointerType: "touch",
+        })
+      );
+    dispatch("pointerdown", rect.right - 35);
+    dispatch("pointermove", rect.left + 35);
+    dispatch("pointerup", rect.left + 35);
+  });
+  await expect(
+    firstGallery.getByRole("button", { name: /Visa bild 2 av/ })
+  ).toHaveAttribute("aria-current", "true");
+
+  const edgeGaps = await stage.evaluate((element) => {
+    const image = element.querySelector("img");
+    if (!image) throw new Error("Gallery image is missing");
+    const rect = element.getBoundingClientRect();
+    const imageRect = image.getBoundingClientRect();
+    return [
+      imageRect.left - rect.left,
+      rect.right - imageRect.right,
+      imageRect.top - rect.top,
+      rect.bottom - imageRect.bottom,
+    ];
+  });
+  expect(Math.max(...edgeGaps)).toBeLessThanOrEqual(0);
+
+  await doubleTapStage();
+  await expect(stage).toHaveAttribute("data-zoom-mode", "base");
+  await expect
+    .poll(() =>
+      stage.locator("img").evaluate((image) => getComputedStyle(image).objectFit)
+    )
+    .toBe("cover");
+
+  await stage.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const dispatch = (type: string, x: number) =>
+      element.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          buttons: type === "pointerup" ? 0 : 1,
+          cancelable: true,
+          clientX: x,
+          clientY: rect.top + rect.height / 2,
+          isPrimary: true,
+          pointerId: 2,
+          pointerType: "touch",
+        })
+      );
+    dispatch("pointerdown", rect.right - 30);
+    dispatch("pointermove", rect.left + 30);
+    dispatch("pointerup", rect.left + 30);
+  });
+  await expect(
+    firstGallery.getByRole("button", { name: /Visa bild 3 av/ })
+  ).toHaveAttribute("aria-current", "true");
+  await expect(stage).toHaveAttribute("data-zoom-mode", "base");
+
+  await stage.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const dispatch = (
+      type: string,
+      pointerId: number,
+      x: number,
+      isPrimary: boolean
+    ) =>
+      element.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          buttons: type === "pointerup" ? 0 : 1,
+          cancelable: true,
+          clientX: x,
+          clientY: centerY,
+          isPrimary,
+          pointerId,
+          pointerType: "touch",
+        })
+      );
+
+    dispatch("pointerdown", 3, centerX - 40, true);
+    dispatch("pointerdown", 4, centerX + 40, false);
+    dispatch("pointermove", 3, centerX - 90, true);
+    dispatch("pointermove", 4, centerX + 90, false);
+    dispatch("pointerup", 4, centerX + 90, false);
+    dispatch("pointerup", 3, centerX - 90, true);
+  });
+  await expect(stage).toHaveAttribute("data-zoom-mode", "zoomed");
+  await expect
+    .poll(async () => Number(await stage.getAttribute("data-zoom-scale")))
+    .toBeGreaterThan(1.5);
+  await expect(
+    firstGallery.getByRole("button", { name: /Visa bild 3 av/ })
+  ).toHaveAttribute("aria-current", "true");
+
   await expectNoHorizontalOverflow(page);
 });
 
