@@ -3,6 +3,7 @@ import {
   useLoaderData,
   useLocation,
   useNavigate,
+  useNavigation,
 } from "react-router";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import React, {
@@ -13,6 +14,7 @@ import React, {
 } from "react";
 import { useCart } from "react-use-cart";
 import { CollectionProps, User } from "~/types";
+import ArrowIcon from "./ArrowIcon";
 import ClientOnly from "./ClientOnly";
 import LoginModal from "./LoginModal";
 import ViewportPortal from "./ViewportPortal";
@@ -280,10 +282,21 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const mobileCloseButtonRef = useRef<HTMLButtonElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const pendingAdminTargetRef = useRef<string | null>(null);
   const data = useLoaderData<IndexLoadingType>();
+  const location = useLocation();
   const navigate = useNavigate();
+  const navigation = useNavigation();
+  const pendingAdminPath =
+    navigation.state === "idle" ? undefined : navigation.location?.pathname;
+  const pendingAdminLabel = pendingAdminPath?.startsWith("/admin/orders")
+    ? "Hämtar ordrarna"
+    : pendingAdminPath?.startsWith("/admin/verifications")
+      ? "Öppnar bokföringen"
+      : undefined;
 
   const closeMenu = (restoreFocus = false) => {
+    pendingAdminTargetRef.current = null;
     setMenuOpen(false);
     setMobileMenuCompact(false);
     if (restoreFocus) {
@@ -314,6 +327,19 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
     };
   }, [menuOpen]);
 
+  useEffect(() => {
+    const target = pendingAdminTargetRef.current;
+    if (!menuOpen || !target || location.pathname !== target) return;
+
+    const closeTimer = window.setTimeout(() => {
+      pendingAdminTargetRef.current = null;
+      setMenuOpen(false);
+      setMobileMenuCompact(false);
+    }, 0);
+
+    return () => window.clearTimeout(closeTimer);
+  }, [location.pathname, menuOpen]);
+
   const onAccount = () => {
     closeMenu();
     if (data.user) navigate("/logout");
@@ -321,6 +347,15 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
   };
 
   const closeAfterNavigation = () => closeMenu();
+  const prepareAdminNavigation = (target: string) => {
+    if (location.pathname === target) {
+      closeMenu();
+      return;
+    }
+    pendingAdminTargetRef.current = target;
+  };
+  const adminNavigationClass = (baseClass: string, target: string) =>
+    `${baseClass}${pendingAdminPath === target ? " is-pending" : ""}`;
 
   return (
     <>
@@ -405,19 +440,39 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
                   {data.user ? (
                     <>
                       <Link
-                        aria-label="Ordrar"
-                        className="mcc-navigation-shortcut"
-                        onClick={closeAfterNavigation}
-                        prefetch="intent"
+                        aria-busy={pendingAdminPath === "/admin/orders" || undefined}
+                        aria-label={
+                          pendingAdminPath === "/admin/orders"
+                            ? "Hämtar ordrarna"
+                            : "Ordrar"
+                        }
+                        className={adminNavigationClass(
+                          "mcc-navigation-shortcut",
+                          "/admin/orders"
+                        )}
+                        onClick={() => prepareAdminNavigation("/admin/orders")}
+                        prefetch="render"
                         to="/admin/orders"
                       >
                         <Icon name="orders" />
                       </Link>
                       <Link
-                        aria-label="Bokföring"
-                        className="mcc-navigation-shortcut"
-                        onClick={closeAfterNavigation}
-                        prefetch="intent"
+                        aria-busy={
+                          pendingAdminPath === "/admin/verifications" || undefined
+                        }
+                        aria-label={
+                          pendingAdminPath === "/admin/verifications"
+                            ? "Öppnar bokföringen"
+                            : "Bokföring"
+                        }
+                        className={adminNavigationClass(
+                          "mcc-navigation-shortcut",
+                          "/admin/verifications"
+                        )}
+                        onClick={() =>
+                          prepareAdminNavigation("/admin/verifications")
+                        }
+                        prefetch="render"
                         to="/admin/verifications"
                       >
                         <Icon name="ledger" />
@@ -507,31 +562,51 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
                   {data.user ? (
                     <>
                       <Link
-                        className="mcc-navigation-action"
-                        onClick={closeAfterNavigation}
-                        prefetch="intent"
+                        aria-busy={pendingAdminPath === "/admin/orders" || undefined}
+                        className={adminNavigationClass(
+                          "mcc-navigation-action",
+                          "/admin/orders"
+                        )}
+                        onClick={() => prepareAdminNavigation("/admin/orders")}
+                        prefetch="render"
                         to="/admin/orders"
                       >
                         <span className="mcc-navigation-action-icon">
                           <Icon name="orders" />
                         </span>
                         <span>
-                          <small>Admin</small>
+                          <small>
+                            {pendingAdminPath === "/admin/orders"
+                              ? "Hämtar"
+                              : "Admin"}
+                          </small>
                           Ordrar
                         </span>
                         <Icon name="arrow" />
                       </Link>
                       <Link
-                        className="mcc-navigation-action"
-                        onClick={closeAfterNavigation}
-                        prefetch="intent"
+                        aria-busy={
+                          pendingAdminPath === "/admin/verifications" || undefined
+                        }
+                        className={adminNavigationClass(
+                          "mcc-navigation-action",
+                          "/admin/verifications"
+                        )}
+                        onClick={() =>
+                          prepareAdminNavigation("/admin/verifications")
+                        }
+                        prefetch="render"
                         to="/admin/verifications"
                       >
                         <span className="mcc-navigation-action-icon">
                           <Icon name="ledger" />
                         </span>
                         <span>
-                          <small>Admin</small>
+                          <small>
+                            {pendingAdminPath === "/admin/verifications"
+                              ? "Öppnar"
+                              : "Admin"}
+                          </small>
                           Bokföring
                         </span>
                         <Icon name="arrow" />
@@ -558,8 +633,15 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
                   ) : null}
                 </nav>
 
-                <p className="mcc-navigation-rail-note">
-                  Handgjorda smycken, formade och målade för hand.
+                <p
+                  aria-live="polite"
+                  className={`mcc-navigation-rail-note${
+                    pendingAdminLabel ? " is-pending" : ""
+                  }`}
+                  role={pendingAdminLabel ? "status" : undefined}
+                >
+                  {pendingAdminLabel ??
+                    "Handgjorda smycken, formade och målade för hand."}
                 </p>
               </motion.aside>
 
@@ -819,7 +901,7 @@ const Header = (): React.ReactElement | null => {
                           aria-hidden="true"
                           className="mcc-scroll-collection-nav__arrow"
                         >
-                          ←
+                          <ArrowIcon direction="left" />
                         </span>
                         <span className="mcc-scroll-collection-nav__copy">
                           <small>Föregående</small>
@@ -910,7 +992,7 @@ const Header = (): React.ReactElement | null => {
                           </AnimatePresence>
                         </span>
                         <span aria-hidden="true" className="mcc-scroll-collection-nav__arrow">
-                          →
+                          <ArrowIcon />
                         </span>
                       </Link>
                     </span>
@@ -928,7 +1010,7 @@ const Header = (): React.ReactElement | null => {
                   </span>
                   <strong>{bannerContext.title}</strong>
                   <span aria-hidden="true" className="mcc-scroll-context__arrow">
-                    ↗
+                    <ArrowIcon direction="up-right" />
                   </span>
                 </Link>
               )}

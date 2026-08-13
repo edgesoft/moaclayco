@@ -86,9 +86,7 @@ export const loader: LoaderFunction = async ({ request, url }) => {
       },
     },
   })
-    .select(
-      "recordType description verificationNumber verificationDate metadata files journalEntries"
-    )
+    .select("metadata journalEntries")
     .lean()
     .exec();
 
@@ -269,7 +267,7 @@ export default function VerificationsPage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-[1fr_auto] gap-2 sm:flex">
+            <div className="flex justify-end">
               <Link
                 to="/admin/verifications/settings"
                 prefetch="intent"
@@ -277,15 +275,6 @@ export default function VerificationsPage() {
               >
                 År&nbsp; <span>{year}</span>
                 <span aria-hidden="true" className="ml-2 opacity-50">⌄</span>
-              </Link>
-              <Link
-                to="/admin/verifications/new"
-                prefetch="intent"
-                className="accounting-primary-action"
-              >
-                <span aria-hidden="true" className="mr-2 text-base leading-none">+</span>
-                <span className="hidden sm:inline">Ny verifikation</span>
-                <span className="sm:hidden">Ny</span>
               </Link>
             </div>
           </div>
@@ -352,46 +341,62 @@ export default function VerificationsPage() {
               </div>
             </section>
 
-            <section className="accounting-search-shell">
-              <label htmlFor="verification-search" className="sr-only">
-                Sök bland verifikationer
-              </label>
-              <div className="accounting-search flex h-12 items-center px-4">
-                <span
-                  aria-hidden="true"
-                  className="mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#fbf3ef] text-[#985744]"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.1"
-                    strokeLinecap="round"
-                    className="h-5 w-5"
+            <section
+              aria-label="Sök och skapa verifikation"
+              className="accounting-sticky-tools"
+            >
+              <div className="accounting-search-shell">
+                <label htmlFor="verification-search" className="sr-only">
+                  Sök bland verifikationer
+                </label>
+                <div className="accounting-search flex h-12 items-center px-3 sm:px-4">
+                  <span
+                    aria-hidden="true"
+                    className="mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#fbf3ef] text-[#985744]"
                   >
-                    <circle cx="10.5" cy="10.5" r="5.75" />
-                    <path d="m15 15 4.25 4.25" />
-                  </svg>
-                </span>
-                <input
-                  id="verification-search"
-                  type="search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Sök på nummer, beskrivning eller konto"
-                  className="accounting-search-input min-w-0 flex-1 border-0 bg-transparent py-3 text-base text-stone-900 outline-none placeholder:text-stone-400 sm:text-sm"
-                />
-                {search ? (
-                  <button
-                    type="button"
-                    onClick={() => setSearch("")}
-                    className="ml-2 inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-stone-200 bg-[#fffdf9] px-3 text-xs font-bold text-stone-600 transition hover:border-[#c58a79] hover:bg-[#fbf3ef] hover:text-[#985744] focus:outline-none focus:ring-2 focus:ring-[#e7c8be]"
-                  >
-                    <span aria-hidden="true" className="text-base leading-none text-[#985744]">×</span>
-                    Rensa
-                  </button>
-                ) : null}
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.1"
+                      strokeLinecap="round"
+                      className="h-5 w-5"
+                    >
+                      <circle cx="10.5" cy="10.5" r="5.75" />
+                      <path d="m15 15 4.25 4.25" />
+                    </svg>
+                  </span>
+                  <input
+                    id="verification-search"
+                    type="search"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Sök nummer, beskrivning eller konto"
+                    className="accounting-search-input min-w-0 flex-1 border-0 bg-transparent py-3 text-base text-stone-900 outline-none placeholder:text-stone-400 sm:text-sm"
+                  />
+                  {search ? (
+                    <button
+                      type="button"
+                      aria-label="Rensa sökning"
+                      onClick={() => setSearch("")}
+                      className="accounting-search-clear"
+                    >
+                      <span aria-hidden="true">×</span>
+                      <span className="hidden sm:inline">Rensa</span>
+                    </button>
+                  ) : null}
+                </div>
               </div>
+
+              <Link
+                to="/admin/verifications/new"
+                prefetch="intent"
+                className="accounting-primary-action accounting-sticky-new"
+              >
+                <span aria-hidden="true" className="text-base leading-none">+</span>
+                <span className="hidden sm:inline">Ny verifikation</span>
+                <span className="sm:hidden">Ny</span>
+              </Link>
             </section>
 
             {monthKeys.length === 0 ? (

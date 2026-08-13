@@ -20,6 +20,7 @@ import {
 } from "@stripe/stripe-js";
 import mongoose from "mongoose";
 import { useEffect, useRef, useState } from "react";
+import ArrowIcon from "~/components/ArrowIcon";
 import OrderSummary from "~/components/cart/OrderSummary";
 import Terms from "~/components/terms";
 import { themes } from "~/components/Theme";
@@ -198,7 +199,7 @@ function CheckoutForm({ onReady }: CheckoutFormProps) {
         ) : (
           <>
             Betala säkert
-            <span aria-hidden="true">→</span>
+            <ArrowIcon />
           </>
         )}
       </button>
@@ -297,7 +298,7 @@ export default function CheckoutPage() {
       <div className="mcc-purchase-shell">
         <header className="mcc-purchase-hero">
           <Link className="mcc-purchase-back" to="/cart">
-            <span aria-hidden="true">←</span>
+            <ArrowIcon direction="left" />
             Tillbaka till varukorgen
           </Link>
 

@@ -289,8 +289,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         ],
       }
     : filteredMatch;
+  const needsMatchingCount =
+    !cursor && (!includeSummary || filter !== "all" || Boolean(search));
 
-  const [pageDocuments, matchingCount, statsRows] = await Promise.all([
+  const [pageDocuments, queriedMatchingCount, statsRows] = await Promise.all([
     OrderEntity.find(pageMatch, {
       status: 1,
       createdAt: 1,
@@ -301,7 +303,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       .sort({ createdAt: -1, _id: -1 })
       .limit(PAGE_SIZE + 1)
       .lean(),
-    cursor ? Promise.resolve(-1) : OrderEntity.countDocuments(filteredMatch),
+    needsMatchingCount
+      ? OrderEntity.countDocuments(filteredMatch)
+      : Promise.resolve(-1),
     includeSummary
       ? OrderEntity.aggregate<OrderStats>([
           { $match: baseMatch },
@@ -348,6 +352,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shipped: 0,
     todo: 0,
   };
+  const matchingCount = cursor
+    ? -1
+    : needsMatchingCount
+      ? queriedMatchingCount
+      : Number(stats.all ?? 0);
   const orders: Order[] = visibleDocuments.map((order) => ({
     _id: String(order._id),
     createdAt: order.createdAt?.toISOString() ?? "",

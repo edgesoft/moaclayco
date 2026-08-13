@@ -9,6 +9,7 @@ import {
 import mongoose from "mongoose";
 import { useEffect } from "react";
 import { useCart } from "react-use-cart";
+import ArrowIcon from "~/components/ArrowIcon";
 import OrderSummary from "~/components/cart/OrderSummary";
 import { useTheme } from "~/components/Theme";
 import { Orders } from "~/schemas/orders";
@@ -91,7 +92,7 @@ export default function OrderPage() {
       <div className="mcc-purchase-shell">
         <header className="mcc-purchase-hero mcc-order-hero">
           <Link className="mcc-purchase-back" to="/">
-            <span aria-hidden="true">←</span>
+            <ArrowIcon direction="left" />
             Till kollektionerna
           </Link>
 
@@ -155,7 +156,7 @@ export default function OrderPage() {
                   </p>
                 </div>
                 <Link className="mcc-purchase-action" to="/">
-                  Se kollektioner <span aria-hidden="true">→</span>
+                  Se kollektioner <ArrowIcon />
                 </Link>
               </>
             ) : (
@@ -168,7 +169,7 @@ export default function OrderPage() {
                   className="mcc-purchase-action"
                   to={`/checkout?order=${data._id}`}
                 >
-                  Försök betala igen <span aria-hidden="true">→</span>
+                  Försök betala igen <ArrowIcon />
                 </Link>
               </>
             )}

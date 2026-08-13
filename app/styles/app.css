@@ -2,6 +2,20 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+.mcc-arrow-icon,
+.mcc-plus-minus-icon {
+  display: block;
+  flex: 0 0 auto;
+  height: 1em;
+  overflow: visible;
+  shape-rendering: geometricPrecision;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.55;
+  width: 1em;
+}
+
 html {
   max-width: 100%;
   overflow-x: hidden;
@@ -477,7 +491,7 @@ body {
   border-radius: 999px;
   bottom: 1rem;
   color: var(--mcc-ink);
-  content: "Öppna Collection  ↗";
+  content: "Öppna Collection";
   font-size: 0.58rem;
   font-weight: 750;
   letter-spacing: 0.1em;
@@ -1503,7 +1517,62 @@ body.mcc-menu-open .mcc-scroll-context-wrap {
 }
 
 .accounting-search-shell {
+  min-width: 0;
   padding: 0.3rem 0;
+}
+
+.accounting-sticky-tools {
+  align-items: center;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  background: rgba(245, 244, 240, 0.94);
+  border-bottom: 1px solid rgba(156, 151, 141, 0.42);
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-inline: -0.55rem;
+  padding: 0.45rem 0.55rem 0.65rem;
+  position: sticky;
+  top: var(--mcc-site-header-height, 5rem);
+  z-index: 24;
+}
+
+.accounting-sticky-tools::after {
+  background: linear-gradient(rgba(57, 51, 45, 0.09), transparent);
+  bottom: -0.42rem;
+  content: "";
+  height: 0.42rem;
+  left: 0;
+  opacity: 0.42;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+}
+
+.accounting-sticky-new {
+  gap: 0.5rem;
+  min-height: 3rem;
+  white-space: nowrap;
+}
+
+.accounting-search-clear {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--accounting-accent-dark);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 750;
+  gap: 0.32rem;
+  justify-content: center;
+  min-height: 2.35rem;
+  padding: 0 0.55rem;
+}
+
+.accounting-search-clear:hover {
+  background: rgba(184, 110, 89, 0.1);
 }
 
 .accounting-search {
@@ -1516,6 +1585,50 @@ body.mcc-menu-open .mcc-scroll-context-wrap {
 .accounting-search:focus-within {
   background: #fff;
   border-color: #9d9a92;
+}
+
+@media (max-width: 639px) {
+  .accounting-sticky-tools {
+    gap: 0.45rem;
+    margin-inline: -0.35rem;
+    padding-inline: 0.35rem;
+  }
+
+  .accounting-sticky-new {
+    border-radius: 999px;
+    min-width: 4.15rem;
+    padding-inline: 0.85rem;
+  }
+
+  .accounting-search {
+    padding-left: 0.45rem;
+    padding-right: 0.45rem;
+  }
+
+  .accounting-search > span:first-of-type {
+    height: 2.25rem;
+    margin-right: 0.15rem;
+    width: 2.25rem;
+  }
+
+  .accounting-search-input {
+    font-size: 1rem;
+  }
+
+  .accounting-search-clear {
+    font-size: 1.15rem;
+    min-width: 2.35rem;
+    padding: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mcc-navigation-action.is-pending .mcc-navigation-action-icon,
+  .mcc-navigation-action.is-pending > .mcc-nav-icon,
+  .mcc-navigation-rail-note.is-pending::before,
+  .mcc-navigation-shortcut.is-pending {
+    animation: none;
+  }
 }
 
 input[type="search"] {
@@ -1577,23 +1690,6 @@ input[type="search"]::-ms-reveal {
 .accounting-month-toggle--open {
   background: transparent;
   color: var(--accounting-accent);
-}
-
-.accounting-vat-done {
-  align-items: center;
-  color: #68715f;
-  display: inline-flex;
-  flex: 0 0 auto;
-  font-size: 0.7rem;
-  font-weight: 700;
-  gap: 0.4rem;
-  margin-left: auto;
-  white-space: nowrap;
-}
-
-.accounting-vat-done svg {
-  height: 1rem;
-  width: 1rem;
 }
 
 .accounting-entry-number {
@@ -2043,6 +2139,7 @@ input[type="search"]::-ms-reveal {
   left: clamp(0.75rem, 2vw, 1.5rem);
   padding: 0 0.76rem;
   position: absolute;
+  transform-origin: center;
   top: 50%;
   translate: 0 -50%;
 }
@@ -2057,13 +2154,64 @@ input[type="search"]::-ms-reveal {
 }
 
 .mcc-scroll-brand__collection {
+  animation: mcc-brand-co-spin 30s ease-in-out 3.5s infinite;
   color: #8b5a4b;
   font-family: ui-sans-serif, system-ui, sans-serif;
   font-size: 0.5rem;
   font-weight: 760;
   letter-spacing: 0.14em;
   line-height: 1;
+  transform-origin: center;
   text-transform: uppercase;
+}
+
+@keyframes mcc-brand-co-spin {
+  0% {
+    filter: blur(0);
+    rotate: 0deg;
+    scale: 1;
+    text-shadow: 0 0 0 rgba(139, 90, 75, 0);
+  }
+
+  1.63% {
+    filter: blur(0.55px);
+    letter-spacing: 0.02em;
+    rotate: 360deg;
+    scale: 1.24;
+    text-shadow: 0 0 0.22rem rgba(139, 90, 75, 0.2);
+  }
+
+  3.27% {
+    filter: blur(1px);
+    letter-spacing: -0.08em;
+    rotate: 810deg;
+    scale: 1.34;
+    text-shadow: 0 0 0.38rem rgba(139, 90, 75, 0.3);
+  }
+
+  4.2% {
+    filter: blur(0.35px);
+    letter-spacing: -0.03em;
+    rotate: 1030deg;
+    scale: 0.92;
+    text-shadow: 0 0 0.16rem rgba(139, 90, 75, 0.16);
+  }
+
+  4.9% {
+    filter: blur(0);
+    letter-spacing: 0.05em;
+    rotate: 1080deg;
+    scale: 1.08;
+    text-shadow: 0 0 0 rgba(139, 90, 75, 0);
+  }
+
+  5.6%,
+  100% {
+    filter: blur(0);
+    rotate: 1080deg;
+    scale: 1;
+    text-shadow: 0 0 0 rgba(139, 90, 75, 0);
+  }
 }
 
 .mcc-scroll-context-wrap {
@@ -2497,6 +2645,22 @@ input[type="search"]::-ms-reveal {
   padding-left: 0.28rem;
 }
 
+.mcc-navigation-action.is-pending {
+  color: #8f4f3d;
+  padding-left: 0.28rem;
+}
+
+.mcc-navigation-action.is-pending .mcc-navigation-action-icon {
+  animation: mcc-admin-link-pulse 760ms ease-in-out infinite alternate;
+  background: #b8664f;
+  border-color: #b8664f;
+  color: #fffaf3;
+}
+
+.mcc-navigation-action.is-pending > .mcc-nav-icon {
+  animation: mcc-admin-arrow-nudge 760ms ease-in-out infinite alternate;
+}
+
 .mcc-navigation-action-icon {
   align-items: center;
   background: rgba(187, 112, 90, 0.1);
@@ -2548,6 +2712,50 @@ input[type="search"]::-ms-reveal {
   margin: auto 0 0;
   max-width: 14rem;
   padding-top: 1.4rem;
+}
+
+.mcc-navigation-rail-note.is-pending {
+  align-items: center;
+  color: #8f4f3d;
+  display: flex;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.65rem;
+  font-style: normal;
+  font-weight: 760;
+  gap: 0.48rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.mcc-navigation-rail-note.is-pending::before {
+  animation: mcc-admin-link-pulse 760ms ease-in-out infinite alternate;
+  background: #b8664f;
+  border-radius: 999px;
+  content: "";
+  height: 0.48rem;
+  width: 0.48rem;
+}
+
+@keyframes mcc-admin-link-pulse {
+  from {
+    box-shadow: 0 0 0 0 rgba(184, 102, 79, 0.2);
+    opacity: 0.72;
+  }
+
+  to {
+    box-shadow: 0 0 0 0.38rem rgba(184, 102, 79, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes mcc-admin-arrow-nudge {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(3px);
+  }
 }
 
 .mcc-navigation-collections {
@@ -2779,6 +2987,13 @@ input[type="search"]::-ms-reveal {
   .mcc-navigation-shortcut:hover,
   .mcc-navigation-shortcut:focus-visible {
     background: #b8664f;
+    color: #fffaf3;
+  }
+
+  .mcc-navigation-shortcut.is-pending {
+    animation: mcc-admin-link-pulse 760ms ease-in-out infinite alternate;
+    background: #b8664f;
+    border-color: #b8664f;
     color: #fffaf3;
   }
 
@@ -3051,6 +3266,10 @@ input[type="search"]::-ms-reveal {
   .mcc-scroll-context {
     animation-duration: 0.01ms !important;
   }
+
+  .mcc-scroll-brand__collection {
+    animation: none !important;
+  }
 }
 
 /* Collection: redaktionell butiksyta med progressiv bildladdning. */
@@ -3194,7 +3413,7 @@ input[type="search"]::-ms-reveal {
   text-transform: uppercase;
 }
 
-.mcc-collection-hero__footer a span {
+.mcc-collection-hero__footer a .mcc-arrow-icon {
   color: var(--mcc-accent);
 }
 
@@ -3714,13 +3933,13 @@ input[type="search"]::-ms-reveal {
   display: none;
 }
 
-.mcc-shop-item__details summary span {
+.mcc-shop-item__details summary .mcc-plus-minus-icon {
   color: var(--mcc-accent);
   font-size: 1rem;
   transition: transform 180ms ease;
 }
 
-.mcc-shop-item__details[open] summary span {
+.mcc-shop-item__details[open] summary .mcc-plus-minus-icon {
   transform: rotate(45deg);
 }
 
@@ -3860,24 +4079,28 @@ input[type="search"]::-ms-reveal {
 }
 
 .mcc-shop-item__actions > button span:last-child {
+  align-items: center;
+  display: inline-flex;
   font-family: "Iowan Old Style", Georgia, serif;
   font-size: 0.8rem;
   font-weight: 400;
   letter-spacing: 0;
 }
 
-.mcc-shop-item__actions > button b {
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  font-size: 0.85rem;
-  font-weight: 500;
+.mcc-shop-item__buy-arrow {
+  height: 0.9rem;
   margin-left: 0.45rem;
+  width: 0.9rem;
 }
 
 .mcc-shop-item__actions > a {
+  align-items: center;
   border-bottom: 1px solid currentColor;
   color: #726860;
+  display: inline-flex;
   font-size: 0.59rem;
   font-weight: 730;
+  gap: 0.4rem;
   letter-spacing: 0.09em;
   padding: 0.45rem 0;
   text-transform: uppercase;
@@ -7811,11 +8034,11 @@ input[type="search"]::-ms-reveal {
   }
 
   .mcc-site-header .mcc-scroll-brand__name {
-    font-size: 1.06rem;
+    font-size: 1.16rem;
   }
 
   .mcc-site-header .mcc-scroll-brand__collection {
-    font-size: 0.48rem;
+    font-size: 0.52rem;
   }
 
   .mcc-site-header .mcc-scroll-context-wrap {
@@ -7876,6 +8099,7 @@ input[type="search"]::-ms-reveal {
 
   .mcc-site-header .mcc-scroll-collection-nav__copy strong {
     font-size: 1rem;
+    line-height: 1.15;
   }
 
   .mcc-site-header .mcc-scroll-collection-nav__arrow {

@@ -13,6 +13,8 @@ import {
   useTransform,
 } from "framer-motion";
 import { useEffect, useRef } from "react";
+import ArrowIcon from "~/components/ArrowIcon";
+import PlusMinusIcon from "~/components/PlusMinusIcon";
 import { useTheme, themes } from "~/components/Theme";
 import useMediaQuery from "~/hooks/useMediaQuery";
 import { Items } from "~/schemas/items";
@@ -249,7 +251,7 @@ function ProductScrollStory({ item }: { item: ItemProps }) {
               to={`/collections/${item.collectionRef}#${item._id}`}
             >
               Se och köp
-              <span aria-hidden="true">↗</span>
+              <ArrowIcon direction="up-right" />
             </Link>
           </motion.article>
         </div>
@@ -387,7 +389,7 @@ function CollectionScene({
               to={`/collections/${collection.shortUrl}`}
             >
               Se Collection
-              <span aria-hidden="true">↗</span>
+              <ArrowIcon direction="up-right" />
             </Link>
             {editable ? (
               <Link
@@ -403,7 +405,7 @@ function CollectionScene({
 
         <div className="mcc-collection-scene__continue" aria-hidden="true">
           Scrolla vidare
-          <span>↓</span>
+          <ArrowIcon direction="down" />
         </div>
       </div>
     </section>
@@ -441,7 +443,7 @@ function ProductCard({ item }: { item: ItemProps }) {
             <h3>{item.headline}</h3>
             <p>{item.price} SEK</p>
           </div>
-          <span aria-hidden="true">↗</span>
+          <ArrowIcon direction="up-right" />
         </div>
       </Link>
     </article>
@@ -519,7 +521,7 @@ export default function Index() {
           <div className="mcc-actions">
             <a className="mcc-button mcc-button--dark" href="#collections">
               Se alla Collections
-              <span aria-hidden="true">↓</span>
+              <ArrowIcon direction="down" />
             </a>
             {featuredItem ? (
               <a className="mcc-button mcc-button--light" href="#featured">
@@ -616,7 +618,7 @@ export default function Index() {
                 target="_blank"
               >
                 Följ på Instagram
-                <span aria-hidden="true">↗</span>
+                <ArrowIcon direction="up-right" />
               </a>
             ) : null}
           </div>
@@ -629,7 +631,7 @@ export default function Index() {
           className="mcc-admin-add"
           to="/collections/new"
         >
-          <span aria-hidden="true">+</span>
+          <PlusMinusIcon />
         </Link>
       ) : null}
     </main>

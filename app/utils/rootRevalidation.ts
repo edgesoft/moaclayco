@@ -9,20 +9,19 @@ export function shouldRevalidateRoot({
   formMethod?: string;
   nextPathname: string;
 }) {
-  if (formMethod && formMethod !== "GET") return defaultShouldRevalidate;
+  if (formMethod && formMethod.toUpperCase() !== "GET") {
+    return defaultShouldRevalidate;
+  }
 
-  const staysInAccounting =
-    currentPathname.startsWith("/admin/verifications") &&
-    nextPathname.startsWith("/admin/verifications");
-
-  const isCatalogPath = (pathname: string) =>
+  const usesStableRootData = (pathname: string) =>
     pathname === "/" ||
     pathname.startsWith("/collections/") ||
-    pathname.startsWith("/items/");
-  const staysInCatalog =
-    isCatalogPath(currentPathname) && isCatalogPath(nextPathname);
+    pathname.startsWith("/items/") ||
+    pathname.startsWith("/admin/verifications") ||
+    pathname.startsWith("/admin/orders") ||
+    pathname.startsWith("/admin/discounts");
 
-  return staysInAccounting || staysInCatalog
+  return usesStableRootData(currentPathname) && usesStableRootData(nextPathname)
     ? false
     : defaultShouldRevalidate;
 }

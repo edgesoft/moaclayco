@@ -26,6 +26,25 @@ test("catalog navigation reuses stable root data", () => {
   );
 });
 
+test("admin navigation reuses the authenticated root payload", () => {
+  assert.equal(
+    shouldRevalidateRoot(revalidationArguments("/", "/admin/verifications")),
+    false
+  );
+  assert.equal(
+    shouldRevalidateRoot(
+      revalidationArguments("/collections/wanja", "/admin/orders")
+    ),
+    false
+  );
+  assert.equal(
+    shouldRevalidateRoot(
+      revalidationArguments("/admin/orders", "/admin/verifications")
+    ),
+    false
+  );
+});
+
 test("mutations and authentication routes still revalidate root data", () => {
   assert.equal(
     shouldRevalidateRoot(

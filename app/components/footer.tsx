@@ -1,4 +1,5 @@
 import { useLocation } from "react-router";
+import ArrowIcon from "./ArrowIcon";
 import { useTheme } from "./Theme";
 
 const isPublicStorefrontPath = (pathname: string) => {
@@ -64,7 +65,7 @@ const Footer = (): React.ReactElement | null => {
                 <small>@moaclayco</small>
               </span>
               <span className="mcc-footer-social__arrow" aria-hidden="true">
-                ↗
+                <ArrowIcon direction="up-right" />
               </span>
             </a>
           ) : null}
@@ -92,7 +93,7 @@ const Footer = (): React.ReactElement | null => {
                 <small>@moaclayco</small>
               </span>
               <span className="mcc-footer-social__arrow" aria-hidden="true">
-                ↗
+                <ArrowIcon direction="up-right" />
               </span>
             </a>
           ) : null}
@@ -115,7 +116,7 @@ const Footer = (): React.ReactElement | null => {
                 <small>@moaclayco</small>
               </span>
               <span className="mcc-footer-social__arrow" aria-hidden="true">
-                ↗
+                <ArrowIcon direction="up-right" />
               </span>
             </a>
           ) : null}
@@ -138,7 +139,7 @@ const Footer = (): React.ReactElement | null => {
                 <small>@moaclayco</small>
               </span>
               <span className="mcc-footer-social__arrow" aria-hidden="true">
-                ↗
+                <ArrowIcon direction="up-right" />
               </span>
             </a>
           ) : null}

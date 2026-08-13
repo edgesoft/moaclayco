@@ -13,8 +13,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCart } from "react-use-cart";
 import { useSwipeable } from "react-swipeable";
 import ClientOnly from "~/components/ClientOnly";
+import ArrowIcon from "~/components/ArrowIcon";
 import Magnifier from "~/components/item/magnifier";
 import Loader from "~/components/loader";
+import PlusMinusIcon from "~/components/PlusMinusIcon";
 import type { IndexProps } from "~/root";
 import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
@@ -452,14 +454,14 @@ function Product({
                       onClick={previousImage}
                       type="button"
                     >
-                      ←
+                      <ArrowIcon direction="left" />
                     </button>
                     <button
                       aria-label={`Nästa bild av ${item.headline}`}
                       onClick={nextImage}
                       type="button"
                     >
-                      →
+                      <ArrowIcon />
                     </button>
                   </div>
                 ) : null}
@@ -552,7 +554,8 @@ function Product({
                 {added ? "Tillagd i varukorgen" : "Lägg i varukorgen"}
               </span>
               <span>
-                {totalPrice} SEK <b aria-hidden="true">→</b>
+                {totalPrice} SEK
+                <ArrowIcon className="mcc-shop-item__buy-arrow" />
               </span>
             </button>
           ) : (
@@ -561,7 +564,7 @@ function Product({
 
           {item.instagram ? (
             <a href={item.instagram} rel="noreferrer" target="_blank">
-              Se på Instagram ↗
+              Se på Instagram <ArrowIcon direction="up-right" />
             </a>
           ) : null}
         </div>
@@ -569,7 +572,7 @@ function Product({
         {item.productInfos?.length ? (
           <details className="mcc-shop-item__details">
             <summary>
-              Material & detaljer <span aria-hidden="true">＋</span>
+              Material & detaljer <PlusMinusIcon />
             </summary>
             <ul>
               {item.productInfos.map((info) => (
@@ -687,7 +690,7 @@ export default function Collection() {
             prefetch="intent"
             to="/#collections"
           >
-            <span aria-hidden="true">←</span> Alla Collections
+            <ArrowIcon direction="left" /> Alla Collections
           </Link>
           <p className="mcc-kicker">Moa Clay Co / Collection</p>
           <h1 lang="sv">{collection.headline}</h1>
@@ -699,14 +702,14 @@ export default function Collection() {
           ) : null}
           <div className="mcc-collection-hero__footer">
             <a href="#pieces">
-              Upptäck kollektionen <span aria-hidden="true">↓</span>
+              Upptäck kollektionen <ArrowIcon direction="down" />
             </a>
             {user ? (
               <Link
                 prefetch="intent"
                 to={`/collections/${collection.shortUrl}/edit`}
               >
-                Redigera Collection <span aria-hidden="true">↗</span>
+                Redigera Collection <ArrowIcon direction="up-right" />
               </Link>
             ) : null}
             <span>
@@ -790,7 +793,7 @@ export default function Collection() {
         <p className="mcc-kicker">Färg · form · personlighet</p>
         <h2>Handgjort får gärna synas.</h2>
         <Link prefetch="intent" to="/#collections">
-          Se en annan Collection <span aria-hidden="true">↗</span>
+          Se en annan Collection <ArrowIcon direction="up-right" />
         </Link>
       </section>
 
@@ -801,7 +804,7 @@ export default function Collection() {
           onClick={() => navigate(`/items/${collection.shortUrl}/new`)}
           type="button"
         >
-          <span aria-hidden="true">+</span>
+          <PlusMinusIcon />
         </button>
       ) : null}
     </main>

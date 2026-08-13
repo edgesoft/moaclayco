@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import ArrowIcon from "~/components/ArrowIcon";
 import useLocalStorage from "~/hooks/useLocalStorage";
 
 function CookieIllustration() {
@@ -71,7 +72,7 @@ const Cookies = (): React.ReactElement | null => {
             type="button"
           >
             Acceptera cookies
-            <span aria-hidden="true">→</span>
+            <ArrowIcon />
           </button>
         </div>
       </div>

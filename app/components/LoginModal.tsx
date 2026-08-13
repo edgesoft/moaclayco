@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import ArrowIcon from "./ArrowIcon";
 import ViewportPortal from "./ViewportPortal";
 
 type LoginModalProps = {
@@ -135,7 +136,7 @@ export default function LoginModal({
               <GoogleLogo />
               Fortsätt med Google
               <span aria-hidden="true" className="mcc-login-action-arrow">
-                →
+                <ArrowIcon />
               </span>
             </a>
           ) : (

@@ -67,7 +67,6 @@ function ListVerificationContent({
       ? `A${minMax.min}`
       : `A${minMax.min}–A${minMax.max}`;
   const registerVat = shouldRegisterVat();
-  const vatDone = Boolean(vatReportVerification) && !registerVat;
   const isZeroVatReport = Boolean(vatReportVerification) &&
     !vatReportVerification?.journalEntries?.some(
       (entry) => Number(entry.debit || 0) !== 0 || Number(entry.credit || 0) !== 0
@@ -101,23 +100,6 @@ function ListVerificationContent({
             </p>
           </div>
 
-          {vatDone ? (
-            <span className="accounting-vat-done">
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 20 20"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="10" cy="10" r="7" />
-                <path d="m6.8 10.1 2.1 2.1 4.5-4.6" />
-              </svg>
-              Moms klar
-            </span>
-          ) : null}
         </button>
 
         {isPastMonth && (!vatReportVerification || registerVat) ? (

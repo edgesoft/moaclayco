@@ -18,6 +18,7 @@ import {
 } from "react-router";
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useRef } from "react";
+import ArrowIcon from "./components/ArrowIcon";
 import Header from "./components/header";
 import Footer from "./components/footer";
 import { CartProvider } from "react-use-cart";
@@ -188,6 +189,9 @@ function RouteTransition({ data }: { data: IndexProps }) {
   const isFirstRenderRef = useRef(true);
   const location = useLocation();
   const shouldReduceMotion = useReducedMotion();
+  const isAdminWorkspace =
+    location.pathname.startsWith("/admin/orders") ||
+    location.pathname.startsWith("/admin/verifications");
   const routeTransitionKey = location.pathname.startsWith("/admin/orders")
     ? "/admin/orders"
     : location.pathname;
@@ -202,13 +206,18 @@ function RouteTransition({ data }: { data: IndexProps }) {
       initial={
         shouldReduceMotion || isFirstRenderRef.current
           ? false
-          : { opacity: 0.97, y: 4 }
+          : isAdminWorkspace
+            ? { opacity: 0.92, y: 8 }
+            : { opacity: 0.97, y: 4 }
       }
       key={routeTransitionKey}
       transition={
         shouldReduceMotion
           ? { duration: 0 }
-          : { duration: 0.18, ease: [0.22, 1, 0.36, 1] }
+          : {
+              duration: isAdminWorkspace ? 0.26 : 0.18,
+              ease: [0.22, 1, 0.36, 1],
+            }
       }
     >
       <Outlet context={data} />
@@ -288,7 +297,7 @@ export function ErrorBoundary() {
               <p>{message}</p>
               <div className="mcc-error-actions">
                 <a href="/">
-                  Till startsidan <span aria-hidden="true">→</span>
+                  Till startsidan <ArrowIcon />
                 </a>
                 {isUnauthorized ? (
                   <a className="is-secondary" href="/login">

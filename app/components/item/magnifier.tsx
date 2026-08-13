@@ -6,6 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { createPortal } from "react-dom";
+import PlusMinusIcon from "~/components/PlusMinusIcon";
 
 type MagnifierProps = {
   alt?: string;
@@ -525,9 +526,7 @@ const Magnifier: React.FC<MagnifierProps> = ({
           onClick={() => setZoom(scale - 0.5)}
           type="button"
         >
-          <svg aria-hidden="true" viewBox="0 0 20 20">
-            <path d="M5 10h10" />
-          </svg>
+          <PlusMinusIcon operation="minus" />
         </button>
         <button
           aria-label="Återställ zoom"
@@ -544,9 +543,7 @@ const Magnifier: React.FC<MagnifierProps> = ({
           onClick={() => setZoom(scale + 0.5)}
           type="button"
         >
-          <svg aria-hidden="true" viewBox="0 0 20 20">
-            <path d="M5 10h10M10 5v10" />
-          </svg>
+          <PlusMinusIcon />
         </button>
       </div>
 

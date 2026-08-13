@@ -2,7 +2,9 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useFetcher, useNavigate } from "react-router";
 import { motion, useReducedMotion } from "framer-motion";
 import { useCart } from "react-use-cart";
+import ArrowIcon from "~/components/ArrowIcon";
 import Feedback from "~/components/feedback";
+import PlusMinusIcon from "~/components/PlusMinusIcon";
 import useStickyState from "~/hooks/useStickyState";
 import { classNames } from "~/utils/classnames";
 import { FREE_FREIGHT } from "~/utils/constants";
@@ -254,7 +256,7 @@ export default function CartView() {
         <main className="mcc-cart-shell">
           <header className="mcc-cart-hero">
             <Link className="mcc-cart-back" to="/">
-              <span aria-hidden="true">←</span>
+              <ArrowIcon direction="left" />
               Fortsätt handla
             </Link>
 
@@ -399,7 +401,7 @@ export default function CartView() {
                             onClick={() => decreaseItem(item)}
                             type="button"
                           >
-                            −
+                            <PlusMinusIcon operation="minus" />
                           </button>
                           <output aria-live="polite">{item.quantity}</output>
                           <button
@@ -413,7 +415,7 @@ export default function CartView() {
                             }
                             type="button"
                           >
-                            +
+                            <PlusMinusIcon />
                           </button>
                           </div>
                           <button
@@ -596,7 +598,7 @@ export default function CartView() {
                     {cartFetcher.state === "idle" ? (
                       <>
                         Till betalningen
-                        <span aria-hidden="true">→</span>
+                        <ArrowIcon />
                       </>
                     ) : (
                       <>
