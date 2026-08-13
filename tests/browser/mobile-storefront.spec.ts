@@ -139,12 +139,18 @@ test("collection gallery controls are touch-friendly", async ({ page }) => {
     expect(controlBox!.width).toBeGreaterThanOrEqual(42);
   }
 
-  await firstGallery
-    .getByRole("button", { name: /Nästa bild av/ })
-    .tap();
+  const nextImageButton = firstGallery.getByRole("button", {
+    name: /Nästa bild av/,
+  });
+  await nextImageButton.tap();
   await expect(
     firstGallery.getByRole("button", { name: /Visa bild 2 av/ })
   ).toHaveAttribute("aria-current", "true");
+  await expect
+    .poll(() =>
+      nextImageButton.evaluate((button) => getComputedStyle(button).color)
+    )
+    .not.toBe("rgb(255, 255, 255)");
 
   await firstGallery
     .getByRole("button", { name: /Visa .* i större format/ })
@@ -164,6 +170,22 @@ test("collection gallery controls are touch-friendly", async ({ page }) => {
     expect(controlBox!.height).toBeGreaterThanOrEqual(42);
     expect(controlBox!.width).toBeGreaterThanOrEqual(42);
   }
+
+  const wheelWasCancelled = await page
+    .locator(".mcc-image-viewer__stage")
+    .evaluate((stage) => {
+      const wheel = new WheelEvent("wheel", {
+        bubbles: true,
+        cancelable: true,
+        deltaY: -120,
+      });
+      return !stage.dispatchEvent(wheel);
+    });
+  expect(wheelWasCancelled).toBe(true);
+  await expect(page.getByRole("button", { name: "Återställ zoom" })).toHaveText(
+    "135%"
+  );
+
   await page.getByRole("button", { name: "Stäng stor bild" }).last().tap();
   await expectNoHorizontalOverflow(page);
 });

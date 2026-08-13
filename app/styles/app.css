@@ -3557,7 +3557,16 @@ input[type="search"]::-ms-reveal {
 }
 
 .mcc-shop-item__gallery-meta .mcc-shop-item__arrows button {
+  color: #9d5743;
   width: 2.25rem;
+}
+
+.mcc-shop-item__gallery-meta .mcc-shop-item__arrows button:hover,
+.mcc-shop-item__gallery-meta .mcc-shop-item__arrows button:active {
+  background: rgba(184, 110, 89, 0.13);
+  border-color: rgba(184, 110, 89, 0.24);
+  color: #7e4939;
+  transform: none;
 }
 
 .mcc-shop-item__gallery-meta .mcc-shop-item__edit {

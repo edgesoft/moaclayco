@@ -4,7 +4,6 @@ import {
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
-  type WheelEvent as ReactWheelEvent,
 } from "react";
 import { createPortal } from "react-dom";
 
@@ -253,6 +252,19 @@ const Magnifier: React.FC<MagnifierProps> = ({
     return () => window.removeEventListener("resize", onResize);
   }, [clampPosition, isOpen, scale, updateStageSize]);
 
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!isOpen || !stage) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      setZoom(scale + (event.deltaY < 0 ? 0.35 : -0.35));
+    };
+
+    stage.addEventListener("wheel", handleWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", handleWheel);
+  }, [isOpen, scale, setZoom]);
+
   const handleLoad = useCallback(() => {
     handledErrorRef.current = null;
     setIsLoaded(true);
@@ -406,11 +418,6 @@ const Magnifier: React.FC<MagnifierProps> = ({
     gestureRef.current = null;
   };
 
-  const handleWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setZoom(scale + (event.deltaY < 0 ? 0.35 : -0.35));
-  };
-
   if (!imageUrl || typeof document === "undefined") return null;
 
   const imageSource = useOriginal ? imageUrl : imageWithWidth(imageUrl, 2200);
@@ -442,7 +449,6 @@ const Magnifier: React.FC<MagnifierProps> = ({
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={finishPointer}
-          onWheel={handleWheel}
           ref={stageRef}
           style={stageSize ?? undefined}
         >
