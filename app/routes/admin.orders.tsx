@@ -15,6 +15,8 @@ import { auth } from "~/services/auth.server";
 import { Orders as OrderEntity } from "~/schemas/orders";
 import ordersStyles from "~/styles/orders.css?url";
 import { getDomain } from "~/utils/domain";
+import ArrowIcon from "~/components/ArrowIcon";
+import PlusMinusIcon from "~/components/PlusMinusIcon";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: ordersStyles },
@@ -896,7 +898,11 @@ export default function Orders() {
                           {formatPrice(order.totalSum)}
                         </span>
                         <span className="orders-order-row__arrow" aria-hidden="true">
-                          {isSelected ? "−" : "↗"}
+                          {isSelected ? (
+                            <PlusMinusIcon operation="minus" />
+                          ) : (
+                            <ArrowIcon direction="up-right" />
+                          )}
                         </span>
                       </button>
                     </li>

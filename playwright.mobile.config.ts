@@ -28,7 +28,7 @@ export default defineConfig({
   use: {
     baseURL:
       process.env.MOBILE_E2E_BASE_URL ??
-      "http://127.0.0.1:3100",
+      "http://localhost:3100",
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
     video: "retain-on-failure",

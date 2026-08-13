@@ -18,6 +18,8 @@ import { Verifications } from "~/schemas/verifications";
 import { createVerification } from "~/services/verification.server";
 import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
+import ArrowIcon from "~/components/ArrowIcon";
+import PlusMinusIcon from "~/components/PlusMinusIcon";
 import type Stripe from "stripe";
 import {
   MAX_STANDARD_FORM_REQUEST_SIZE,
@@ -370,7 +372,7 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
       <header className="order-detail-header">
         <div className="order-detail-header__topline">
           <button className="order-detail-back" onClick={closeDetail} type="button">
-            <span aria-hidden="true">←</span>
+            <span aria-hidden="true"><ArrowIcon direction="left" /></span>
             Till orderlistan
           </button>
           <div className="order-detail-context">
@@ -426,7 +428,7 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
               }
               type="button"
             >
-              <span aria-hidden="true">＋</span>
+              <span aria-hidden="true"><PlusMinusIcon /></span>
               {creatingVerification ? "Skapar verifikation…" : "Skapa verifikation"}
             </button>
           )}

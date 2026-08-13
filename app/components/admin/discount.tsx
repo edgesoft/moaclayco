@@ -7,6 +7,7 @@ import { z } from "zod";
 import { formSchema } from "~/schemas/discount-form";
 import { formatDateToUTC } from "~/utils/formatDateToUTC";
 import type { DiscountType } from "~/types";
+import ArrowIcon from "~/components/ArrowIcon";
 
 type DiscountFormData = z.infer<typeof formSchema>;
 
@@ -153,17 +154,17 @@ function DiscountDateControl({
             type="button"
           >
             <span>{selectedDate ? formatExpiry(value).split(" · ")[0] : "Välj ett datum"}</span>
-            <span aria-hidden="true">⌄</span>
+            <span aria-hidden="true"><ArrowIcon direction="down" /></span>
           </button>
 
           {calendarOpen ? (
             <div aria-label="Välj slutdatum" className="mcc-discount-calendar" role="dialog">
               <div className="mcc-discount-calendar__header">
-                <button aria-label="Föregående månad" onClick={() => moveMonth(-1)} type="button">←</button>
+                <button aria-label="Föregående månad" onClick={() => moveMonth(-1)} type="button"><ArrowIcon direction="left" /></button>
                 <strong>
                   {swedishMonth.format(new Date(Date.UTC(visibleMonth.year, visibleMonth.month, 1)))}
                 </strong>
-                <button aria-label="Nästa månad" onClick={() => moveMonth(1)} type="button">→</button>
+                <button aria-label="Nästa månad" onClick={() => moveMonth(1)} type="button"><ArrowIcon /></button>
               </div>
               <div className="mcc-discount-calendar__weekdays" aria-hidden="true">
                 {[
@@ -334,7 +335,7 @@ export default function Discount() {
       <form className="mcc-editor-form" method="post" onSubmit={handleSubmit(onSubmit)}>
         <header className="mcc-editor-header">
           <div className="mcc-editor-header__topline">
-            <Link to="/admin/discounts"><span aria-hidden="true">←</span> Tillbaka till rabatter</Link>
+            <Link to="/admin/discounts"><span aria-hidden="true"><ArrowIcon direction="left" /></span> Tillbaka till rabatter</Link>
           </div>
           <div className="mcc-editor-header__title">
             <div>
@@ -484,7 +485,7 @@ export default function Discount() {
             </div>
             <button disabled={isSaving || isDeleting} type="submit">
               <span>{isSaving ? "Sparar…" : discount ? "Spara ändringar" : "Skapa rabatt"}</span>
-              <span aria-hidden="true">→</span>
+              <span aria-hidden="true"><ArrowIcon /></span>
             </button>
           </div>
         ) : null}

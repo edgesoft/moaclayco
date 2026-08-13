@@ -485,7 +485,10 @@
   text-decoration: none; text-transform: uppercase; transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
 }
 .mcc-discount-create:hover { background: var(--editor-accent-dark); border-color: var(--editor-accent-dark); transform: translateY(-1px); }
-.mcc-discount-create span:last-child { font-size: 1rem; font-weight: 400; }
+.mcc-discount-create span:last-child {
+  align-items: center; display: inline-flex; font-size: 1rem; font-weight: 400;
+  justify-content: center;
+}
 .mcc-discount-mobile-sticky { display: none; }
 
 .mcc-discount-index {
@@ -714,7 +717,10 @@
     display: flex; flex: 0 0 3.5rem; height: 3.5rem; justify-content: center;
     text-decoration: none; width: 3.5rem;
   }
-  .mcc-discount-mobile-sticky > a span { font-size: 1.15rem; line-height: 1; }
+  .mcc-discount-mobile-sticky > a span {
+    align-items: center; display: flex; font-size: 1.15rem; justify-content: center;
+    line-height: 1;
+  }
   .mcc-discount-list-intro { max-width: 18rem; }
   .mcc-discount-index { padding-bottom: 5rem; }
   .mcc-discount-empty { align-items: start; gap: 1rem; grid-template-columns: 1fr; min-height: 20rem; }

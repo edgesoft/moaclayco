@@ -40,6 +40,8 @@ import {
   validateVerificationFile,
 } from "~/services/verification-files.server";
 import { AccountingDateField } from "~/components/admin/AccountingDateField";
+import ArrowIcon from "~/components/ArrowIcon";
+import PlusMinusIcon from "~/components/PlusMinusIcon";
 import {
   hasMeaningfulVerificationInput,
   sanitizeVerificationFileLabel,
@@ -164,7 +166,7 @@ const FileUpload = ({
       className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center transition hover:border-emerald-400 hover:bg-emerald-50/40 sm:p-7"
     >
       <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-lg font-bold text-emerald-800" aria-hidden="true">
-        ↑
+        <ArrowIcon direction="up" />
       </div>
       <p className="mt-3 text-sm font-bold text-slate-900">
         Ladda upp ett underlag
@@ -182,7 +184,7 @@ const FileUpload = ({
           aria-hidden="true"
           className="absolute right-2.5 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white/15 text-base"
         >
-          →
+          <ArrowIcon />
         </span>
       </button>
       <input
@@ -817,7 +819,7 @@ export default function Verification() {
             onClick={() => navigate("/admin/verifications")}
             className="mb-3 inline-flex h-10 items-center rounded-lg px-1 text-xs font-bold text-slate-500 hover:text-slate-900"
           >
-            <span aria-hidden="true" className="mr-2">←</span>
+            <span aria-hidden="true" className="mr-2"><ArrowIcon direction="left" /></span>
             Till verifikationer
           </button>
           <h2
@@ -859,7 +861,7 @@ export default function Verification() {
                       Vi läser datum, beskrivning och föreslagen kontering.
                     </span>
                   </span>
-                  <span className="text-lg text-stone-400 transition group-hover:translate-x-0.5 group-hover:text-[#985744]" aria-hidden="true">→</span>
+                  <span className="text-lg text-stone-400 transition group-hover:translate-x-0.5 group-hover:text-[#985744]" aria-hidden="true"><ArrowIcon /></span>
                 </button>
                 <button
                   type="button"
@@ -877,7 +879,7 @@ export default function Verification() {
                       Fyll i uppgifter och konteringsrader själv.
                     </span>
                   </span>
-                  <span className="text-lg text-stone-400 transition group-hover:translate-x-0.5 group-hover:text-[#985744]" aria-hidden="true">→</span>
+                  <span className="text-lg text-stone-400 transition group-hover:translate-x-0.5 group-hover:text-[#985744]" aria-hidden="true"><ArrowIcon /></span>
                 </button>
               </div>
             </section>
@@ -887,7 +889,7 @@ export default function Verification() {
               onClick={() => setEntryMode("choose")}
               className="inline-flex min-h-10 items-center text-xs font-bold text-stone-500 transition hover:text-[#985744]"
             >
-              <span aria-hidden="true" className="mr-2">←</span>
+              <span aria-hidden="true" className="mr-2"><ArrowIcon direction="left" /></span>
               Byt registreringssätt
             </button>
           ) : null}
@@ -1082,7 +1084,7 @@ export default function Verification() {
                   onClick={handleAddRow}
                   className="inline-flex h-12 w-full items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-[#fffdf9] px-5 text-sm font-bold text-stone-600 transition hover:border-[#c58a79] hover:bg-[#fbf3ef] hover:text-[#985744] sm:w-auto"
                 >
-                  <span aria-hidden="true" className="mr-2 text-lg">+</span>
+                  <span aria-hidden="true" className="mr-2 text-lg"><PlusMinusIcon /></span>
                   Lägg till konteringsrad
                 </button>
               </div>
@@ -1294,7 +1296,7 @@ export default function Verification() {
                 >
                   <span className="sm:hidden">Spara</span>
                   <span className="hidden sm:inline">Spara verifikation</span>
-                  <span aria-hidden="true" className="text-base">→</span>
+                  <span aria-hidden="true" className="text-base"><ArrowIcon /></span>
                 </button>
               </div>
             </div>

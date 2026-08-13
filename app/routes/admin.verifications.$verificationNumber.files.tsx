@@ -17,6 +17,7 @@ import {
   sanitizeVerificationFileLabel,
 } from "~/utils/verificationFiles";
 import { toLoaderData } from "~/utils/loaderData";
+import ArrowIcon from "~/components/ArrowIcon";
 import {
   parseFormDataWithinLimit,
   RequestBodyTooLargeError,
@@ -438,7 +439,7 @@ export default function VerificationFiles() {
           to="/admin/verifications"
           className="inline-flex h-10 items-center rounded-lg px-1 text-xs font-bold text-stone-500 transition hover:text-stone-950"
         >
-          <span aria-hidden="true" className="mr-2">←</span>
+          <span aria-hidden="true" className="mr-2"><ArrowIcon direction="left" /></span>
           Till bokföringen
         </Link>
         <div className="mt-3 max-w-3xl">
@@ -507,7 +508,7 @@ export default function VerificationFiles() {
                       </span>
                     </span>
                     <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-stone-400 transition group-hover:bg-[#f3e4de] group-hover:text-[#985744]">
-                      ↗
+                      <ArrowIcon direction="up-right" />
                     </span>
                   </a>
                 </li>
@@ -601,7 +602,7 @@ export default function VerificationFiles() {
                       aria-hidden="true"
                       className="absolute right-2.5 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white/15 text-base"
                     >
-                      →
+                      <ArrowIcon />
                     </span>
                   </button>
                 </div>
@@ -711,7 +712,7 @@ export default function VerificationFiles() {
                         aria-hidden="true"
                         className="absolute right-3 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 text-lg"
                       >
-                        →
+                        <ArrowIcon />
                       </span>
                     ) : null}
                   </button>

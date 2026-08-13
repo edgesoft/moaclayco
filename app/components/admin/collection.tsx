@@ -8,6 +8,8 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { CollectionProps } from "~/types";
+import ArrowIcon from "~/components/ArrowIcon";
+import PlusMinusIcon from "~/components/PlusMinusIcon";
 
 type LoaderData = {
   collection: (CollectionProps & { _id: string }) | null;
@@ -258,7 +260,7 @@ function CollectionImageUpload({
           <small>JPG, PNG, WebP eller HEIC · upp till {formatFileSize(MAX_IMAGE_SIZE)}</small>
         </div>
         <button onClick={() => inputRef.current?.click()} type="button">
-          {image ? "Välj en annan" : "Välj bild"} <span aria-hidden="true">＋</span>
+          {image ? "Välj en annan" : "Välj bild"} <span aria-hidden="true"><PlusMinusIcon /></span>
         </button>
         <input
           accept=".jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic,image/heif"
@@ -351,11 +353,11 @@ export default function CollectionEditor() {
         <header className="mcc-editor-header">
           <div className="mcc-editor-header__topline">
             <Link to={collection ? `/collections/${collection.shortUrl}` : "/#collections"}>
-              <span aria-hidden="true">←</span> {collection ? `Tillbaka till ${collection.headline}` : "Tillbaka till Collections"}
+              <span aria-hidden="true"><ArrowIcon direction="left" /></span> {collection ? `Tillbaka till ${collection.headline}` : "Tillbaka till Collections"}
             </Link>
             {collection ? (
               <Link className="mcc-editor-preview-link" to={`/collections/${collection.shortUrl}`}>
-                Visa i butik <span aria-hidden="true">↗</span>
+                Visa i butik <span aria-hidden="true"><ArrowIcon direction="up-right" /></span>
               </Link>
             ) : null}
           </div>
@@ -533,7 +535,7 @@ export default function CollectionEditor() {
           </div>
           <button disabled={isSaving || isDeleting || uploadSummary.busy || !uploadSummary.ready} type="submit">
             <span>{isSaving ? "Sparar…" : collection ? "Spara ändringar" : "Skapa Collection"}</span>
-            <span aria-hidden="true">→</span>
+            <span aria-hidden="true"><ArrowIcon /></span>
           </button>
         </div>
       </Form>

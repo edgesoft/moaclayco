@@ -24,6 +24,7 @@ import {
   parseAccountingDate,
 } from "~/utils/accountingDates";
 import { AccountingDateField } from "~/components/admin/AccountingDateField";
+import ArrowIcon from "~/components/ArrowIcon";
 import {
   MAX_STANDARD_FORM_REQUEST_SIZE,
   parseFormDataWithinLimit,
@@ -348,7 +349,7 @@ export default function VATReportPage() {
           to="/admin/verifications"
           className="inline-flex h-10 items-center text-xs font-bold text-stone-500 transition hover:text-[#985744]"
         >
-          <span aria-hidden="true" className="mr-2 text-base">←</span>
+          <span aria-hidden="true" className="mr-2 text-base"><ArrowIcon direction="left" /></span>
           Till bokföringen
         </Link>
         <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.18em] text-[#985744]">
@@ -455,7 +456,7 @@ export default function VATReportPage() {
                       aria-hidden="true"
                       className="absolute right-3 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 text-lg"
                     >
-                      →
+                      <ArrowIcon />
                     </span>
                   ) : null}
                 </button>

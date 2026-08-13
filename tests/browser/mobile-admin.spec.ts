@@ -2,7 +2,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { sessionStorage } from "../../app/services/session.server";
 
 const baseUrl =
-  process.env.MOBILE_E2E_BASE_URL ?? "http://127.0.0.1:3100";
+  process.env.MOBILE_E2E_BASE_URL ?? "http://localhost:3100";
 const isLocalRun = ["127.0.0.1", "localhost"].includes(
   new URL(baseUrl).hostname
 );
@@ -21,7 +21,19 @@ async function authenticateLocalAdmin(context: BrowserContext) {
   const cookieHeader = setCookie.match(/^mcc_session=[^;]+/)?.[0];
   if (!cookieHeader) throw new Error("Kunde inte skapa lokal adminsession");
 
-  await context.setExtraHTTPHeaders({ Cookie: cookieHeader });
+  const separator = cookieHeader.indexOf("=");
+  const target = new URL(baseUrl);
+  await context.addCookies([
+    {
+      domain: target.hostname,
+      httpOnly: true,
+      name: cookieHeader.slice(0, separator),
+      path: "/",
+      sameSite: "Lax",
+      secure: target.protocol === "https:",
+      value: cookieHeader.slice(separator + 1),
+    },
+  ]);
 }
 
 async function acceptCookiesIfNeeded(page: Page) {
@@ -78,6 +90,41 @@ test.describe("authenticated mobile admin", () => {
         document.documentElement.clientWidth
     );
     expect(overflow).toBeLessThanOrEqual(1);
+  });
+
+  test("the discount add SVG is centered at Pixel 10 width", async ({ page }) => {
+    await page.setViewportSize({ width: 412, height: 915 });
+    await page.goto("/admin/discounts");
+    await acceptCookiesIfNeeded(page);
+
+    const createLink = page.locator(
+      ".mcc-discount-list-title .mcc-discount-create"
+    );
+    const icon = createLink.locator(".mcc-plus-minus-icon");
+
+    await expect(createLink).toBeVisible();
+    await expect(icon).toHaveCount(1);
+    await expect
+      .poll(() =>
+        createLink.evaluate((element) => {
+          const controlRect = element.getBoundingClientRect();
+          const iconRect = element
+            .querySelector(".mcc-plus-minus-icon")!
+            .getBoundingClientRect();
+
+          return Math.max(
+            Math.abs(
+              controlRect.left + controlRect.width / 2 -
+                (iconRect.left + iconRect.width / 2)
+            ),
+            Math.abs(
+              controlRect.top + controlRect.height / 2 -
+                (iconRect.top + iconRect.height / 2)
+            )
+          );
+        })
+      )
+    .toBeLessThanOrEqual(0.5);
   });
 
   for (const destination of [

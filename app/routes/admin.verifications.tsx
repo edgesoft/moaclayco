@@ -20,6 +20,8 @@ import {
   getAccountingYearBounds,
 } from "~/utils/accountingDates";
 import { getDomain } from "~/utils/domain";
+import ArrowIcon from "~/components/ArrowIcon";
+import PlusMinusIcon from "~/components/PlusMinusIcon";
 
 const normalizePathname = (pathname: string) => pathname.replace(/\/+$/, "");
 const verificationNumberFrom = (verification: unknown) => {
@@ -274,7 +276,7 @@ export default function VerificationsPage() {
                 className="accounting-secondary-action"
               >
                 År&nbsp; <span>{year}</span>
-                <span aria-hidden="true" className="ml-2 opacity-50">⌄</span>
+                <span aria-hidden="true" className="ml-2 opacity-50"><ArrowIcon direction="down" /></span>
               </Link>
             </div>
           </div>
@@ -393,7 +395,7 @@ export default function VerificationsPage() {
                 prefetch="intent"
                 className="accounting-primary-action accounting-sticky-new"
               >
-                <span aria-hidden="true" className="text-base leading-none">+</span>
+                <span aria-hidden="true" className="text-base leading-none"><PlusMinusIcon /></span>
                 <span className="hidden sm:inline">Ny verifikation</span>
                 <span className="sm:hidden">Ny</span>
               </Link>
@@ -414,7 +416,7 @@ export default function VerificationsPage() {
                     to="/admin/verifications/new"
                     className="mt-5 inline-flex h-12 items-center justify-center rounded-2xl border border-[#a85f4b] bg-[#a85f4b] px-6 text-sm font-bold text-white shadow-[0_7px_18px_rgba(126,67,51,0.14)] transition hover:-translate-y-px hover:border-[#8f4f3e] hover:bg-[#8f4f3e]"
                   >
-                    Skapa verifikation <span aria-hidden="true" className="ml-3">→</span>
+                    Skapa verifikation <span aria-hidden="true" className="ml-3"><ArrowIcon /></span>
                   </Link>
                 ) : null}
               </section>

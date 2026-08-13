@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import ArrowIcon from "~/components/ArrowIcon";
 
 type AccountingDateFieldProps = {
   id: string;
@@ -184,7 +185,7 @@ export function AccountingDateField({
               aria-label="Föregående månad"
               className="flex h-9 w-9 items-center justify-center rounded-full text-stone-600 hover:bg-[#f3e4de] hover:text-[#985744]"
             >
-              ←
+              <ArrowIcon direction="left" />
             </button>
             <strong className="text-sm capitalize text-stone-900">
               {monthLabel.format(visibleMonth)}
@@ -195,7 +196,7 @@ export function AccountingDateField({
               aria-label="Nästa månad"
               className="flex h-9 w-9 items-center justify-center rounded-full text-stone-600 hover:bg-[#f3e4de] hover:text-[#985744]"
             >
-              →
+              <ArrowIcon />
             </button>
           </div>
 

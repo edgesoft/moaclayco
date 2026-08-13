@@ -14,6 +14,8 @@ import {
   useState,
 } from "react";
 import type { CollectionProps, ItemProps } from "~/types";
+import ArrowIcon from "~/components/ArrowIcon";
+import PlusMinusIcon from "~/components/PlusMinusIcon";
 
 type LoaderDataItemProps = {
   collection: CollectionProps;
@@ -88,7 +90,7 @@ const formatFileSize = (bytes: number) => {
   return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
 };
 
-function ArrowIcon({ direction }: { direction: "left" | "right" }) {
+function GalleryArrowIcon({ direction }: { direction: "left" | "right" }) {
   return (
     <svg aria-hidden="true" viewBox="0 0 20 20">
       <path d={direction === "left" ? "M15 10H5m4-4-4 4 4 4" : "M5 10h10m-4-4 4 4-4 4"} />
@@ -221,7 +223,7 @@ function ProductInfoEditor({ item }: { item: ItemProps | null }) {
           onClick={addInfo}
           type="button"
         >
-          Lägg till <span aria-hidden="true">＋</span>
+          Lägg till <span aria-hidden="true"><PlusMinusIcon /></span>
         </button>
       </div>
 
@@ -341,7 +343,7 @@ function AdditionalItemsEditor({ item }: { item: ItemProps | null }) {
           onClick={addItem}
           type="button"
         >
-          Lägg till <span aria-hidden="true">＋</span>
+          Lägg till <span aria-hidden="true"><PlusMinusIcon /></span>
         </button>
       </div>
 
@@ -644,7 +646,7 @@ function FileUpload({
           <small>JPG, PNG, WebP eller HEIC · upp till {formatFileSize(MAX_IMAGE_SIZE)}</small>
         </div>
         <button onClick={() => fileInputRef.current?.click()} type="button">
-          Välj bilder <span aria-hidden="true">＋</span>
+          Välj bilder <span aria-hidden="true"><PlusMinusIcon /></span>
         </button>
         <input
           accept=".jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic,image/heif"
@@ -694,7 +696,7 @@ function FileUpload({
                       onClick={() => moveImage(index, -1)}
                       type="button"
                     >
-                      <ArrowIcon direction="left" />
+                      <GalleryArrowIcon direction="left" />
                     </button>
                     <button
                       aria-label="Flytta bilden framåt"
@@ -702,7 +704,7 @@ function FileUpload({
                       onClick={() => moveImage(index, 1)}
                       type="button"
                     >
-                      <ArrowIcon direction="right" />
+                      <GalleryArrowIcon direction="right" />
                     </button>
                     <button
                       aria-label={`Ta bort ${image.name}`}
@@ -779,11 +781,11 @@ export default function ItemComponent() {
         <header className="mcc-editor-header">
           <div className="mcc-editor-header__topline">
             <Link to={`/collections/${collection.shortUrl}${item ? `#${item._id}` : ""}`}>
-              <span aria-hidden="true">←</span> Tillbaka till {collection.headline}
+              <span aria-hidden="true"><ArrowIcon direction="left" /></span> Tillbaka till {collection.headline}
             </Link>
             {item ? (
               <Link className="mcc-editor-preview-link" to={`/collections/${collection.shortUrl}#${item._id}`}>
-                Visa i butik <span aria-hidden="true">↗</span>
+                Visa i butik <span aria-hidden="true"><ArrowIcon direction="up-right" /></span>
               </Link>
             ) : null}
           </div>
@@ -925,7 +927,7 @@ export default function ItemComponent() {
           </div>
           <button disabled={saveDisabled} type="submit">
             <span>{isSubmitting ? "Sparar…" : item ? "Spara ändringar" : "Skapa produkt"}</span>
-            <span aria-hidden="true">→</span>
+            <span aria-hidden="true"><ArrowIcon /></span>
           </button>
         </div>
       </Form>

@@ -6,6 +6,8 @@ import { auth } from "~/services/auth.server";
 import type { DiscountType } from "~/types";
 import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
+import ArrowIcon from "~/components/ArrowIcon";
+import PlusMinusIcon from "~/components/PlusMinusIcon";
 
 export const loader: LoaderFunction = async ({ request }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
@@ -78,7 +80,7 @@ export default function Discounts() {
       <div className="mcc-editor-form">
         <header className="mcc-editor-header">
           <div className="mcc-editor-header__topline">
-            <Link to="/"><span aria-hidden="true">←</span> Tillbaka till butiken</Link>
+            <Link to="/"><span aria-hidden="true"><ArrowIcon direction="left" /></span> Tillbaka till butiken</Link>
           </div>
           <div className="mcc-editor-header__title mcc-discount-list-title" ref={titleRef}>
             <div>
@@ -91,7 +93,7 @@ export default function Discounts() {
               </p>
             </div>
             <Link className="mcc-discount-create" to="/admin/discounts/new">
-              <span>Ny rabatt</span><span aria-hidden="true">＋</span>
+              <span>Ny rabatt</span><span aria-hidden="true"><PlusMinusIcon /></span>
             </Link>
           </div>
         </header>
@@ -102,7 +104,7 @@ export default function Discounts() {
         >
           <strong>Rabatter</strong>
           <Link aria-label="Ny rabatt" tabIndex={showStickyTitle ? undefined : -1} to="/admin/discounts/new">
-            <span aria-hidden="true">＋</span>
+            <span aria-hidden="true"><PlusMinusIcon /></span>
           </Link>
         </div>
 
@@ -142,7 +144,7 @@ export default function Discounts() {
                     <span className={`mcc-discount-row__state ${state.tone}`} data-label="Status">
                       <i /> {state.label}
                     </span>
-                    <span className="mcc-discount-row__arrow" aria-hidden="true">→</span>
+                    <span className="mcc-discount-row__arrow" aria-hidden="true"><ArrowIcon /></span>
                   </Link>
                 );
               })}
@@ -153,7 +155,7 @@ export default function Discounts() {
               <div>
                 <h3>Här är det tomt än så länge.</h3>
                 <p>Skapa din första rabattkod. Du väljer procentsats, antal användningar och om koden ska ha ett slutdatum.</p>
-                <Link to="/admin/discounts/new">Skapa en rabatt <span aria-hidden="true">→</span></Link>
+                <Link to="/admin/discounts/new">Skapa en rabatt <span aria-hidden="true"><ArrowIcon /></span></Link>
               </div>
             </div>
           )}

@@ -13,6 +13,7 @@ import { Users } from "~/schemas/user";
 import { auth } from "~/services/auth.server";
 import { commitSession, sessionStorage } from "~/services/session.server";
 import { User } from "~/types";
+import ArrowIcon from "~/components/ArrowIcon";
 import {
   MAX_STANDARD_FORM_REQUEST_SIZE,
   parseFormDataWithinLimit,
@@ -78,7 +79,7 @@ export default function Settings() {
         onClick={() => navigate("/admin/verifications")}
         className="mb-3 inline-flex h-10 items-center rounded-lg px-1 text-xs font-bold text-slate-500 hover:text-slate-900"
       >
-        <span aria-hidden="true" className="mr-2">←</span>
+        <span aria-hidden="true" className="mr-2"><ArrowIcon direction="left" /></span>
         Till verifikationer
       </button>
 
@@ -132,7 +133,7 @@ export default function Settings() {
               type="submit"
               className="accounting-submit-action"
             >
-              Använd {selectedYear} <span aria-hidden="true">→</span>
+              Använd {selectedYear} <span aria-hidden="true"><ArrowIcon /></span>
             </button>
           </div>
         </Form>

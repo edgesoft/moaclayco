@@ -3,6 +3,8 @@ import { Fragment, useState } from "react";
 import { VerificationProps } from "~/types";
 import { accounts } from "~/utils/accounts";
 import { formatMonthName } from "~/utils/formatMonthName";
+import ArrowIcon from "~/components/ArrowIcon";
+import PlusMinusIcon from "~/components/PlusMinusIcon";
 
 const formatDate = (dateString: string) =>
   new Intl.DateTimeFormat("sv-SE", {
@@ -247,7 +249,7 @@ function VerificationDetails({ verification }: { verification: VerificationProps
                     </span>
                   </span>
                   <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-stone-400 transition group-hover:bg-[#f3e4de] group-hover:text-[#985744]">
-                    ↗
+                    <ArrowIcon direction="up-right" />
                   </span>
                 </a>
               </li>
@@ -314,7 +316,7 @@ export function ListItemVerification({
             onClick={() => setExpanded((value) => !value)}
             className={`accounting-row-toggle ${expanded ? "accounting-row-toggle--open" : ""}`}
           >
-            {expanded ? "−" : "+"}
+            <PlusMinusIcon operation={expanded ? "minus" : "plus"} />
           </button>
         </td>
       </tr>
@@ -393,7 +395,7 @@ export function MobileVerificationCard({
               className={`accounting-month-toggle ${expanded ? "accounting-month-toggle--open" : ""}`}
               aria-hidden="true"
             >
-              {expanded ? "−" : "+"}
+              <PlusMinusIcon operation={expanded ? "minus" : "plus"} />
             </span>
           </div>
         </div>

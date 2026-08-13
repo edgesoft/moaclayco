@@ -2,6 +2,8 @@ import { Link } from "react-router";
 import { useState } from "react";
 import { VerificationProps } from "~/types";
 import { formatMonthName } from "~/utils/formatMonthName";
+import ArrowIcon from "~/components/ArrowIcon";
+import PlusMinusIcon from "~/components/PlusMinusIcon";
 import {
   ListItemVerification,
   MobileVerificationCard,
@@ -87,7 +89,7 @@ function ListVerificationContent({
                 aria-hidden="true"
                 className={`accounting-month-toggle ${expanded ? "accounting-month-toggle--open" : ""}`}
               >
-                {expanded ? "−" : "+"}
+                <PlusMinusIcon operation={expanded ? "minus" : "plus"} />
               </span>
               <h2 className="truncate text-lg text-stone-950 sm:text-xl">
                 {formatMonthName(monthKey)}
@@ -110,7 +112,7 @@ function ListVerificationContent({
                 prefetch="intent"
                 className="accounting-inline-action"
               >
-                Registrera momsdeklaration <span aria-hidden="true">→</span>
+                Registrera momsdeklaration <span aria-hidden="true"><ArrowIcon /></span>
               </Link>
             ) : registerVat ? (
               <Link
@@ -118,7 +120,7 @@ function ListVerificationContent({
                 prefetch="intent"
                 className="accounting-inline-action"
               >
-                Registrera momsbetalning <span aria-hidden="true">→</span>
+                Registrera momsbetalning <span aria-hidden="true"><ArrowIcon /></span>
               </Link>
             ) : null}
           </div>

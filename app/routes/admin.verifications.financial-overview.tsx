@@ -14,6 +14,7 @@ import { ReportType } from "~/types";
 import { accounts } from "~/utils/accounts";
 import { getDomain } from "~/utils/domain";
 import { AccountingDateField } from "~/components/admin/AccountingDateField";
+import ArrowIcon from "~/components/ArrowIcon";
 import {
   getAccountingDateBounds,
   parseAccountingDate,
@@ -400,7 +401,7 @@ export default function FinancialOverview() {
                   />
                 </div>
                 <button type="submit">
-                  Visa perioden <span aria-hidden="true">→</span>
+                  Visa perioden <span aria-hidden="true"><ArrowIcon /></span>
                 </button>
               </Form>
             </details>

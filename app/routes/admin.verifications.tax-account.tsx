@@ -17,6 +17,7 @@ import {
 import Select from "react-select";
 import { z } from "zod";
 import ClientOnly from "~/components/ClientOnly";
+import ArrowIcon from "~/components/ArrowIcon";
 import { Verifications } from "~/schemas/verifications";
 import { auth } from "~/services/auth.server";
 import { interpretTaxAccountStatement } from "~/services/tax-account-document.server";
@@ -1040,7 +1041,7 @@ export default function TaxAccountPage() {
                   onClick={() => fileInputRef.current?.click()}
                   className="accounting-primary-action mt-6"
                 >
-                  <span aria-hidden="true" className="mr-2">↑</span>
+                  <span aria-hidden="true" className="mr-2"><ArrowIcon direction="up" /></span>
                   Välj PDF
                 </button>
                 <input
@@ -1194,7 +1195,7 @@ export default function TaxAccountPage() {
                 : selectedRows.length
                 ? `Bokför ${selectedRows.length} ${selectedRows.length === 1 ? "rad" : "rader"}`
                 : "Koppla underlaget"}
-              <span aria-hidden="true" className="ml-3">→</span>
+              <span aria-hidden="true" className="ml-3"><ArrowIcon /></span>
             </button>
           </section>
         </div>

@@ -1,4 +1,4 @@
-type ArrowDirection = "down" | "left" | "right" | "up-right";
+type ArrowDirection = "down" | "left" | "right" | "up" | "up-right";
 
 type ArrowIconProps = {
   className?: string;
@@ -8,6 +8,7 @@ type ArrowIconProps = {
 const rotations: Partial<Record<ArrowDirection, string>> = {
   down: "rotate(90 10 10)",
   left: "rotate(180 10 10)",
+  up: "rotate(-90 10 10)",
 };
 
 export default function ArrowIcon({
