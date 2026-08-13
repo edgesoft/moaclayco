@@ -230,6 +230,7 @@ export default function VerificationsPage() {
   const isReport = normalizedPath.endsWith("/financial-overview");
   const isTaxAccount = normalizedPath.endsWith("/tax-account");
   const selectedReport = searchParams.get("report") || "income";
+  const editedVerification = Number(searchParams.get("edited"));
 
   const displayVerifications = useMemo(() => {
     return verifications;
@@ -332,6 +333,14 @@ export default function VerificationsPage() {
 
         {isOverview ? (
           <div className="space-y-5">
+            {Number.isInteger(editedVerification) && editedVerification > 0 ? (
+              <p
+                role="status"
+                className="border-y border-[#cad8c9] bg-[#f4f8f2] px-4 py-3 text-sm text-stone-700 sm:px-5"
+              >
+                Verifikation <strong>A{editedVerification}</strong> har uppdaterats och ändringen har sparats i revisionshistoriken.
+              </p>
+            ) : null}
             {yearStatus === "closed" ? (
               <section className="border-y border-[#d3b6aa] bg-[#fbf3ef] px-4 py-4 sm:px-5" aria-label="Avslutat bokföringsår">
                 <p className="text-sm font-bold text-stone-800">Bokföringsår {year} är avslutat</p>

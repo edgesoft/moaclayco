@@ -53,6 +53,12 @@ const metadataValue = (verification: VerificationProps, key: string) =>
 const vatPeriod = (verification: VerificationProps) =>
   metadataValue(verification, "vatReport");
 
+const isSystemVerification = (verification: VerificationProps) =>
+  verification.recordType === "incomingBalance" ||
+  verification.recordType === "vatReport" ||
+  Boolean(metadataValue(verification, "IB")) ||
+  Boolean(metadataValue(verification, "vatPaymentFor"));
+
 const primaryDateLabel = (verification: VerificationProps) =>
   formatDate(verification.verificationDate);
 
@@ -80,6 +86,28 @@ function VerificationDetails({ verification }: { verification: VerificationProps
 
   return (
     <div className="space-y-4">
+      {!isSystemVerification(verification) ? (
+        <div className="flex justify-end">
+          <Link
+            to={`/admin/verifications/${verification.verificationNumber}/edit`}
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-[#d8c3bb] bg-[#fffaf7] px-3.5 text-xs font-bold text-[#985744] transition hover:border-[#b8735e] hover:bg-[#fbf1ed]"
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              className="mr-2 h-4 w-4"
+            >
+              <path d="m4 20 4.2-1 10.9-10.9a2.1 2.1 0 0 0-3-3L5.2 16Z" />
+              <path d="m14.8 6.4 2.8 2.8M4 20l1.2-4" />
+            </svg>
+            Redigera
+          </Link>
+        </div>
+      ) : null}
+
       {reportPeriod ? (
         <div className="rounded-xl border border-[#dcc9c1] bg-[#fbf5f1] px-4 py-3 text-sm leading-6 text-stone-700">
           <strong className="text-stone-950">Redovisningsperiod:</strong>{" "}

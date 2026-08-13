@@ -2,14 +2,21 @@ import mongoose, { type ClientSession } from "mongoose";
 import { AccountingYears } from "~/schemas/accounting-years";
 import { VerificationCounters } from "~/schemas/verification-counters";
 import { Verifications } from "~/schemas/verifications";
-import { normalizeJournalEntries } from "~/utils/verificationValidation";
+import {
+  normalizeJournalEntries,
+  VerificationValidationError,
+} from "~/utils/verificationValidation";
 import { getIBJournalEntries } from "~/utils/accounts.server";
-import { accountingYear } from "~/utils/accountingDates";
+import { accountingMonthKey, accountingYear } from "~/utils/accountingDates";
 import {
   evaluateAccountingYearClosing,
   type AccountingYearStatus,
   type ClosingVatReport,
 } from "~/utils/accountingYearClosing";
+import {
+  evaluateVerificationEditPolicy,
+  type VerificationEditPolicy,
+} from "~/utils/verificationEditing";
 
 type MetadataEntry = { key: string; value: string | number };
 type FileEntry = { name: string; path: string };
@@ -30,6 +37,13 @@ export class AccountingYearClosingError extends Error {
   }
 }
 
+export class VerificationEditBlockedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "VerificationEditBlockedError";
+  }
+}
+
 export type CreateVerificationInput = {
   domain: string;
   description: string;
@@ -39,6 +53,17 @@ export type CreateVerificationInput = {
   idempotencyKey?: string;
   metadata?: MetadataEntry[];
   files?: FileEntry[];
+};
+
+export type EditVerificationInput = {
+  domain: string;
+  verificationNumber: number;
+  expectedYear: number;
+  description: string;
+  verificationDate: Date;
+  journalEntries: unknown;
+  reason: string;
+  editedBy?: string;
 };
 
 const normalizeInput = (input: CreateVerificationInput) => {
@@ -131,6 +156,81 @@ const touchOpenAccountingYear = async (
   await state.save({ session });
   return state;
 };
+
+type EditableVerification = {
+  recordType?: string;
+  verificationDate: Date;
+  metadata?: Array<{ key?: unknown; value?: unknown }>;
+};
+
+const reportedVatPeriods = async (
+  domain: string,
+  periods: string[],
+  session?: ClientSession
+) => {
+  if (periods.length === 0) return [];
+  const query = Verifications.find({
+    domain,
+    metadata: {
+      $elemMatch: {
+        key: "vatReport",
+        value: { $in: periods },
+      },
+    },
+  })
+    .select("metadata")
+    .lean();
+  if (session) query.session(session);
+  const reports = await query.exec();
+  return reports
+    .flatMap((report: any) => report.metadata ?? [])
+    .filter((entry: any) => entry.key === "vatReport")
+    .map((entry: any) => String(entry.value))
+    .filter((period) => periods.includes(period));
+};
+
+export async function getVerificationEditPolicy({
+  domain,
+  verification,
+  targetDate,
+  session,
+}: {
+  domain: string;
+  verification: EditableVerification;
+  targetDate?: Date;
+  session?: ClientSession;
+}): Promise<VerificationEditPolicy> {
+  const sourceYear = accountingYear(verification.verificationDate);
+  const targetYear = accountingYear(targetDate ?? verification.verificationDate);
+  const sourceMonth = accountingMonthKey(verification.verificationDate);
+  const targetMonth = accountingMonthKey(
+    targetDate ?? verification.verificationDate
+  );
+  if (!sourceYear || !targetYear || !sourceMonth || !targetMonth) {
+    return {
+      editable: false,
+      reason: "Verifikationen saknar ett giltigt bokföringsdatum.",
+      reportedPeriods: [],
+    };
+  }
+  const [yearState, reportedPeriods] = await Promise.all([
+    accountingYearState(domain, sourceYear, session),
+    reportedVatPeriods(
+      domain,
+      Array.from(new Set([sourceMonth, targetMonth])),
+      session
+    ),
+  ]);
+  return evaluateVerificationEditPolicy({
+    recordType: verification.recordType,
+    metadataKeys: (verification.metadata ?? []).map((entry) =>
+      String(entry.key ?? "")
+    ),
+    yearStatus: yearState?.status === "closed" ? "closed" : "open",
+    sameAccountingYear: sourceYear === targetYear,
+    reportedPeriods,
+  });
+}
 
 export async function createVerification(input: CreateVerificationInput) {
   const normalized = normalizeInput(input);
@@ -320,6 +420,100 @@ export async function createVerificationsBatch(inputs: CreateVerificationInput[]
   }
 
   return savedVerifications;
+}
+
+export async function editVerification(input: EditVerificationInput) {
+  if (!Number.isInteger(input.verificationNumber) || input.verificationNumber < 1) {
+    throw new Error("Ogiltigt verifikationsnummer");
+  }
+  const reason = input.reason?.trim();
+  if (!reason || reason.length < 3 || reason.length > 500) {
+    throw new VerificationValidationError(
+      "Beskriv kort varför verifikationen ändras"
+    );
+  }
+  const normalized = normalizeInput({
+    domain: input.domain,
+    description: input.description,
+    verificationDate: input.verificationDate,
+    journalEntries: input.journalEntries,
+    recordType: "journal",
+  });
+  const targetYear = accountingYear(normalized.verificationDate);
+  if (targetYear !== input.expectedYear) {
+    throw new VerificationEditBlockedError(
+      `Bokföringsdatumet måste tillhöra bokföringsår ${input.expectedYear}.`
+    );
+  }
+  await ensureAccountingYearState(normalized.domain, input.expectedYear);
+
+  const session = await mongoose.startSession();
+  let editedVerification: any = null;
+  try {
+    await session.withTransaction(async () => {
+      const verification = await Verifications.findOne({
+        domain: normalized.domain,
+        verificationNumber: input.verificationNumber,
+      }).session(session);
+      if (!verification) throw new Error("Verifikationen hittades inte");
+
+      const sourceYear = accountingYear(verification.verificationDate);
+      if (sourceYear !== input.expectedYear) {
+        throw new VerificationEditBlockedError(
+          `Verifikationen tillhör bokföringsår ${sourceYear ?? "okänt"}, inte ${input.expectedYear}.`
+        );
+      }
+      const policy = await getVerificationEditPolicy({
+        domain: normalized.domain,
+        verification,
+        targetDate: normalized.verificationDate,
+        session,
+      });
+      if (!policy.editable) {
+        throw new VerificationEditBlockedError(
+          policy.reason || "Verifikationen kan inte redigeras"
+        );
+      }
+
+      await touchOpenAccountingYear(
+        normalized.domain,
+        input.expectedYear,
+        session
+      );
+      verification.editHistory = [
+        ...(verification.editHistory ?? []),
+        {
+          editedAt: new Date(),
+          editedBy: input.editedBy?.trim() || undefined,
+          reason,
+          previousDescription: verification.description,
+          previousVerificationDate: verification.verificationDate,
+          previousJournalEntries: (verification.journalEntries ?? []).map(
+            (entry: any) => ({
+              account: Number(entry.account),
+              debit: Number(entry.debit || 0),
+              credit: Number(entry.credit || 0),
+            })
+          ),
+        },
+      ];
+      verification.recordType = "journal";
+      verification.description = normalized.description;
+      verification.verificationDate = normalized.verificationDate;
+      verification.journalEntries = normalized.journalEntries;
+      await verification.save({ session });
+      await refreshIncomingBalanceForFollowingYear(
+        normalized.domain,
+        input.expectedYear,
+        session
+      );
+      editedVerification = verification;
+    });
+  } finally {
+    await session.endSession();
+  }
+  if (!editedVerification) throw new Error("Verifikationen kunde inte uppdateras");
+  return editedVerification;
 }
 
 const incomingBalanceQuery = (domain: string, year: number) => ({

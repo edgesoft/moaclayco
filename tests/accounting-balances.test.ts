@@ -22,6 +22,7 @@ import {
   accountingYearMonthKeys,
   evaluateAccountingYearClosing,
 } from "../app/utils/accountingYearClosing";
+import { evaluateVerificationEditPolicy } from "../app/utils/verificationEditing";
 
 const totals = (entries: Array<{ debit: number; credit: number }>) => ({
   debit: entries.reduce((sum, entry) => sum + entry.debit, 0),
@@ -156,6 +157,68 @@ test("an open year remains open when a VAT period is missing", () => {
 
   assert.equal(readiness.canClose, false);
   assert.deepEqual(readiness.missingVatMonths, ["2025-12"]);
+});
+
+test("an ordinary verification in an unreported period can be edited", () => {
+  assert.deepEqual(
+    evaluateVerificationEditPolicy({
+      recordType: "journal",
+      metadataKeys: [],
+      yearStatus: "open",
+      sameAccountingYear: true,
+      reportedPeriods: [],
+    }),
+    { editable: true, reason: null, reportedPeriods: [] }
+  );
+});
+
+test("a verification is locked when either affected VAT period is reported", () => {
+  const policy = evaluateVerificationEditPolicy({
+    recordType: "journal",
+    metadataKeys: [],
+    yearStatus: "open",
+    sameAccountingYear: true,
+    reportedPeriods: ["2026-03", "2026-02", "2026-03"],
+  });
+
+  assert.equal(policy.editable, false);
+  assert.deepEqual(policy.reportedPeriods, ["2026-02", "2026-03"]);
+  assert.match(policy.reason ?? "", /ny verifikation/);
+});
+
+test("closed years and system-generated records cannot be edited", () => {
+  const closedYear = evaluateVerificationEditPolicy({
+    recordType: "journal",
+    metadataKeys: [],
+    yearStatus: "closed",
+    sameAccountingYear: true,
+    reportedPeriods: [],
+  });
+  const systemRecord = evaluateVerificationEditPolicy({
+    recordType: "journal",
+    metadataKeys: ["vatPaymentFor"],
+    yearStatus: "open",
+    sameAccountingYear: true,
+    reportedPeriods: [],
+  });
+
+  assert.equal(closedYear.editable, false);
+  assert.match(closedYear.reason ?? "", /avslutat/);
+  assert.equal(systemRecord.editable, false);
+  assert.match(systemRecord.reason ?? "", /momshändelser/);
+});
+
+test("an edit cannot move a verification to another accounting year", () => {
+  const policy = evaluateVerificationEditPolicy({
+    recordType: "journal",
+    metadataKeys: [],
+    yearStatus: "open",
+    sameAccountingYear: false,
+    reportedPeriods: [],
+  });
+
+  assert.equal(policy.editable, false);
+  assert.match(policy.reason ?? "", /samma bokföringsår/);
 });
 
 test("VAT report closes a VAT liability to credit 2650", () => {

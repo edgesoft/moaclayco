@@ -42,6 +42,22 @@ const VerificationsSchema = new Schema({
       name: String,
       path: String
     }],
+    editHistory: [
+      {
+        editedAt: { type: Date, required: true },
+        editedBy: String,
+        reason: { type: String, required: true, trim: true, maxlength: 500 },
+        previousDescription: { type: String, required: true },
+        previousVerificationDate: { type: Date, required: true },
+        previousJournalEntries: [
+          {
+            account: { type: Number, required: true },
+            debit: { type: Number, default: 0 },
+            credit: { type: Number, default: 0 },
+          },
+        ],
+      },
+    ],
     journalEntries: [
       {
         account: {

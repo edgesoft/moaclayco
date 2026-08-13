@@ -59,6 +59,51 @@ test("still rejects an empty ordinary journal verification", async () => {
   await assert.rejects(() => verification.validate(), /minst två konteringsrader/);
 });
 
+test("keeps the previous values in a verification edit history", async () => {
+  const previousDate = new Date("2026-03-10T12:00:00.000Z");
+  const verification = new Verifications({
+    ...baseVerification,
+    recordType: "journal",
+    metadata: [],
+    journalEntries: [
+      { account: 1930, debit: 500, credit: 0 },
+      { account: 3001, debit: 0, credit: 500 },
+    ],
+    editHistory: [
+      {
+        editedAt: new Date("2026-04-20T09:00:00.000Z"),
+        editedBy: "admin@moaclayco.se",
+        reason: "Rättat felaktigt belopp",
+        previousDescription: "Försäljning",
+        previousVerificationDate: previousDate,
+        previousJournalEntries: [
+          { account: 1930, debit: 450, credit: 0 },
+          { account: 3001, debit: 0, credit: 450 },
+        ],
+      },
+    ],
+  });
+
+  await verification.validate();
+  assert.equal(verification.editHistory.length, 1);
+  assert.equal(verification.editHistory[0].reason, "Rättat felaktigt belopp");
+  assert.equal(
+    verification.editHistory[0].previousVerificationDate.toISOString(),
+    previousDate.toISOString()
+  );
+  assert.deepEqual(
+    verification.editHistory[0].previousJournalEntries.map((entry: any) => ({
+      account: entry.account,
+      debit: entry.debit,
+      credit: entry.credit,
+    })),
+    [
+      { account: 1930, debit: 450, credit: 0 },
+      { account: 3001, debit: 0, credit: 450 },
+    ]
+  );
+});
+
 test("accounting years only accept controlled open and closed states", async () => {
   const openYear = new AccountingYears({
     domain: "moaclayco",
