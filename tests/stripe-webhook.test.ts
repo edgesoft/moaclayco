@@ -102,6 +102,7 @@ const makeDependencies = (
   return {
     createVerification: unexpected("createVerification"),
     discounts: { updateOne: unexpected("discounts.updateOne") },
+    domainNames: [order.domain],
     items: { updateOne: unexpected("items.updateOne") },
     now: () => new Date(fixedNow),
     orders: {
@@ -910,7 +911,34 @@ test("manual payout accounting uses explicit domain metadata", async () => {
   ]);
 });
 
-test("manual payout accounting rejects missing domain metadata", async () => {
+test("manual payout accounting falls back to the only configured domain", async () => {
+  const verifications: Array<Record<string, unknown>> = [];
+  const dependencies = makeDependencies({
+    createVerification: async (input) => {
+      verifications.push(input as unknown as Record<string, unknown>);
+      return input as never;
+    },
+  });
+
+  await handlePayoutPaid(
+    {
+      amount: 30_037,
+      automatic: false,
+      created: 1_786_634_763,
+      id: "po_manual_without_domain",
+      metadata: {},
+    } as unknown as Stripe.Payout,
+    dependencies
+  );
+
+  assert.equal(verifications[0].domain, order.domain);
+  assert.equal(
+    verifications[0].idempotencyKey,
+    "stripe:payout:po_manual_without_domain"
+  );
+});
+
+test("manual payout accounting requires metadata for multiple domains", async () => {
   await assert.rejects(
     () =>
       handlePayoutPaid(
@@ -921,7 +949,7 @@ test("manual payout accounting rejects missing domain metadata", async () => {
           id: "po_manual_without_domain",
           metadata: {},
         } as unknown as Stripe.Payout,
-        makeDependencies()
+        makeDependencies({ domainNames: [order.domain, "another-store"] })
       ),
     /missing domain metadata/
   );

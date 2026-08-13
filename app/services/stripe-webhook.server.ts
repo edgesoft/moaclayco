@@ -20,12 +20,14 @@ import {
   getRequestedStripeWebhookApiVersion,
   getStripeWebhookSecret,
 } from "~/services/stripe-config.server";
+import { domains as configuredDomains } from "~/utils/domain";
 
 const MAX_STRIPE_WEBHOOK_SIZE = 1024 * 1024;
 
 export type StripeWebhookDependencies = {
   createVerification: typeof createVerification;
   discounts: typeof Discounts;
+  domainNames: readonly string[];
   items: typeof Items;
   now: () => Date;
   orders: typeof Orders;
@@ -38,6 +40,7 @@ export type StripeWebhookDependencies = {
 const defaultDependencies: StripeWebhookDependencies = {
   createVerification,
   discounts: Discounts,
+  domainNames: configuredDomains.map(({ domain }) => domain),
   items: Items,
   now: () => new Date(),
   orders: Orders,
@@ -210,10 +213,24 @@ export const handlePayoutPaid = async (
 
   if (payout.automatic === false) {
     const manualPayoutDomain = payout.metadata?.domain?.trim();
-    if (!manualPayoutDomain) {
+    const configuredDomainNames = new Set(
+      dependencies.domainNames.map((domain) => domain.trim()).filter(Boolean)
+    );
+
+    if (manualPayoutDomain) {
+      if (!configuredDomainNames.has(manualPayoutDomain)) {
+        throw new Error(
+          `Manual Stripe payout references unknown domain: ${manualPayoutDomain}`
+        );
+      }
+      domains.add(manualPayoutDomain);
+    } else if (configuredDomainNames.size === 1) {
+      for (const configuredDomain of configuredDomainNames) {
+        domains.add(configuredDomain);
+      }
+    } else {
       throw new Error("Manual Stripe payout is missing domain metadata");
     }
-    domains.add(manualPayoutDomain);
   } else {
     // Stripe only supports filtering balance transactions by automatic payouts.
     const balanceTransactions = await dependencies.stripe.balanceTransactions
