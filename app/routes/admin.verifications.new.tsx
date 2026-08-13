@@ -1,25 +1,69 @@
 import {
+  ActionFunction,
+  data as json,
   useActionData,
   useFetcher,
   useNavigate,
   useOutletContext,
   useSubmit,
-} from "@remix-run/react";
-import { useEffect, useRef, useState } from "react";
+} from "react-router";
+import {
+  ChangeEvent,
+  DragEvent,
+  MouseEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { z, ZodError } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "react-toastify";
 import Select from "react-select";
-import { accounts, getIBJournalEntries } from "~/utils/accounts";
-import { generateNextEntryNumber } from "~/utils/verificationUtil";
+import { accounts } from "~/utils/accounts";
 import { Verifications } from "~/schemas/verifications";
-import { ActionFunction, json } from "@remix-run/node";
 import ClientOnly from "~/components/ClientOnly";
-import { classNames } from "~/utils/classnames";
 import { getDomain } from "~/utils/domain";
-import { loader as rootLoader } from "~/root";
 import { auth } from "~/services/auth.server";
+import {
+  AccountingYearClosedError,
+  createVerification,
+  ensureIncomingBalance,
+} from "~/services/verification.server";
+import {
+  accountingDateKey,
+  accountingMonthKey,
+  accountingYear,
+  parseAccountingDate,
+} from "~/utils/accountingDates";
+import {
+  deleteUploadedVerificationFile,
+  MAX_VERIFICATION_REQUEST_SIZE,
+  readVerifiedVerificationFile,
+  uploadVerificationFile,
+  validateVerificationFile,
+} from "~/services/verification-files.server";
+import { AccountingDateField } from "~/components/admin/AccountingDateField";
+import JournalEntryAmountField from "~/components/admin/JournalEntryAmountField";
+import ArrowIcon from "~/components/ArrowIcon";
+import PlusMinusIcon from "~/components/PlusMinusIcon";
+import {
+  hasMeaningfulVerificationInput,
+  sanitizeVerificationFileLabel,
+} from "~/utils/verificationFiles";
+import {
+  isEmptyJournalEntry,
+  VerificationValidationError,
+  withoutEmptyJournalEntries,
+} from "~/utils/verificationValidation";
+import {
+  getVerificationSuggestionDateNotice,
+  type VerificationSuggestionDateNotice,
+} from "~/utils/verificationSuggestionDates";
+import {
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 const formSchema = z.object({
   description: z.string().min(1, "Beskrivning är obligatorisk"),
@@ -28,29 +72,35 @@ const formSchema = z.object({
     .array(
       z.object({
         account: z.number().min(1, "Konto är obligatoriskt"),
-        debit: z.preprocess(
-          (v) => (v === "" || v === null ? 0 : parseFloat(v as string)),
-          z.number().min(0, "Debet måste vara ett tal")
-        ),
-        credit: z.preprocess(
-          (v) => (v === "" || v === null ? 0 : parseFloat(v as string)),
-          z.number().min(0, "Kredit måste vara ett tal")
-        ),
+        debit: z.number().min(0, "Debet måste vara ett tal"),
+        credit: z.number().min(0, "Kredit måste vara ett tal"),
       })
     )
-    .min(1, "Du måste lägga till minst en journalpost")
+    .min(2, "Du måste lägga till minst två konteringsrader")
     .refine(
-      (entries) => entries.some((entry) => entry.debit > 0 || entry.credit > 0),
+      (entries) =>
+        entries.every(
+          (entry) =>
+            (entry.debit > 0 && entry.credit === 0) ||
+            (entry.credit > 0 && entry.debit === 0)
+        ),
       {
-        message: "Varje rad måste ha ett debet eller kreditvärde",
+        message: "Varje rad måste ha belopp på exakt en av debet eller kredit",
       }
     ),
-  file: z
-    .object({
-      filePath: z.string().url(),
-      label: z.string(),
-    })
-    .optional(), // Markera filen som valfri
+});
+
+const clientFormSchema = formSchema.extend({
+  journalEntries: z
+    .array(
+      z.object({
+        account: z.number(),
+        debit: z.number(),
+        credit: z.number(),
+      })
+    )
+    .transform((entries) => withoutEmptyJournalEntries(entries))
+    .pipe(formSchema.shape.journalEntries),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -64,78 +114,148 @@ type VerificationData = {
   description: string;
   date: string;
   accounts: { [accountNumber: string]: AccountEntry };
-  file?: {
-    filePath: string;
-    label: string;
-  };
+};
+
+type SuggestedVerificationData = VerificationData & {
+  confidence?: number;
+  warnings?: string[];
+  sourceReference?: string;
+};
+
+type ReviewSuggestion = SuggestedVerificationData & {
+  uiId: string;
+};
+
+const ReviewWarnings = ({
+  label = "Saker att kontrollera",
+  warnings,
+}: {
+  label?: string;
+  warnings?: string[];
+}) => {
+  const uniqueWarnings = Array.from(
+    new Set(warnings?.map((warning) => warning.trim()).filter(Boolean) ?? [])
+  );
+  if (!uniqueWarnings.length) return null;
+
+  return (
+    <details className="mt-2 border-t border-[#ead8d1] pt-2 text-[#8d4b39]">
+      <summary className="flex min-h-8 list-none cursor-pointer items-center justify-between gap-3 text-[11px] font-bold marker:content-none">
+        <span>
+          {label} · {uniqueWarnings.length}
+        </span>
+        <span aria-hidden="true" className="text-base font-normal">
+          +
+        </span>
+      </summary>
+      <ul className="mt-1 space-y-1.5 pb-1 text-[11px] font-normal leading-4 text-stone-600">
+        {uniqueWarnings.map((warning) => (
+          <li key={warning} className="border-l border-[#d7b0a3] pl-2.5">
+            {warning}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+};
+
+const SuggestedDateNotice = ({
+  notice,
+}: {
+  notice: VerificationSuggestionDateNotice | null;
+}) => {
+  if (!notice) return null;
+
+  return (
+    <div
+      role={notice.blocksAutomaticDate ? "alert" : "status"}
+      className="mt-3 border-l-2 border-[#a85f4b] bg-[#fbf1ed] px-3 py-2 text-[11px] font-medium leading-5 text-[#7c4435]"
+    >
+      <strong className="block text-[10px] uppercase tracking-[0.12em]">
+        {notice.blocksAutomaticDate
+          ? "Datum utanför bokföringsåret"
+          : "Gammalt underlag"}
+      </strong>
+      {notice.message}
+    </div>
+  );
 };
 
 type SuggestionProps = {
   status: string;
-  verificationData: VerificationData;
+  verificationData: SuggestedVerificationData | null;
+  suggestions?: SuggestedVerificationData[];
+  file?: { label: string };
+  document?: { type: string; warnings: string[] };
   uuid: string;
+  error?: string;
 };
 
-export const loader = rootLoader;
-
 const FileUpload = ({
-  onSuggestionsReceived,
   onFileSelected,
 }: {
-  onSuggestionsReceived: (suggestions: SuggestionProps) => void;
-  onFileSelected: (file: File) => void; // Definiera en typ för callback-funktionen
+  onFileSelected: (file: File) => void;
 }) => {
-  const fileInputRef = useRef(null);
-  const fetcher = useFetcher<SuggestionProps>();
-  const [uuid, setUuid] = useState<String | null>();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (fetcher && fetcher.data) {
-      if (!uuid || uuid !== fetcher.data.uuid) {
-        setUuid(fetcher.data.uuid);
-        onSuggestionsReceived(fetcher.data);
-      }
-    }
-  }, [fetcher, fetcher.data]);
-
-  const handleFileInputClick = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    fileInputRef.current.click();
+  const submitFile = (file: File) => {
+    onFileSelected(file);
   };
 
-  const handleFileChange = (event) => {
+  const handleFileInputClick = (e: MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    const file = event.target.files[0];
+    const file = event.target.files?.[0];
     if (file) {
-      const formData = new FormData();
-      formData.append("file", file);
-      onFileSelected(file);
-      fetcher.submit(formData, {
-        action: "/admin/verifications/files/parse",
-        method: "post",
-        encType: "multipart/form-data",
-      });
-
+      submitFile(file);
       event.target.value = "";
     }
   };
 
   return (
-    <div>
+    <div
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        const file = event.dataTransfer.files[0];
+        if (file) submitFile(file);
+      }}
+      className="rounded-2xl border border-dashed border-stone-300 bg-[#fcfaf7] p-5 text-center transition hover:border-[#c58a79] hover:bg-[#fbf1ed] sm:p-7"
+    >
+      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[#f3e4de] text-lg font-bold text-[#985744]" aria-hidden="true">
+        <ArrowIcon direction="up" />
+      </div>
+      <p className="mt-3 text-sm font-bold text-slate-900">
+        Ladda upp ett underlag
+      </p>
+      <p className="mt-1 text-xs leading-5 text-slate-500">
+        PDF eller bild. Vi läser in datum, beskrivning och föreslagen kontering.
+      </p>
       <button
+        type="button"
         onClick={handleFileInputClick}
-        className="inline-flex justify-center mb-2 mt-2 px-4 py-2 w-full text-white text-base font-medium bg-blue-600 hover:bg-blue-700 border border-transparent rounded-md focus:outline-none shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:text-sm"
+        className="relative mt-4 inline-flex h-12 min-w-[13rem] items-center justify-center rounded-2xl border border-[#a85f4b] bg-[#a85f4b] px-12 text-sm font-bold text-white shadow-[0_7px_18px_rgba(126,67,51,0.14)] transition hover:-translate-y-px hover:border-[#8f4f3e] hover:bg-[#8f4f3e] focus:outline-none focus:ring-2 focus:ring-[#d7b0a3] focus:ring-offset-2"
       >
-        Välj fil
+        Välj fil från enheten
+        <span
+          aria-hidden="true"
+          className="absolute right-2.5 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white/15 text-base"
+        >
+          <ArrowIcon />
+        </span>
       </button>
       <input
         type="file"
         ref={fileInputRef}
         onChange={handleFileChange}
         className="hidden"
-        accept="application/pdf,image/*"
+        accept=".pdf,.avif,.gif,.heic,.heif,.jpeg,.jpg,.png,.tif,.tiff,.webp,application/pdf,image/avif,image/gif,image/heic,image/heif,image/jpeg,image/png,image/tiff,image/webp"
       />
     </div>
   );
@@ -147,27 +267,32 @@ const showVATToast = (
   onConfirm: () => void,
   onCancel: () => void
 ) => {
-  toast.info(
+  toast(
     <div>
-      Kontot är {account}. Vill du fördela moms ({devide})
-      <div className="flex space-x-4 mt-2">
+      <p className="text-sm font-bold text-stone-900">Fördela moms?</p>
+      <p className="mt-1 text-xs font-medium leading-5 text-stone-500">
+        Konto {account} har momskonto {devide}.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
         <button
+          type="button"
           onClick={() => {
             onConfirm();
             toast.dismiss(); // Stäng toasten efter valet
           }}
-          className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+          className="inline-flex h-9 items-center justify-center rounded-lg border border-[#a85f4b] bg-[#a85f4b] px-3.5 text-xs font-bold text-white transition hover:border-[#8f4f3e] hover:bg-[#8f4f3e]"
         >
-          Ja
+          Ja, fördela
         </button>
         <button
+          type="button"
           onClick={() => {
             onCancel();
             toast.dismiss(); // Stäng toasten efter valet
           }}
-          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+          className="inline-flex h-9 items-center justify-center rounded-lg border border-stone-300 bg-[#fffdf9] px-3.5 text-xs font-bold text-stone-600 transition hover:border-[#c58a79] hover:text-[#985744]"
         >
-          Nej
+          Utan moms
         </button>
       </div>
     </div>,
@@ -207,32 +332,82 @@ type ActionData =
       errors: { [key: string]: string };
     };
 
-export const action: ActionFunction = async ({ request, params }) => {
-  const formData = await request.formData();
-  const domain = getDomain(request);
+export const action: ActionFunction = async ({ request }) => {
   const user = await auth.isAuthenticated(request, {
     failureRedirect: "/login",
   });
+  const domain = getDomain(request);
+  let requestFormData: globalThis.FormData;
+  try {
+    requestFormData = await parseFormDataWithinLimit(
+      request,
+      MAX_VERIFICATION_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json(
+        { success: false, errors: { file: "Filen är större än 20 MB" } },
+        { status: 413 }
+      );
+    }
+    throw error;
+  }
 
   if (!domain) throw new Error("Could not find domain");
-  const description = formData.get("description");
-  const verificationDate = formData.get("verificationDate");
-  const journalEntries = JSON.parse(formData.get("journalEntries") as string);
+  const description = requestFormData.get("description");
+  const verificationDate = requestFormData.get("verificationDate");
+  const rawJournalEntries = requestFormData.get("journalEntries");
+  let journalEntries: FormData["journalEntries"];
+  try {
+    journalEntries = withoutEmptyJournalEntries(
+      JSON.parse(
+        typeof rawJournalEntries === "string" ? rawJournalEntries : ""
+      ) as FormData["journalEntries"]
+    );
+  } catch {
+    return json(
+      {
+        success: false,
+        errors: { journalEntries: "Konteringsraderna kunde inte läsas" },
+      },
+      { status: 400 }
+    );
+  }
 
-  // Deserialisera filinformationen om den finns
-  let file = null;
-  const fileData = formData.get("file");
-  if (fileData) {
+  if (typeof verificationDate !== "string") {
+    return json(
+      { success: false, errors: { verificationDate: "Datum är obligatoriskt" } },
+      { status: 400 }
+    );
+  }
+
+  const supportingFile = requestFormData.get("supportingFile");
+  const supportingFileLabel = requestFormData.get("supportingFileLabel");
+  let verifiedSupportingFile:
+    | Awaited<ReturnType<typeof readVerifiedVerificationFile>>
+    | undefined;
+  if (supportingFile instanceof File && supportingFile.size > 0) {
     try {
-      file = JSON.parse(fileData as string); // Filinmatningen är JSON, deserialisera den
+      validateVerificationFile(supportingFile);
+      verifiedSupportingFile = await readVerifiedVerificationFile(supportingFile);
     } catch (error) {
-      file = undefined;
+      return json(
+        { success: false, errors: { file: error instanceof Error ? error.message : "Ogiltig fil" } },
+        { status: 400 }
+      );
     }
   }
 
-  const dateForDatabase = new Date(verificationDate);
+  const dateForDatabase = parseAccountingDate(verificationDate);
+  if (!dateForDatabase) {
+    return json(
+      { success: false, errors: { verificationDate: "Datumet är ogiltigt" } },
+      { status: 400 }
+    );
+  }
 
-  if (user.fiscalYear !== dateForDatabase.getFullYear()) {
+  const verificationYear = accountingYear(dateForDatabase);
+  if (user.fiscalYear !== verificationYear) {
     return json(
       {
         success: false,
@@ -249,7 +424,6 @@ export const action: ActionFunction = async ({ request, params }) => {
   // Validera med Zod och kolla om resultatet är success
   const result = formSchema.safeParse({
     description,
-    file,
     verificationDate,
     journalEntries,
   });
@@ -280,13 +454,16 @@ export const action: ActionFunction = async ({ request, params }) => {
   });
 
   if (vatEntries.length > 0) {
-    let isVatRegistered = await Verifications.findOne({
+    const monthKey = accountingMonthKey(dateForDatabase);
+    const isVatRegistered = monthKey
+      ? await Verifications.findOne({
       domain: domain?.domain,
-      "metadata.key": "vatReport",
-      "metadata.value": `${dateForDatabase.getFullYear()}-${
-        dateForDatabase.getMonth() + 1
-      }`,
-    }).exec();
+      metadata: { $elemMatch: { key: "vatReport", value: monthKey } },
+    })
+        .select("_id")
+        .lean()
+        .exec()
+      : null;
 
     if (isVatRegistered) {
       return json(
@@ -303,70 +480,66 @@ export const action: ActionFunction = async ({ request, params }) => {
     }
   }
 
-  const firstVerification = await Verifications.findOne({
-    domain: domain?.domain,
-    verificationDate: {
-      $gte: new Date(dateForDatabase.getFullYear(), 0, 1), // Från årets början
-      $lte: new Date(dateForDatabase.getFullYear(), 11, 31), // Till årets slut
-    },
-  })
-    .sort({ verificationDate: 1 }) // Sortera i stigande ordning
-    .exec(); // Hämta resultatet
-
-  // This is the first verification for the year
-  if (!firstVerification) {
-    const journalEntries = await getIBJournalEntries(
-      domain.domain,
-      dateForDatabase.getFullYear() - 1
-    );
-    if (journalEntries.length > 0) {
-      await Verifications.create({
-        domain: domain?.domain,
-        verificationNumber: await generateNextEntryNumber(domain?.domain),
-        description: "Ingående balans",
-        verificationDate: new Date(dateForDatabase.getFullYear(), 0, 1),
-        metadata: [{ key: "IB", value: dateForDatabase.getFullYear() }],
-        journalEntries,
-      });
-    }
-  }
+  await ensureIncomingBalance(domain.domain, verificationYear);
 
   try {
-    const newVerification = new Verifications({
-      domain: domain?.domain,
-      description,
-      verificationNumber: await generateNextEntryNumber(domain?.domain),
-      verificationDate: dateForDatabase,
-      journalEntries,
-      files: file ? [{ name: file.label, path: file.filePath }] : [],
-    });
+    let uploadedFile: Awaited<ReturnType<typeof uploadVerificationFile>> | null = null;
+    try {
+      if (supportingFile instanceof File && supportingFile.size > 0) {
+        uploadedFile = await uploadVerificationFile(
+          supportingFile,
+          "documents",
+          verifiedSupportingFile
+        );
+      }
+      const newVerification = await createVerification({
+        domain: domain?.domain,
+        description: result.data.description,
+        verificationDate: dateForDatabase,
+        journalEntries: result.data.journalEntries,
+        files: uploadedFile
+          ? [
+              {
+                name:
+                  typeof supportingFileLabel === "string" &&
+                  supportingFileLabel.trim()
+                    ? sanitizeVerificationFileLabel(supportingFileLabel)
+                    : uploadedFile.name,
+                path: uploadedFile.path,
+              },
+            ]
+          : [],
+      });
 
-    await newVerification.save();
-
-    // find IB verification for next year
-    let ibVerification = await Verifications.findOne({
-      domain: domain?.domain,
-      "metadata.key": "IB",
-      "metadata.value": dateForDatabase.getFullYear() + 1,
-    }).exec();
-
-    if (ibVerification) {
-      // if found get current year journal entries
-      const journalEntries = await getIBJournalEntries(
-        domain.domain,
-        dateForDatabase.getFullYear()
-      );
-      ibVerification.journalEntries = journalEntries;
-      await ibVerification.save();
+      return json({
+        success: true,
+        message: "Verifikation sparades",
+        verification: newVerification,
+      });
+    } catch (error) {
+      if (uploadedFile) {
+        await deleteUploadedVerificationFile(uploadedFile.key).catch((cleanupError) =>
+          console.error("Kunde inte rensa en misslyckad filuppladdning", cleanupError)
+        );
+      }
+      throw error;
     }
-
-    return json({
-      success: true,
-      message: "Verifikation sparades",
-      verification: newVerification,
-    });
   } catch (e) {
-    console.log(e);
+    if (e instanceof AccountingYearClosedError) {
+      return json(
+        { success: false, errors: { yearError: { message: e.message } } },
+        { status: 409 }
+      );
+    }
+    if (e instanceof VerificationValidationError) {
+      return json(
+        { success: false, errors: { journalEntries: e.message } },
+        { status: 400 }
+      );
+    }
+    console.error("Verifikationen kunde inte sparas", {
+      name: e instanceof Error ? e.name : "UnknownError",
+    });
     return json(
       {
         success: false,
@@ -379,6 +552,7 @@ export const action: ActionFunction = async ({ request, params }) => {
 
 type ContextType = {
   latestVerificationNumber: number;
+  year: number;
 };
 
 enum UploadingState {
@@ -386,19 +560,46 @@ enum UploadingState {
   UPLOADING = 2,
   FAILED = 3,
   SUCCESS = 4,
+  REVIEW = 5,
 }
 
 export default function Verification() {
   const actionData = useActionData<ActionData>();
   const data = useOutletContext<ContextType>();
-  if (!data) return null;
   const submit = useSubmit();
-  const [uploadedFile, setUploadedFile] = useState(null); // Nytt state för att hålla filinfo
+  const interpretationFetcher = useFetcher<SuggestionProps>();
+  const handledInterpretationUuidRef = useRef<string | null>(null);
+  const preUploadFormValuesRef = useRef<FormData | null>(null);
+  const handleSuggestionsRef = useRef<(data: SuggestionProps) => void>(
+    () => undefined
+  );
+  const [uploadedFile, setUploadedFile] = useState<{ label: string } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [reviewSuggestions, setReviewSuggestions] = useState<ReviewSuggestion[]>([]);
+  const [interpretationWarnings, setInterpretationWarnings] = useState<string[]>([]);
+  const [protectingManualInput, setProtectingManualInput] = useState(false);
+  const [suggestedDateNotice, setSuggestedDateNotice] =
+    useState<VerificationSuggestionDateNotice | null>(null);
+  const saveSummaryRef = useRef<HTMLDivElement>(null);
+  const journalSectionRef = useRef<HTMLElement>(null);
+  const journalBottomRef = useRef<HTMLButtonElement>(null);
+  const [isSaveSummaryVisible, setIsSaveSummaryVisible] = useState(false);
+  const [isJournalSectionVisible, setIsJournalSectionVisible] = useState(false);
+  const [isJournalBottomVisible, setIsJournalBottomVisible] = useState(false);
   const navigate = useNavigate();
-  const previousVerification = useRef<number | null>(null);
+  const previousVerificationRef = useRef<number | null>(null);
   const [uploadingState, setUploadingState] = useState<UploadingState>(
     UploadingState.IDLE
   );
+  const [entryMode, setEntryMode] = useState<"choose" | "upload" | "manual">(
+    "choose"
+  );
+  const [initialVerificationDate] = useState(() => {
+    const now = new Date();
+    const today = accountingDateKey(now) ?? now.toISOString().split("T")[0];
+    return Number(today.slice(0, 4)) === data.year ? today : "";
+  });
 
   const {
     register,
@@ -407,11 +608,14 @@ export default function Verification() {
     getValues,
     reset,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<FormData>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(clientFormSchema),
     defaultValues: {
-      journalEntries: [{ account: 0, debit: undefined, credit: undefined }],
+      description: "",
+      verificationDate: initialVerificationDate,
+      journalEntries: [{ account: 0, debit: 0, credit: 0 }],
     },
   });
 
@@ -425,7 +629,7 @@ export default function Verification() {
 
     // Kontrollera om det finns fler än en rad
     if (journalEntries.length > 1) {
-      append({ account: undefined, debit: undefined, credit: undefined });
+      append({ account: 0, debit: 0, credit: 0 });
       return;
     }
 
@@ -449,63 +653,144 @@ export default function Verification() {
           // Lägg till momsrad
           append({
             account: vatAccount,
-            debit: debitOrCredit === "credit" ? undefined : Number(vatAmount),
-            credit: debitOrCredit === "debit" ? undefined : Number(vatAmount),
+            debit: debitOrCredit === "credit" ? 0 : Number(vatAmount),
+            credit: debitOrCredit === "debit" ? 0 : Number(vatAmount),
           });
 
           // Lägg till summeringsrad
           append({
-            account: undefined, // Tom rad för summering
+            account: 0, // Tom rad för summering
             debit:
               debitOrCredit === "debit"
-                ? undefined
+                ? 0
                 : Number(baseAmount) + Number(vatAmount),
             credit:
               debitOrCredit === "credit"
-                ? undefined
+                ? 0
                 : Number(baseAmount) + Number(vatAmount),
           });
         },
         () => {
-          append({ account: undefined, debit: undefined, credit: undefined });
+          append({ account: 0, debit: 0, credit: 0 });
         }
       );
       return;
     }
 
-    append({ account: undefined, debit: undefined, credit: undefined });
+    append({ account: 0, debit: 0, credit: 0 });
+  };
+
+  const applySuggestion = (
+    suggestion: SuggestedVerificationData,
+    documentWarnings: string[] = interpretationWarnings
+  ) => {
+    const dateNotice = getVerificationSuggestionDateNotice({
+      dateKey: suggestion.date,
+      fiscalYear: data.year,
+    });
+    remove(fields.map((_, index) => index));
+    setValue("description", suggestion.description || "");
+    setValue(
+      "verificationDate",
+      dateNotice?.blocksAutomaticDate ? "" : suggestion.date || ""
+    );
+    setSuggestedDateNotice(dateNotice);
+    Object.entries(suggestion.accounts).forEach(([accountNumber, values]) => {
+      append({
+        account: Number(accountNumber),
+        debit: values.debit || 0,
+        credit: values.credit || 0,
+      });
+    });
+    setInterpretationWarnings(
+      Array.from(new Set([...documentWarnings, ...(suggestion.warnings ?? [])]))
+    );
+    setReviewSuggestions([]);
+    setUploadError(null);
+    setProtectingManualInput(false);
+    setUploadingState(UploadingState.SUCCESS);
+  };
+
+  const removeUploadedMaterial = () => {
+    const previousManualValues = preUploadFormValuesRef.current;
+
+    reset(
+      previousManualValues ?? {
+        description: "",
+        verificationDate: initialVerificationDate,
+        journalEntries: [{ account: 0, debit: 0, credit: 0 }],
+      }
+    );
+    preUploadFormValuesRef.current = null;
+    setUploadedFile(null);
+    setSelectedFile(null);
+    setUploadError(null);
+    setReviewSuggestions([]);
+    setInterpretationWarnings([]);
+    setSuggestedDateNotice(null);
+    setProtectingManualInput(false);
+    setUploadingState(UploadingState.IDLE);
+    setEntryMode(previousManualValues ? "manual" : "choose");
   };
 
   function handleSuggestions(data: SuggestionProps): void {
-    if (data.status === "success" && data.verificationData) {
+    if (data.status === "success" && data.verificationData && data.file) {
       if (data && data.verificationData && data.verificationData.accounts) {
-        console.log("Success");
-        setUploadingState(UploadingState.SUCCESS);
-
-        remove(fields.map((_, index) => index));
-        setValue("description", data.verificationData.description || "");
-        setValue("verificationDate", data.verificationData.date || "");
         setUploadedFile(data.file);
-
-        Object.entries(data.verificationData.accounts).forEach(
-          ([accountNumber, values]) => {
-            append({
-              account: Number(accountNumber),
-              debit: values.debit || undefined,
-              credit: values.credit || undefined,
-            });
-          }
-        );
+        setUploadError(null);
+        if (protectingManualInput) {
+          setReviewSuggestions([
+            { ...data.verificationData, uiId: `${data.uuid}:suggestion:1` },
+          ]);
+          setInterpretationWarnings(data.document?.warnings ?? []);
+          setUploadingState(UploadingState.REVIEW);
+        } else {
+          applySuggestion(data.verificationData, data.document?.warnings ?? []);
+        }
       } else {
         setUploadingState(UploadingState.FAILED);
         console.error("Account data saknas");
       }
+    } else if (
+      data.status === "review" &&
+      data.file &&
+      data.suggestions &&
+      data.suggestions.length > 0
+    ) {
+      setUploadedFile(data.file);
+      setUploadError(null);
+      setReviewSuggestions(
+        data.suggestions.map((suggestion, suggestionPosition) => ({
+          ...suggestion,
+          uiId: `${data.uuid}:suggestion:${suggestionPosition + 1}`,
+        }))
+      );
+      setInterpretationWarnings(data.document?.warnings ?? []);
+      setUploadingState(UploadingState.REVIEW);
     } else {
-      console.log("FAILED");
+      setUploadError(
+        data.error ??
+          "Underlaget kunde inte tolkas. Prova igen eller fyll i manuellt."
+      );
       setUploadingState(UploadingState.FAILED);
-      append({ account: undefined, debit: undefined, credit: undefined });
+      if (fields.length === 0) append({ account: 0, debit: 0, credit: 0 });
     }
   }
+
+  handleSuggestionsRef.current = handleSuggestions;
+
+  useEffect(() => {
+    const response = interpretationFetcher.data;
+    if (
+      !response ||
+      handledInterpretationUuidRef.current === response.uuid
+    ) {
+      return;
+    }
+
+    handledInterpretationUuidRef.current = response.uuid;
+    handleSuggestionsRef.current(response);
+  }, [interpretationFetcher.data]);
 
   const showToast = (message: string) => {
     toast.warn(message, {
@@ -516,7 +801,7 @@ export default function Verification() {
       pauseOnHover: true,
       draggable: false,
       progress: undefined,
-      theme: "dark",
+      theme: "light",
     });
   };
 
@@ -556,10 +841,16 @@ export default function Verification() {
       const verificationNumber = actionData.verification.verificationNumber;
 
       // Kör endast om verifikationsnumret är nytt
-      if (verificationNumber !== previousVerification.current) {
+      if (verificationNumber !== previousVerificationRef.current) {
         // Uppdatera föregående verifikationsnummer
-        previousVerification.current = verificationNumber;
+        previousVerificationRef.current = verificationNumber;
         setUploadedFile(null);
+        setSelectedFile(null);
+        preUploadFormValuesRef.current = null;
+        setReviewSuggestions([]);
+        setInterpretationWarnings([]);
+        setSuggestedDateNotice(null);
+        setProtectingManualInput(false);
         reset();
         // Visa toast
         toast.success(`Verifikation ${verificationNumber} sparades`, {
@@ -570,276 +861,823 @@ export default function Verification() {
           pauseOnHover: true,
           draggable: false,
           progress: undefined,
-          theme: "dark",
+          theme: "light",
         });
+        navigate("/admin/verifications");
       }
     }
-  }, [actionData, previousVerification]);
+  }, [actionData, navigate, previousVerificationRef, reset]);
+
+  const currentEntries = watch("journalEntries") || [];
+  const currentEntriesForSaving = withoutEmptyJournalEntries(currentEntries);
+  const currentDescription = watch("description") || "";
+  const currentVerificationDate = watch("verificationDate") || "";
+  const currentSums = currentEntriesForSaving.reduce(
+    (sum, entry) => ({
+      debit: sum.debit + Number(entry?.debit || 0),
+      credit: sum.credit + Number(entry?.credit || 0),
+    }),
+    { debit: 0, credit: 0 }
+  );
+  const balanceDifference = Number(
+    Math.abs(currentSums.debit - currentSums.credit).toFixed(2)
+  );
+  const isBalanced =
+    currentSums.debit > 0 && currentSums.credit > 0 && balanceDifference === 0;
+  const hasStartedVerification =
+    Boolean(selectedFile) ||
+    hasMeaningfulVerificationInput({
+      description: currentDescription,
+      journalEntries: currentEntries,
+      verificationDate: currentVerificationDate,
+      initialVerificationDate,
+    });
+  const interpretationBlocksForm =
+    uploadingState === UploadingState.UPLOADING ||
+    uploadingState === UploadingState.REVIEW ||
+    uploadingState === UploadingState.FAILED;
+  const showVerificationActions =
+    hasStartedVerification && !interpretationBlocksForm;
+  const hasIncompleteJournalEntry = currentEntries.some((entry) => {
+    if (isEmptyJournalEntry(entry)) return false;
+
+    const debit = Number(entry?.debit || 0);
+    const credit = Number(entry?.credit || 0);
+    return (
+      Number(entry?.account || 0) <= 0 ||
+      !((debit > 0 && credit === 0) || (credit > 0 && debit === 0))
+    );
+  });
+  const saveBlockReason = !currentDescription.trim()
+    ? "Skriv en beskrivning för att kunna spara."
+    : !currentVerificationDate
+      ? "Välj bokföringsdatum för att kunna spara."
+      : currentEntriesForSaving.length < 2
+        ? "Minst två kompletta konteringsrader krävs."
+        : hasIncompleteJournalEntry
+          ? "Fyll i den påbörjade konteringsraden."
+          : !isBalanced
+            ? "Debet och kredit måste balansera."
+            : null;
+  const isReadyToSave =
+    showVerificationActions &&
+    !saveBlockReason &&
+    formSchema.safeParse({
+      description: currentDescription,
+      verificationDate: currentVerificationDate,
+      journalEntries: currentEntriesForSaving,
+    }).success;
+
+  useEffect(() => {
+    const saveSummary = saveSummaryRef.current;
+    if (!saveSummary || typeof IntersectionObserver === "undefined") {
+      setIsSaveSummaryVisible(false);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsSaveSummaryVisible(entry.isIntersecting),
+      { threshold: 0.05 }
+    );
+    observer.observe(saveSummary);
+    return () => observer.disconnect();
+  }, [showVerificationActions]);
+
+  useEffect(() => {
+    const journalSection = journalSectionRef.current;
+    const journalBottom = journalBottomRef.current;
+    if (
+      !showVerificationActions ||
+      !journalSection ||
+      !journalBottom ||
+      typeof IntersectionObserver === "undefined"
+    ) {
+      return;
+    }
+
+    const sectionObserver = new IntersectionObserver(
+      ([entry]) => setIsJournalSectionVisible(entry.isIntersecting),
+      { threshold: 0 }
+    );
+    const bottomObserver = new IntersectionObserver(
+      ([entry]) => setIsJournalBottomVisible(entry.isIntersecting),
+      { threshold: 0.01 }
+    );
+    sectionObserver.observe(journalSection);
+    bottomObserver.observe(journalBottom);
+
+    return () => {
+      sectionObserver.disconnect();
+      bottomObserver.disconnect();
+    };
+  }, [showVerificationActions]);
+  const showMobileModeChoice =
+    entryMode === "choose" && !hasStartedVerification;
+  const showMobileUpload =
+    entryMode === "upload" ||
+    Boolean(selectedFile) ||
+    uploadingState !== UploadingState.IDLE;
+  const showMobileManual =
+    entryMode === "manual" ||
+    (hasStartedVerification && !selectedFile) ||
+    uploadingState === UploadingState.SUCCESS ||
+    protectingManualInput;
+  const singleReviewSuggestion =
+    reviewSuggestions.length === 1 ? reviewSuggestions[0] : null;
+  const singleReviewWarnings = singleReviewSuggestion
+    ? Array.from(
+        new Set([
+          ...(singleReviewSuggestion.warnings ?? []),
+          ...interpretationWarnings,
+        ])
+      )
+    : [];
+  const singleReviewDateNotice = singleReviewSuggestion
+    ? getVerificationSuggestionDateNotice({
+        dateKey: singleReviewSuggestion.date,
+        fiscalYear: data.year,
+      })
+    : null;
+
+  const submitVerification = handleSubmit((formValues) => {
+    const journalEntries = withoutEmptyJournalEntries(formValues.journalEntries);
+    const sums = journalEntries.reduce(
+      (sum, { debit = 0, credit = 0 }) => ({
+        debit: sum.debit + Number(debit),
+        credit: sum.credit + Number(credit),
+      }),
+      { debit: 0, credit: 0 }
+    );
+
+    if (sums.debit.toFixed(2) !== sums.credit.toFixed(2)) {
+      toast.warn(
+        `Debet ${sums.debit.toLocaleString("sv-SE", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} kr och kredit ${sums.credit.toLocaleString("sv-SE", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} kr måste vara lika.`,
+        {
+          position: "top-right",
+          autoClose: 2500,
+          hideProgressBar: true,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: false,
+          theme: "light",
+        }
+      );
+      return;
+    }
+
+    const submission = new FormData();
+    submission.append("description", formValues.description);
+    submission.append("verificationDate", formValues.verificationDate);
+    submission.append("journalEntries", JSON.stringify(journalEntries));
+    if (selectedFile) {
+      submission.append("supportingFile", selectedFile);
+      if (uploadedFile?.label) {
+        submission.append("supportingFileLabel", uploadedFile.label);
+      }
+    }
+    submit(submission, { method: "post", encType: "multipart/form-data" });
+  });
 
   return (
-    <div
-      className="fixed z-10 inset-0 overflow-y-auto"
-      aria-labelledby="modal-title"
-      role="dialog"
-      aria-modal="true"
+    <section
+      aria-labelledby="new-verification-title"
+      className="verification-page w-full min-w-0 max-w-full"
     >
-      <div className="flex items-center justify-center min-h-screen text-center sm:block sm:p-0">
-        <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"></div>
-        <span
-          className="hidden sm:inline-block sm:align-middle sm:h-screen"
-          aria-hidden="true"
-        >
-          &#8203;
-        </span>
-        <div className="inline-block align-bottom w-full max-w-md  bg-white rounded-lg text-left shadow-xl overflow-hidden transform transition-all sm:align-middle sm:max-w-6xl">
-          <div className="bg-white px-6 py-5">
-            <div className="sm:flex sm:items-start">
-              <div className="w-full sm:text-left">
-                <h3
-                  className="text-lg leading-6 font-medium text-gray-900"
-                  id="modal-title"
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <div>
+          <button
+            type="button"
+            onClick={() => navigate("/admin/verifications")}
+            className="mb-3 inline-flex h-10 items-center rounded-lg px-1 text-xs font-bold text-slate-500 hover:text-slate-900"
+          >
+            <span aria-hidden="true" className="mr-2"><ArrowIcon direction="left" /></span>
+            Till verifikationer
+          </button>
+          <h2
+            id="new-verification-title"
+            className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl"
+          >
+            Ny verifikation
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Nästa verifikationsnummer blir A{data.latestVerificationNumber + 1}.
+          </p>
+        </div>
+      </div>
+
+      <form
+        onSubmit={submitVerification}
+        className="w-full min-w-0 max-w-full space-y-5"
+      >
+        <div className="verification-mobile-mode">
+          {showMobileModeChoice ? (
+            <section aria-labelledby="verification-mode-title" className="border-y border-stone-300 py-5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#985744]">
+                Välj arbetssätt
+              </p>
+              <h3 id="verification-mode-title" className="mt-1 text-2xl text-stone-950">
+                Hur vill du börja?
+              </h3>
+              <div className="mt-4 divide-y divide-stone-200 border-y border-stone-200">
+                <button
+                  type="button"
+                  onClick={() => setEntryMode("upload")}
+                  className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 py-4 text-left"
                 >
-                  Ny verifikation
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#f7e9e4] text-[#985744]" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                      <path d="M12 16V5M8 9l4-4 4 4M5 19h14" />
+                    </svg>
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold text-stone-900">Ladda upp underlag</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-stone-500">
+                      Vi läser datum, beskrivning och föreslagen kontering.
+                    </span>
+                  </span>
+                  <span className="text-lg text-stone-400 transition group-hover:translate-x-0.5 group-hover:text-[#985744]" aria-hidden="true"><ArrowIcon /></span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEntryMode("manual")}
+                  className="group grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 py-4 text-left"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-600" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+                      <path d="M6 5h12v14H6zM9 9h6M9 13h6" />
+                    </svg>
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold text-stone-900">Registrera manuellt</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-stone-500">
+                      Fyll i uppgifter och konteringsrader själv.
+                    </span>
+                  </span>
+                  <span className="text-lg text-stone-400 transition group-hover:translate-x-0.5 group-hover:text-[#985744]" aria-hidden="true"><ArrowIcon /></span>
+                </button>
+              </div>
+            </section>
+          ) : !hasStartedVerification && uploadingState === UploadingState.IDLE ? (
+            <button
+              type="button"
+              onClick={() => setEntryMode("choose")}
+              className="inline-flex min-h-10 items-center text-xs font-bold text-stone-500 transition hover:text-[#985744]"
+            >
+              <span aria-hidden="true" className="mr-2"><ArrowIcon direction="left" /></span>
+              Byt registreringssätt
+            </button>
+          ) : null}
+        </div>
+
+        <div className="verification-layout grid w-full min-w-0 max-w-full gap-5">
+          <div
+            className={`${showMobileManual ? "block" : "hidden"} verification-manual min-w-0 space-y-5 ${
+              uploadingState === UploadingState.UPLOADING ? "opacity-60" : ""
+            }`}
+          >
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+              <div className="mb-5">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#985744]">
+                  Grunduppgifter
+                </p>
+                <h3 className="mt-1 text-lg font-bold text-slate-950">
+                  Vad gäller verifikationen?
                 </h3>
-                <div className="mt-6 space-y-2">
-                  {uploadingState === UploadingState.UPLOADING && (
-                    <div className="w-full p-4 bg-white rounded-lg shadow-lg">
-                      <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-                        <div className="h-full w-full bg-[repeating-linear-gradient(45deg,_#3b82f6_0px,_#3b82f6_10px,_#60a5fa_10px,_#60a5fa_20px)] bg-[length:120%_100%] animate-stripe"></div>
-                      </div>
-                      <p className="text-sm mt-2 text-gray-600">
-                        Laddar upp...
-                      </p>
-                    </div>
-                  )}
-                  {uploadingState === UploadingState.FAILED && (
-                    <div className="w-full p-4 bg-red-500 rounded-lg shadow-lg">
-                      <div className="w-full h-6 overflow-hidden relative">
-                        <div
-                          className="absolute right-0 top-0"
-                          onClick={() => {
-                            setUploadingState(UploadingState.IDLE);
-                          }}
-                        >
-                          <svg
-                            className="w-5 h-5"
-                            viewBox="0 0 20 20"
-                            fill="#fff"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </div>
-                      </div>
-                      <p className="text-sm mt-2 text-white">
-                        Kunde inte tolka den uppladdade filen
-                      </p>
-                    </div>
-                  )}
+              </div>
 
-                  <form
-                    onSubmit={handleSubmit((data) => {
-                      const sums = data.journalEntries.reduce(
-                        (acc, { debit = 0, credit = 0 }) => ({
-                          debit: acc.debit + Number(debit),
-                          credit: acc.credit + Number(credit),
-                        }),
-                        { debit: 0, credit: 0 }
-                      );
-
-                      if (sums.debit.toFixed(2) !== sums.credit.toFixed(2)) {
-                        toast.warn(
-                          `Debit: ${sums.debit} och kredit: ${sums.credit} stämmer inte överens`,
-                          {
-                            position: "top-right",
-                            autoClose: 2000,
-                            hideProgressBar: true,
-                            closeOnClick: true,
-                            pauseOnHover: true,
-                            draggable: false,
-                            theme: "dark",
-                          }
-                        );
-                      } else {
-                        const formData = {
-                          ...data,
-                          file: uploadedFile
-                            ? JSON.stringify(uploadedFile)
-                            : {},
-                          journalEntries: JSON.stringify(data.journalEntries),
-                        };
-                        console.log(formData);
-                        submit(formData, { method: "post" });
-                      }
-                    })}
-                    className={classNames(
-                      "space-y-2",
-                      uploadingState === UploadingState.UPLOADING ||
-                        uploadingState === UploadingState.FAILED
-                        ? "hidden"
-                        : ""
-                    )}
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_200px]">
+                <div>
+                  <label
+                    htmlFor="description"
+                    className="mb-1.5 block text-xs font-bold text-slate-700"
                   >
-                    <div className="flex flex-col space-y-4 sm:flex-row sm:space-x-4 sm:space-y-0">
-                      {/* Description Column */}
-                      <div className="flex-1">
-                        <label
-                          htmlFor="description"
-                          className="block text-sm font-medium text-gray-700"
-                        >
-                          Beskrivning:
-                        </label>
-                        <input
-                          {...register("description")}
-                          type="text"
-                          className={`input mt-1 block w-full px-3 py-2 border rounded-md shadow-sm sm:text-sm ${
-                            errors.description
-                              ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                              : "border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-                          }`}
-                        />
-                      </div>
-                      {/* Date Column */}
-                      <div className="flex-1">
-                        <label
-                          htmlFor="verificationDate"
-                          className="block text-sm font-medium text-gray-700"
-                        >
-                          Datum:
-                        </label>
-                        <input
-                          {...register("verificationDate")}
-                          type="date"
-                          defaultValue={new Date().toISOString().split("T")[0]}
-                          className={`input mt-1 block w-full px-3 py-2 border rounded-md shadow-sm sm:text-sm ${
-                            errors.verificationDate
-                              ? "border-red-500 focus:ring-red-500 focus:border-red-500"
-                              : "border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-                          }`}
-                        />
-                      </div>
+                    Beskrivning
+                  </label>
+                  <input
+                    id="description"
+                    {...register("description")}
+                    type="text"
+                    autoComplete="off"
+                    placeholder="Exempel: Inköp av emballage"
+                    className={`h-12 w-full rounded-xl border bg-white px-4 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-2 sm:text-sm ${
+                      errors.description
+                        ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+                        : "border-slate-300 focus:border-[#ad644f] focus:ring-[#f3e4de]"
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="verificationDate"
+                    className="mb-1.5 block text-xs font-bold text-slate-700"
+                  >
+                    Bokföringsdatum
+                  </label>
+                  <Controller
+                    control={control}
+                    name="verificationDate"
+                    render={({ field }) => (
+                      <AccountingDateField
+                        id="verificationDate"
+                        value={field.value}
+                        onChange={(value) => {
+                          field.onChange(value);
+                          setSuggestedDateNotice(null);
+                        }}
+                        label="Välj bokföringsdatum"
+                        error={
+                          Boolean(errors.verificationDate) ||
+                          Boolean(suggestedDateNotice?.blocksAutomaticDate)
+                        }
+                        allowedYear={data.year}
+                      />
+                    )}
+                  />
+                  <SuggestedDateNotice notice={suggestedDateNotice} />
+                </div>
+              </div>
+            </section>
+
+            <section
+              ref={journalSectionRef}
+              className="min-w-0 max-w-full overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-4 sm:p-6">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#985744]">
+                    Kontering
+                  </p>
+                  <h3 className="mt-1 text-lg font-bold text-slate-950">
+                    Debet och kredit
+                  </h3>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Lägg till minst två rader. Summorna måste balansera innan du sparar.
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                  {fields.length} {fields.length === 1 ? "rad" : "rader"}
+                </span>
+              </div>
+
+              <div className="min-w-0 max-w-full p-4 sm:p-6">
+                <div
+                  data-testid="verification-journal-rows"
+                  className="min-w-0 max-w-full space-y-4"
+                >
+                {showVerificationActions &&
+                fields.length > 2 &&
+                isJournalSectionVisible &&
+                !isJournalBottomVisible &&
+                !isSaveSummaryVisible ? (
+                <div
+                  data-testid="verification-balance-dock"
+                  role="status"
+                  aria-live="polite"
+                  aria-label={
+                    isBalanced
+                      ? "Konteringen balanserar"
+                      : `Konteringen skiljer ${balanceDifference.toLocaleString("sv-SE", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })} kronor`
+                  }
+                  className="verification-balance-dock pointer-events-none z-20"
+                >
+                  <div
+                    className={`verification-balance-dock-panel grid grid-cols-3 divide-x border-t px-4 pt-2.5 shadow-[0_-8px_24px_rgba(78,55,47,0.1)] backdrop-blur-md sm:px-6 ${
+                      isBalanced
+                        ? "divide-stone-200 border-stone-300 bg-[#fffdf9]/98"
+                        : "divide-[#e4c8bf] border-[#c98773] bg-[#fbf1ed]/98"
+                    }`}
+                  >
+                    <div className="min-w-0 px-2 sm:px-3">
+                      <p className="text-[8px] font-bold uppercase tracking-[0.12em] text-stone-400 sm:text-[9px]">
+                        Debet
+                      </p>
+                      <p className="mt-0.5 truncate text-[11px] font-bold tabular-nums text-stone-900 sm:text-xs">
+                        {currentSums.debit.toLocaleString("sv-SE", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </p>
+                    </div>
+                    <div className="min-w-0 px-2 sm:px-3">
+                      <p className="text-[8px] font-bold uppercase tracking-[0.12em] text-stone-400 sm:text-[9px]">
+                        Kredit
+                      </p>
+                      <p className="mt-0.5 truncate text-[11px] font-bold tabular-nums text-stone-900 sm:text-xs">
+                        {currentSums.credit.toLocaleString("sv-SE", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </p>
+                    </div>
+                    <div className="min-w-0 px-2 text-right sm:px-3">
+                      <p
+                        className={`text-[8px] font-bold uppercase tracking-[0.12em] sm:text-[9px] ${
+                          isBalanced ? "text-stone-400" : "text-[#985744]"
+                        }`}
+                      >
+                        Diff
+                      </p>
+                      <p
+                        className={`mt-0.5 truncate text-[11px] font-bold tabular-nums sm:text-xs ${
+                          isBalanced ? "text-stone-700" : "text-[#985744]"
+                        }`}
+                      >
+                        {balanceDifference.toLocaleString("sv-SE", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                ) : null}
+
+                {fields.map((entry, index) => (
+                  <div
+                    key={entry.id}
+                    className="verification-entry-card w-full min-w-0 max-w-full rounded-[1.25rem] border border-stone-200 bg-[#fbfaf8] p-4 shadow-[0_1px_0_rgba(41,37,36,0.03)] sm:p-5"
+                  >
+                    <div className="mb-4 flex min-h-[2rem] items-center border-b border-stone-200 pb-3">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-stone-500">
+                        Konteringsrad {index + 1}
+                      </p>
                     </div>
 
-                    {/* Journal Entries Section */}
-                    <div className="space-y-2">
-                      {fields.map((entry, index) => (
-                        <div
-                          key={entry.id}
-                          className="flex flex-col space-y-2 sm:flex-row sm:space-x-2 sm:space-y-0"
+                    <div className="verification-entry-grid grid w-full min-w-0 max-w-full gap-3">
+                      <div className="min-w-0">
+                        <label
+                          className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.13em] text-stone-500"
+                          htmlFor={`account-select-${index}`}
                         >
-                          <div className="flex-1">
-                            <Controller
-                              control={control}
-                              key={`account-select-${index}.controller`}
-                              name={`journalEntries.${index}.account`}
-                              render={({ field }) => (
-                                <ClientOnly fallback={null}>
-                                  {() => (
-                                    <Select
-                                      instanceId={`account-select-${index}`}
-                                      {...field}
-                                      options={accounts}
-                                      onChange={(option) =>
-                                        field.onChange(
-                                          option ? option.value : null
-                                        )
-                                      }
-                                      value={accounts.find(
-                                        (acc) => acc.value === field.value
-                                      )}
-                                      placeholder="Välj konto"
-                                    />
+                          Konto
+                        </label>
+                        <Controller
+                          control={control}
+                          name={`journalEntries.${index}.account`}
+                          render={({ field }) => (
+                            <ClientOnly fallback={<div className="h-[3.25rem] rounded-2xl bg-stone-100" />}>
+                              {() => (
+                                <Select
+                                  instanceId={`account-select-${index}`}
+                                  inputId={`account-select-${index}`}
+                                  {...field}
+                                  options={accounts}
+                                  onChange={(option) =>
+                                    field.onChange(option ? option.value : null)
+                                  }
+                                  value={accounts.find(
+                                    (account) => account.value === field.value
                                   )}
-                                </ClientOnly>
+                                  placeholder="Sök eller välj konto"
+                                  className="min-w-0 max-w-full text-sm"
+                                  classNamePrefix="verification-account"
+                                />
                               )}
-                            />
-                          </div>
-                          <input
-                            type="number"
-                            step="0.01"
-                            placeholder="Debet"
-                            {...register(
-                              `journalEntries.${index}.debit` as const
-                            )}
-                            className="input h-10 mt-1 block px-3 py-2 border rounded-md shadow-sm sm:text-sm"
-                          />
-                          <input
-                            type="number"
-                            step="0.01"
-                            placeholder="Kredit"
-                            {...register(
-                              `journalEntries.${index}.credit` as const
-                            )}
-                            className="input h-10 mt-1 block px-3 py-2 border rounded-md shadow-sm sm:text-sm"
-                          />
-                          <div>
-                            <button
-                              type="button"
-                              onClick={() => remove(index)}
-                              className="bg-slate-800 text-white rounded-md px-4 py-2 sm:py-1 mt-1"
-                            >
-                              Ta bort
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="flex h-10 space-x-2 ">
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => handleAddRow()}
-                          className="inline-flex justify-center mb-2 mt-2 px-4 py-2 w-full text-white text-base font-medium bg-blue-600 hover:bg-blue-700 border border-transparent rounded-md focus:outline-none shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:text-sm"
-                        >
-                          Lägg till rad
-                        </button>
+                            </ClientOnly>
+                          )}
+                        />
                       </div>
-                      <div>
-                        <button
-                          type="submit"
-                          className="inline-flex justify-center mb-2 mt-2 px-4 py-2 w-full text-white text-base font-medium bg-blue-600 hover:bg-blue-700 border border-transparent rounded-md focus:outline-none shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:text-sm"
-                        >
-                          Spara
-                        </button>
-                      </div>
-                      <FileUpload
-                        onSuggestionsReceived={handleSuggestions}
-                        onFileSelected={(file) => {
-                          setTimeout(() => {
-                            setUploadingState(UploadingState.UPLOADING);
 
-                            remove(fields.map((_, index) => index));
-                            setValue("description", "");
-                            setValue(
-                              "verificationDate",
-                              new Date().toISOString().split("T")[0]
-                            );
-                          }, 100);
+                      <JournalEntryAmountField
+                        id={`journal-entry-${index}`}
+                        debit={Number(currentEntries[index]?.debit || 0)}
+                        credit={Number(currentEntries[index]?.credit || 0)}
+                        onChange={({ debit, credit }) => {
+                          setValue(`journalEntries.${index}.debit`, debit, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                          setValue(`journalEntries.${index}.credit`, credit, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
                         }}
                       />
                     </div>
-                  </form>
+                  </div>
+                ))}
                 </div>
+
+                <button
+                  ref={journalBottomRef}
+                  type="button"
+                  onClick={handleAddRow}
+                  className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-[#fffdf9] px-5 text-sm font-bold text-stone-600 transition hover:border-[#c58a79] hover:bg-[#fbf3ef] hover:text-[#985744] sm:w-auto"
+                >
+                  <span aria-hidden="true" className="mr-2 text-lg"><PlusMinusIcon /></span>
+                  Lägg till konteringsrad
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <aside className={`${showMobileUpload ? "block" : "hidden"} verification-aside min-w-0 max-w-full space-y-3`}>
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#985744]">
+                  Underlag
+                </p>
+                <h3 className="mt-1 text-base font-bold text-slate-950">
+                  Snabbast med en fil
+                </h3>
+              </div>
+
+              {uploadingState === UploadingState.UPLOADING ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className="border-y border-stone-200 py-4"
+                >
+                  <div className="flex items-start gap-3.5">
+                    <span
+                      aria-hidden="true"
+                      className="relative mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center"
+                    >
+                      <span className="absolute h-8 w-8 animate-ping rounded-full bg-[#c98773]/15 motion-reduce:animate-none" />
+                      <span className="relative h-2.5 w-2.5 rounded-full bg-[#a85f4b]" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#985744]">
+                        Läser underlag
+                      </p>
+                      <p className="mt-1 truncate font-serif text-lg leading-tight text-stone-950">
+                        {selectedFile?.name ?? "Vald fil"}
+                      </p>
+                      {protectingManualInput ? (
+                        <p className="mt-1 text-xs leading-5 text-stone-500">
+                          Dina ifyllda uppgifter ligger kvar.
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ) : uploadingState === UploadingState.FAILED ? (
+                <div
+                  role="alert"
+                  className="border-y border-[#d7b0a3] py-5"
+                >
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#985744]">
+                    Uppladdningen avbröts
+                  </p>
+                  <p className="mt-1 font-serif text-lg leading-tight text-stone-950">
+                    Det gick inte att läsa filen
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-stone-600">
+                    {uploadError ??
+                      "Prova igen med en PDF eller vanlig bildfil."}
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFile(null);
+                        setUploadedFile(null);
+                        setUploadError(null);
+                        setProtectingManualInput(false);
+                        setUploadingState(UploadingState.IDLE);
+                      }}
+                      className="inline-flex h-10 items-center border-b border-[#a85f4b] px-0.5 text-xs font-bold text-[#985744] transition hover:text-[#7c4435]"
+                    >
+                      Välj en annan fil
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFile(null);
+                        setUploadedFile(null);
+                        setUploadError(null);
+                        setReviewSuggestions([]);
+                        setInterpretationWarnings([]);
+                        setProtectingManualInput(false);
+                        setUploadingState(UploadingState.IDLE);
+                        setEntryMode("manual");
+                      }}
+                      className="inline-flex h-10 items-center px-0.5 text-xs font-bold text-stone-500 transition hover:text-stone-900"
+                    >
+                      Fortsätt manuellt
+                    </button>
+                  </div>
+                </div>
+              ) : uploadingState === UploadingState.REVIEW && singleReviewSuggestion ? (
+                <div className="border-y border-[#d7b0a3] py-4">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#985744]">
+                    Kontrollera förslaget
+                  </p>
+                  <SuggestedDateNotice notice={singleReviewDateNotice} />
+                  <button
+                    type="button"
+                    onClick={() => applySuggestion(singleReviewSuggestion)}
+                    className="group mt-2 block w-full text-left"
+                  >
+                    <span className="line-clamp-2 text-sm font-bold leading-5 text-stone-900">
+                      {singleReviewSuggestion.description}
+                    </span>
+                    <span className="mt-1 block text-[11px] text-stone-500">
+                      {singleReviewSuggestion.date}
+                      {singleReviewSuggestion.sourceReference
+                        ? ` · ${singleReviewSuggestion.sourceReference}`
+                        : ""}
+                    </span>
+                    <span className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-[#985744] transition group-hover:text-[#7c4435]">
+                      {singleReviewDateNotice?.blocksAutomaticDate
+                        ? "Använd och välj datum"
+                        : "Använd förslaget"}
+                      <span aria-hidden="true"><ArrowIcon /></span>
+                    </span>
+                  </button>
+                  <ReviewWarnings warnings={singleReviewWarnings} />
+                </div>
+              ) : uploadingState === UploadingState.REVIEW ? (
+                <div className="space-y-3 rounded-2xl border border-[#d7b0a3] bg-[#fbf3ef] p-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-[#985744]">
+                      {protectingManualInput
+                        ? "Förslag från underlaget"
+                        : "Välj bokföringspost"}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-[#7d493a]">
+                      {protectingManualInput
+                        ? "Dina ifyllda uppgifter ligger kvar."
+                        : "Välj posten som ska bokföras."}
+                    </p>
+                  </div>
+                  {reviewSuggestions.map((suggestion) => {
+                    const dateNotice = getVerificationSuggestionDateNotice({
+                      dateKey: suggestion.date,
+                      fiscalYear: data.year,
+                    });
+                    return (
+                    <div
+                      key={suggestion.uiId}
+                      className="rounded-xl border border-[#dfc1b7] bg-white transition hover:border-[#b86e59]"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => applySuggestion(suggestion)}
+                        className="block w-full p-3 text-left"
+                      >
+                        <span className="line-clamp-2 text-xs font-bold leading-5 text-stone-900">
+                          {suggestion.description}
+                        </span>
+                        <span className="mt-1 block text-[11px] text-stone-500">
+                          {suggestion.date}{suggestion.sourceReference ? ` · ${suggestion.sourceReference}` : ""}
+                        </span>
+                        <span className="mt-2 block text-[11px] font-bold text-[#985744]">
+                          {dateNotice?.blocksAutomaticDate
+                            ? "Använd och välj datum"
+                            : "Använd förslaget"}
+                        </span>
+                      </button>
+                      <div className="px-3 pb-2">
+                        <SuggestedDateNotice notice={dateNotice} />
+                        <ReviewWarnings warnings={suggestion.warnings} />
+                      </div>
+                    </div>
+                    );
+                  })}
+                  <ReviewWarnings
+                    label="Om dokumentet"
+                    warnings={interpretationWarnings}
+                  />
+                </div>
+              ) : uploadedFile ? (
+                <div className="rounded-2xl border border-[#dfbcae] bg-[#fbf1ed] p-4">
+                  <p className="text-xs font-bold uppercase tracking-wide text-[#985744]">
+                    Underlag kopplat
+                  </p>
+                  <p className="mt-1 truncate text-sm font-bold text-stone-900">
+                    {uploadedFile.label}
+                  </p>
+                  <ReviewWarnings warnings={interpretationWarnings} />
+                  <button
+                    type="button"
+                    onClick={removeUploadedMaterial}
+                    className="mt-3 inline-flex min-h-10 items-center text-xs font-bold text-[#985744] transition hover:text-[#7c4435]"
+                  >
+                    Ta bort underlag
+                  </button>
+                </div>
+              ) : (
+                <FileUpload
+                  onFileSelected={(file) => {
+                    setEntryMode("upload");
+                    const currentValues = getValues();
+                    const hasManualInput = hasMeaningfulVerificationInput({
+                      description: currentValues.description,
+                      journalEntries: currentValues.journalEntries,
+                      verificationDate: currentValues.verificationDate,
+                      initialVerificationDate,
+                    });
+                    preUploadFormValuesRef.current = hasManualInput
+                      ? {
+                          description: currentValues.description,
+                          verificationDate: currentValues.verificationDate,
+                          journalEntries: currentValues.journalEntries.map(
+                            (entry) => ({ ...entry })
+                          ),
+                        }
+                      : null;
+                    setSelectedFile(file);
+                    setUploadedFile({ label: file.name });
+                    setUploadError(null);
+                    setReviewSuggestions([]);
+                    setInterpretationWarnings([]);
+                    setSuggestedDateNotice(null);
+                    setProtectingManualInput(hasManualInput);
+                    setUploadingState(UploadingState.UPLOADING);
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    interpretationFetcher.submit(formData, {
+                      action: "/admin/verifications/files/parse",
+                      method: "post",
+                      encType: "multipart/form-data",
+                    });
+                  }}
+                />
+              )}
+            </section>
+
+            <div className="verification-desktop-note hidden rounded-2xl border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-500 shadow-sm">
+              <p className="font-bold text-slate-800">Manuell registrering</p>
+              <p className="mt-1">
+                Det går lika bra att fylla i uppgifterna direkt utan underlag.
+              </p>
+            </div>
+          </aside>
+        </div>
+
+        {showVerificationActions ? (
+          <div
+            ref={saveSummaryRef}
+            className="w-full min-w-0 max-w-full border-t border-stone-300 pt-4"
+          >
+            {saveBlockReason ? (
+              <p
+                id="verification-save-block-reason"
+                role="status"
+                className="mb-3 text-xs font-semibold leading-5 text-[#985744]"
+              >
+                {saveBlockReason}
+              </p>
+            ) : null}
+            <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-end gap-4 sm:flex sm:items-center sm:justify-between">
+              <div className="grid grid-cols-2 gap-5 sm:flex sm:gap-6">
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">Debet</p>
+                  <p className="mt-0.5 text-xs font-bold tabular-nums text-slate-900 sm:mt-1 sm:text-base">
+                    {currentSums.debit.toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400 sm:text-[10px]">Kredit</p>
+                  <p className="mt-0.5 text-xs font-bold tabular-nums text-slate-900 sm:mt-1 sm:text-base">
+                    {currentSums.credit.toLocaleString("sv-SE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="hidden sm:block">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Status</p>
+                  <p className="mt-1 text-sm font-bold text-[#985744]">
+                    {isBalanced ? "Balanserar" : "Inte klar"}
+                  </p>
+                </div>
+                <span className="sr-only">
+                  {isBalanced ? "Konteringen balanserar" : "Konteringen är inte klar"}
+                </span>
+              </div>
+
+              <div className="sm:grid sm:gap-3 sm:grid-cols-[9.5rem_15rem]">
+                <button
+                  type="button"
+                  onClick={() => navigate("/admin/verifications")}
+                  className="hidden h-14 w-full items-center justify-center rounded-2xl border border-stone-300 bg-[#fffdf9] px-5 text-sm font-bold text-stone-700 transition hover:-translate-y-px hover:border-[#c58a79] hover:bg-white hover:text-[#985744] focus:outline-none focus:ring-2 focus:ring-[#e7c8be] focus:ring-offset-2 sm:inline-flex"
+                >
+                  Avbryt
+                </button>
+                <button
+                  type="submit"
+                  disabled={!isReadyToSave}
+                  aria-describedby={saveBlockReason ? "verification-save-block-reason" : undefined}
+                  className="inline-flex h-12 min-w-[7.75rem] items-center justify-center gap-2 rounded-xl border border-[#a85f4b] bg-[#a85f4b] px-4 text-sm font-bold text-white shadow-[0_6px_16px_rgba(126,67,51,0.14)] transition hover:-translate-y-px hover:border-[#8f4f3e] hover:bg-[#8f4f3e] focus:outline-none focus:ring-2 focus:ring-[#d7b0a3] focus:ring-offset-2 disabled:cursor-not-allowed disabled:border-stone-300 disabled:bg-stone-200 disabled:text-stone-500 disabled:shadow-none disabled:hover:translate-y-0 sm:h-14 sm:w-full sm:rounded-2xl sm:px-6"
+                >
+                  <span className="sm:hidden">Spara</span>
+                  <span className="hidden sm:inline">Spara verifikation</span>
+                  <span aria-hidden="true" className="text-base"><ArrowIcon /></span>
+                </button>
               </div>
             </div>
           </div>
-          <div className="bg-gray-50 px-6 py-3 flex justify-end">
-            <div>
-              <button
-                type="button"
-                className="inline-flex justify-center mb-2 mt-2 px-4 py-2 w-full text-white text-base font-medium bg-blue-600 hover:bg-blue-700 border border-transparent rounded-md focus:outline-none shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto sm:text-sm"
-                onClick={() => navigate(-1)}
-              >
-                Stäng
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+        ) : null}
+      </form>
+    </section>
   );
 }

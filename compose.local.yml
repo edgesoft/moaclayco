@@ -1,0 +1,30 @@
+name: moaclayco-local
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    env_file:
+      - ${APP_ENV_FILE:-.env.stage.local}
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      CHOKIDAR_USEPOLLING: "true"
+      REMIX_DEV_INSTANCE: docker
+    ports:
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - .:/app
+      - moaclayco_node_modules:/app/node_modules
+    init: true
+    healthcheck:
+      test: ["CMD", "node", "tools/smoke-check.mjs", "--url=http://localhost:3000", "--timeout=4000"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  moaclayco_node_modules:

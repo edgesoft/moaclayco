@@ -1,8 +1,20 @@
-import Stripe from 'stripe'
+import Stripe from "stripe";
+import {
+  getConfiguredStripeApiVersion,
+  toStripeSdkApiVersion,
+  type SupportedStripeRequestApiVersion,
+} from "~/services/stripe-config.server";
 
-const stripeClient = new Stripe(process.env.STRIPE_SRV || "", {
-    apiVersion: '2023-08-16'
-});
+export const stripeApiVersion = getConfiguredStripeApiVersion();
 
+export const createStripeClient = (
+  secretKey = process.env.STRIPE_SRV || "",
+  apiVersion: SupportedStripeRequestApiVersion = stripeApiVersion
+) =>
+  new Stripe(secretKey, {
+    apiVersion: toStripeSdkApiVersion(apiVersion),
+  });
 
-export default stripeClient
+const stripeClient = createStripeClient();
+
+export default stripeClient;

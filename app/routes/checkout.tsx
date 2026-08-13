@@ -1,212 +1,410 @@
-import { MetaFunction, LoaderFunction } from "@remix-run/node";
-import { useLoaderData, useNavigation } from "@remix-run/react";
+import {
+  Link,
+  LoaderFunctionArgs,
+  MetaFunction,
+  redirect,
+  useLoaderData,
+} from "react-router";
 import {
   Elements,
   PaymentElement,
   useElements,
   useStripe,
 } from "@stripe/react-stripe-js";
-import stripeClient from "../stripeClient";
 import {
   loadStripe,
   Stripe,
   StripeElementLocale,
+  StripeElementsOptions,
   StripePaymentElement,
 } from "@stripe/stripe-js";
-import { Orders } from "~/schemas/orders";
+import mongoose from "mongoose";
 import { useEffect, useRef, useState } from "react";
-import { classNames } from "~/utils/classnames";
-import Loader from "../components/loader";
-import Terms from "../components/terms";
-import { Order } from "../types";
-import Feedback from "../components/feedback";
-import { getDomain } from "~/utils/domain";
+import ArrowIcon from "~/components/ArrowIcon";
+import OrderSummary from "~/components/cart/OrderSummary";
+import Terms from "~/components/terms";
 import { themes } from "~/components/Theme";
-
-declare global {
-  interface Window {
-    ENV: any;
-  }
-}
+import { Orders } from "~/schemas/orders";
+import { orderCookie } from "~/services/order-cookie.server";
+import { Order } from "~/types";
+import { getDomain } from "~/utils/domain";
+import { toLoaderData } from "~/utils/loaderData";
+import { checkoutOrderProjection } from "~/utils/queryProjections.server";
 
 let stripePromise: Stripe | PromiseLike<Stripe | null> | null = null;
-if (typeof window !== "undefined") {
-  stripePromise = loadStripe(window ? window.ENV.STRIPE_PUBLIC_KEY : "");
+if (typeof document !== "undefined") {
+  const publicKey = document.querySelector<HTMLMetaElement>(
+    'meta[name="stripe-public-key"]'
+  )?.content;
+  stripePromise = loadStripe(publicKey ?? "");
 }
 
-export let loader: LoaderFunction = async ({ request }) => {
-  let url = new URL(await request.url);
-  let body = new URLSearchParams(url.search);
-  const order: Order | null = await Orders.findOne({ _id: body.get("order") });
-  const domain = getDomain(request)
-  if (!domain) throw new Error("Could not find domain")
-  const theme = themes[domain?.domain]
-
-  if (!order) {
-    throw new Error("Order not found");
-  }
-
-  if (order && order.paymentIntent?.id) {
-    const paymentIntent = await stripeClient.paymentIntents.update(
-      order.paymentIntent.id,
-      {
-        amount: order.totalSum * 100,
-        currency: "sek",
-        payment_method_types: theme.paymentMethods,
-      }
-    );
-    return { clientSecret: paymentIntent.client_secret, domain };
-  }
-
-  const paymentIntent = await stripeClient.paymentIntents.create({
-    amount: order.totalSum * 100,
-    currency: "sek",
-    payment_method_types: theme.paymentMethods,
-  });
-
-  await Orders.updateOne(
-    { _id: order._id },
-    {
-      paymentIntent: {
-        id: paymentIntent.id,
-        client_secret: paymentIntent.client_secret,
-      },
-    }
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const url = new URL(request.url);
+  const requestedOrderId = url.searchParams.get("order") ?? "";
+  const cookieOrderId = String(
+    (await orderCookie.parse(request.headers.get("Cookie"))) ?? ""
   );
+  const domain = getDomain(request);
 
-  return { domain, clientSecret: paymentIntent.client_secret };
+  if (!domain || !themes[domain.domain]) {
+    throw new Response("Okänd butik", { status: 404 });
+  }
+  if (
+    requestedOrderId !== cookieOrderId ||
+    !mongoose.Types.ObjectId.isValid(requestedOrderId)
+  ) {
+    return redirect("/cart");
+  }
+
+  const order = (await Orders.findOne({
+    _id: requestedOrderId,
+    domain: domain.domain,
+    status: { $in: ["OPENED", "PENDING"] },
+  })
+    .select(checkoutOrderProjection)
+    .lean()
+    .exec()) as Order | null;
+
+  if (!order?.paymentIntent?.client_secret) {
+    return redirect("/cart");
+  }
+
+  return toLoaderData({
+    clientSecret: order.paymentIntent.client_secret,
+    domain,
+    order: {
+      discount: order.discount,
+      freightCost: order.freightCost,
+      items: order.items.map((item) => ({
+        _id: String(item._id ?? item.itemRef),
+        additionalItems: item.additionalItems ?? [],
+        image: item.image,
+        itemRef: String(item.itemRef),
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+      })),
+      totalSum: order.totalSum,
+    },
+    testMode:
+      process.env.STRIPE_PUBLIC_KEY?.startsWith("pk_test_") === true &&
+      process.env.STRIPE_SRV?.startsWith("sk_test_") === true,
+  });
 };
 
-export let meta: MetaFunction = ({data}) => {
-  const theme = themes[data.domain.domain]
+export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
+  const theme = themes[loaderData?.domain.domain ?? "moaclayco"];
   return [
-    {
-      title: theme.longName
-    },
-    {
-      name: "description",
-      content: theme.longName
-    },
+    { title: `Betalning — ${theme.longName}` },
+    { name: "description", content: `Slutför din beställning hos ${theme.longName}` },
   ];
 };
 
-interface Props {
-  setShow: (show: boolean) => void;
-}
-
-type ClientType = {
-  clientSecret?: string;
+type CheckoutFormProps = {
+  onReady: () => void;
 };
 
-export default function Index() {
-  let data: ClientType = useLoaderData();
-  let transition = useNavigation();
-  const [show, setShow] = useState(false);
-  const locale: StripeElementLocale = "sv";
+function CheckoutForm({ onReady }: CheckoutFormProps) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const paymentElementRef = useRef<StripePaymentElement | null>(null);
+  const termsRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string>();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [useLink, setUseLink] = useState(true);
+  const [showTerms, setShowTerms] = useState(false);
 
-  const options = {
-    clientSecret: data.clientSecret,
-    locale,
-  };
+  useEffect(() => {
+    if (!error) return;
+    const handle = window.setTimeout(() => setError(undefined), 5000);
+    return () => window.clearTimeout(handle);
+  }, [error]);
 
-  const CheckoutForm = ({ setShow }: Props) => {
-    const stripe = useStripe();
-    const elements = useElements();
-    const termsRef: React.RefObject<HTMLInputElement> = useRef(null);
-    const [error, showError] = useState<string | undefined>(undefined);
-    const [showTerm, setShowTerm] = useState<boolean>(false);
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
 
-    useEffect(() => {
-      if (error) {
-        setTimeout(() => {
-          showError(undefined);
-        }, 2000);
+    if (!stripe || !elements || isSubmitting) return;
+    if (!termsRef.current?.checked) {
+      setError("Du måste godkänna villkoren innan du går vidare.");
+      termsRef.current?.focus();
+      return;
+    }
+
+    setError(undefined);
+    setIsSubmitting(true);
+
+    const { error: submitError } = await elements.submit();
+    if (submitError) {
+      setError(submitError.message ?? "Kontrollera betalningsuppgifterna.");
+      setIsSubmitting(false);
+
+      if (
+        submitError.code === "incomplete_number" ||
+        submitError.code === "invalid_number"
+      ) {
+        window.requestAnimationFrame(() => paymentElementRef.current?.focus());
       }
-    }, [error]);
+      return;
+    }
 
-    const handleSubmit = async (event: React.FormEvent) => {
-      event.preventDefault();
+    const result = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: `${location.protocol}//${location.host}/order`,
+      },
+    });
 
-      if (!stripe || !elements) {
-        return;
-      }
-      const agreeTerms = termsRef.current && termsRef.current.checked;
-      if (agreeTerms) {
-        const result = await stripe.confirmPayment({
-          elements,
-          confirmParams: {
-            return_url: `${location.protocol}//${location.host}/order`,
-          },
-        });
-
-        if (result.error) {
-          showError(result.error.message);
-        }
-      } else {
-        showError("Du måste godkänna villkoren");
-      }
-    };
-
-    return (
-      <form onSubmit={handleSubmit}>
-        {showTerm ? <Terms show={setShowTerm} /> : null}
-        <PaymentElement
-          onReady={(e: StripePaymentElement) => {
-            setShow(true);
-          }}
-        />
-        <div className="flex mt-3">
-          <input
-            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            ref={termsRef}
-            type="checkbox"
-          />{" "}
-          <span
-            className="-mt-2 px-1 py-1 underline"
-            onClick={() => {
-              setShowTerm(true);
-            }}
-          >
-            Jag godkänner villkoren
-          </span>
-        </div>
-        <button
-          disabled={!stripe}
-          className="mt-2 p-2 text-gray-700 font-medium bg-rosa rounded"
-        >
-          Gå vidare till betalning
-        </button>
-        <Feedback
-          headline="Fel i formulär"
-          forceInvisble={!error}
-          type="error"
-          message={error}
-        />
-      </form>
-    );
+    if (result.error) {
+      setError(result.error.message ?? "Betalningen kunde inte startas.");
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <Elements stripe={stripePromise} options={options}>
-      <>
-        <Loader forceSpinner={!show} transition={transition} />
-        <section
-          className={classNames(
-            show && transition.state !== "loading"
-              ? "mx-auto px-4 py-5 max-w-6xl sm:px-6 lg:px-4 visible"
-              : "hidden"
-          )}
+    <form className="mcc-checkout-form" onSubmit={handleSubmit}>
+      {showTerms ? <Terms show={setShowTerms} /> : null}
+
+      <div className="mcc-checkout-payment-choice">
+        <p>
+          {useLink
+            ? "Link har valt ditt sparade kort. Du kan använda det eller fylla i ett annat kort."
+            : "Fyll i kortet du vill använda. Dina kortuppgifter hanteras av Stripe."}
+        </p>
+        <button
+          aria-pressed={!useLink}
+          onClick={() => {
+            setError(undefined);
+            setUseLink((current) => !current);
+          }}
+          type="button"
         >
-          <div className="grid gap-6 grid-cols-1 my-20 lg:grid-cols-2">
-            <div className="flex flex-col w-full bg-gray-50 rounded-lg shadow-lg">
-              <div className="p-2">
-                <div className="mb-1 text-gray-700 text-xl">Betalning</div>
-                <CheckoutForm setShow={setShow} />
+          {useLink ? "Använd ett annat kort" : "Använd mitt sparade Link-kort"}
+        </button>
+      </div>
+
+      <PaymentElement
+        key={useLink ? "link" : "card-entry"}
+        onReady={(element) => {
+          paymentElementRef.current = element;
+          onReady();
+        }}
+        options={{
+          layout: "tabs",
+          wallets: { link: useLink ? "auto" : "never" },
+        }}
+      />
+
+      <div className="mcc-checkout-terms">
+        <label>
+          <input ref={termsRef} type="checkbox" />
+          <span aria-hidden="true" className="mcc-checkout-checkbox" />
+          <span>Jag godkänner</span>
+        </label>
+        <button onClick={() => setShowTerms(true)} type="button">
+          villkoren
+        </button>
+      </div>
+
+      {error ? (
+        <p aria-live="polite" className="mcc-checkout-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <button
+        aria-busy={isSubmitting}
+        className="mcc-checkout-submit"
+        disabled={!stripe || isSubmitting}
+        type="submit"
+      >
+        {isSubmitting ? (
+          <>
+            <span aria-hidden="true" className="mcc-button-spinner" />
+            Öppnar betalningen…
+          </>
+        ) : (
+          <>
+            Betala säkert
+            <ArrowIcon />
+          </>
+        )}
+      </button>
+
+      <Link className="mcc-checkout-cart-return" to="/cart">
+        <ArrowIcon direction="left" />
+        Tillbaka till varukorgen
+      </Link>
+    </form>
+  );
+}
+
+export default function CheckoutPage() {
+  const data = useLoaderData<typeof loader>();
+  const [paymentReady, setPaymentReady] = useState(false);
+  const locale: StripeElementLocale = "sv";
+  const options: StripeElementsOptions = {
+    clientSecret: data.clientSecret,
+    locale,
+    appearance: {
+      theme: "flat",
+      variables: {
+        borderRadius: "2px",
+        colorBackground: "#fffdf9",
+        colorDanger: "#a34d45",
+        colorPrimary: "#9a5946",
+        colorText: "#242321",
+        colorTextSecondary: "#74706a",
+        fontFamily:
+          'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontSizeBase: "14px",
+        spacingGridRow: "14px",
+      },
+      rules: {
+        ".AccordionItem": {
+          border: "1px solid rgba(74, 68, 61, 0.20)",
+          boxShadow: "none",
+        },
+        ".Input": {
+          backgroundColor: "transparent",
+          border: "0",
+          borderBottom: "1px solid #aaa39a",
+          borderRadius: "0",
+          boxShadow: "none",
+          color: "#242321",
+          fontSize: "14px",
+          padding: "8px 1px",
+        },
+        ".Input:focus": {
+          border: "0",
+          borderBottom: "1px solid #b86e59",
+          boxShadow: "none",
+        },
+        ".Input--invalid": {
+          border: "0",
+          borderBottom: "1px solid #b6534d",
+          boxShadow: "none",
+        },
+        ".Input::placeholder": {
+          color: "#b0aaa2",
+        },
+        ".Label": {
+          color: "#6f6962",
+          fontSize: "9px",
+          fontWeight: "700",
+          letterSpacing: "0.11em",
+          textTransform: "uppercase",
+        },
+        ".Tab": {
+          backgroundColor: "#fffdf9",
+          border: "1px solid rgba(74, 68, 61, 0.20)",
+          boxShadow: "none",
+          color: "#74706a",
+        },
+        ".Tab:hover": {
+          backgroundColor: "#fbf7f1",
+          border: "1px solid rgba(184, 110, 89, 0.55)",
+          color: "#965542",
+        },
+        ".Tab--selected": {
+          backgroundColor: "#fbf7f1",
+          border: "1px solid #b86e59",
+          boxShadow: "inset 0 -3px 0 #b86e59",
+          color: "#242321",
+        },
+        ".TabIcon": {
+          color: "#7f7a73",
+        },
+        ".TabIcon--selected": {
+          color: "#965542",
+        },
+        ".TabLabel--selected": {
+          color: "#242321",
+        },
+      },
+    },
+  };
+
+  return (
+    <main className="mcc-purchase-page mcc-checkout-page">
+      <div className="mcc-purchase-shell">
+        <header className="mcc-purchase-hero">
+          <Link className="mcc-purchase-back" to="/cart">
+            <ArrowIcon direction="left" />
+            Tillbaka till varukorgen
+          </Link>
+
+          <div className="mcc-purchase-hero__copy">
+            <p className="mcc-purchase-kicker">Sista steget</p>
+            <h1>Betalning</h1>
+            <p>Välj hur du vill betala. Dina uppgifter hanteras säkert av Stripe.</p>
+          </div>
+
+          <ol aria-label="Steg i köpet" className="mcc-purchase-steps">
+            <li>
+              <span>01</span> Varukorg
+            </li>
+            <li aria-current="step">
+              <span>02</span> Betalning
+            </li>
+            <li>
+              <span>03</span> Klart
+            </li>
+          </ol>
+        </header>
+
+        {data.testMode ? (
+          <p className="mcc-purchase-test-note">
+            <span aria-hidden="true">○</span>
+            Testläge — inga riktiga pengar dras
+          </p>
+        ) : null}
+
+        <div className="mcc-checkout-layout">
+          <section
+            aria-busy={!paymentReady}
+            aria-labelledby="payment-method-heading"
+            className="mcc-checkout-payment"
+          >
+            <div className="mcc-purchase-section-heading">
+              <h2 id="payment-method-heading">Välj betalsätt</h2>
+              <span>Säkert med Stripe</span>
+            </div>
+
+            <div
+              className={`mcc-checkout-element${
+                paymentReady ? " is-ready" : ""
+              }`}
+            >
+              {!paymentReady ? (
+                <div className="mcc-checkout-placeholder" role="status">
+                  <span className="mcc-checkout-placeholder__line" />
+                  <div>
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                  <p>Läser in säkra betalsätt…</p>
+                </div>
+              ) : null}
+              <div className="mcc-checkout-element__content">
+                <Elements options={options} stripe={stripePromise}>
+                  <CheckoutForm onReady={() => setPaymentReady(true)} />
+                </Elements>
               </div>
             </div>
-          </div>
-        </section>
-      </>
-    </Elements>
+
+            <div className="mcc-checkout-assurance">
+              <span aria-hidden="true">◇</span>
+              <p>
+                Betalningen krypteras. Moa Clay Co sparar aldrig dina kortuppgifter.
+              </p>
+            </div>
+          </section>
+
+          <OrderSummary {...data.order} />
+        </div>
+      </div>
+    </main>
   );
 }

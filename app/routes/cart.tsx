@@ -1,38 +1,44 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useCart } from "react-use-cart";
-import { AnimatePresence, motion } from "framer-motion";
-import { MetaFunction, useFetcher } from "@remix-run/react";
-import Loader from "~/components/loader";
-import { HashLink } from "react-router-hash-link";
+import type {
+  ActionFunction,
+  LoaderFunction,
+  MetaFunction,
+} from "react-router";
 import { Items } from "../schemas/items";
 import { Orders } from "../schemas/orders";
 import { Discounts } from "~/schemas/discounts";
-import { classNames } from "~/utils/classnames";
-import { FREE_FREIGHT } from "~/utils/constants";
 import getFreightCost from "~/utils/getFreightCost";
-import useStickyState from "../hooks/useStickyState";
-import Feedback from "../components/feedback";
-import { ActionFunction, createCookie, json, redirect } from "@remix-run/node";
-import React from "react";
+import { data as json, redirect } from "react-router";
 import ClientOnly from "~/components/ClientOnly";
-import { getNextUrl } from "~/utils/getNextUrl";
-import { domains, getDomain } from "~/utils/domain";
+import { getDomain } from "~/utils/domain";
+import { z } from "zod";
+import mongoose from "mongoose";
+import stripeClient from "~/stripeClient";
+import { themes } from "~/components/Theme";
+import { orderCookie } from "~/services/order-cookie.server";
+import CartView from "~/components/cart/CartView";
+import {
+  buildCheckoutPaymentIntent,
+  checkoutAttemptCookie,
+  createCheckoutAttemptToken,
+  createCheckoutFingerprint,
+  isCheckoutAttemptToken,
+} from "~/services/checkout-payment.server";
+import {
+  MAX_STANDARD_FORM_REQUEST_SIZE,
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 export let meta: MetaFunction = () => {
   return [
     {
-      title: "Moa Clay Collection",
+      title: "Varukorg — Moa Clay Collection",
     },
     {
       name: "description",
       content: "Moa Clay Collection",
     },
   ];
-};
-
-type Id = {
-  id: string;
 };
 
 enum ItemError {
@@ -49,606 +55,399 @@ type ErrorItemVal = {
   };
 };
 
-const getDiscount = (balance:number, percentage: number, cartTotal: number): number => {
-  if (balance === 0) return 0
-  return Math.round(cartTotal * (percentage / 100));
+const cartLineSchema = z
+  .object({
+    id: z.string().min(1).max(100),
+    parentId: z.string().max(100).nullable().optional(),
+    quantity: z.number().int().positive().max(100),
+    price: z.number().finite().nonnegative().optional(),
+  })
+  .passthrough();
+
+const cartSchema = z.array(cartLineSchema).min(1).max(500);
+
+const customerSchema = z.object({
+  firstname: z.string().trim().min(1).max(100),
+  lastname: z.string().trim().min(1).max(100),
+  postaddress: z.string().trim().min(1).max(200),
+  zipcode: z.string().trim().min(1).max(20),
+  city: z.string().trim().min(1).max(100),
+  email: z.string().trim().email().max(254),
+});
+
+const toCents = (amount: number) => Math.round(amount * 100);
+const fromCents = (amount: number) => amount / 100;
+
+const cartError = (
+  message: string,
+  items: true | ErrorItemVal = true,
+  init: ResponseInit = {}
+) =>
+  json(
+    {
+      key: Date.now(),
+      errors: { items, message },
+    },
+    { ...init, status: init.status ?? 400 }
+  );
+
+const isDuplicateKeyError = (error: unknown) =>
+  Boolean(
+    error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === 11000
+  );
+
+export const loader: LoaderFunction = async ({ request }) => {
+  const checkoutToken = await checkoutAttemptCookie.parse(
+    request.headers.get("Cookie")
+  );
+  if (isCheckoutAttemptToken(checkoutToken)) return json({});
+
+  return json(
+    {},
+    {
+      headers: {
+        "Set-Cookie": await checkoutAttemptCookie.serialize(
+          createCheckoutAttemptToken()
+        ),
+      },
+    }
+  );
+};
+
+const redirectToCheckout = async (orderId: string) => {
+  const headers = new Headers();
+  headers.append("Set-Cookie", await orderCookie.serialize(orderId));
+  headers.append(
+    "Set-Cookie",
+    await checkoutAttemptCookie.serialize("", { maxAge: 0 })
+  );
+  return redirect(`/checkout?order=${orderId}`, { headers });
 };
 
 export let action: ActionFunction = async ({ request }) => {
-  let body = new URLSearchParams(await request.text());
-  const domain = getDomain(request)
-  
-  const data = JSON.parse(body.get("items") || "");
-  const [items, discount] = await Promise.all([
-    Items.find(
-      {
-        _id: { $in: data.filter((d: any) => !d.parentId).map((d: Id) => d.id) },
-      },
-      { amount: 1, price: 1 }
-    ),
-    Discounts.findOne({ domain: domain?.domain, code: body.get("discount") }),
-  ]);
-
-
-  if (items.length !== data.filter((d: any) => !d.parentId).length) {
-    return json({
-      key: new Date().getTime(),
-      errors: {
-        items: true,
-        message: "Artiklar är borttagna. Var god ladda om!",
-      },
-    });
+  const resolvedDomain = getDomain(request);
+  if (!resolvedDomain || !themes[resolvedDomain.domain]) {
+    throw new Response("Okänd butik", { status: 404 });
   }
 
-  const itemErrors = items.reduce<ErrorItemVal>((acc, item) => {
-    const s = data
-      .filter((d: any) => !d.parentId)
-      .find((d: Id) => d.id === item.id);
-    if (s.price !== item.price) {
-      acc[s.id] = {
-        error: `Priset är uppdaterat`,
-        clientValue: `${s.price}`,
-        serverValue: `${item.price}`,
+  const checkoutToken = await checkoutAttemptCookie.parse(
+    request.headers.get("Cookie")
+  );
+  if (!isCheckoutAttemptToken(checkoutToken)) {
+    return cartError(
+      "Betalningssessionen saknas. Försök igen.",
+      true,
+      {
+        status: 409,
+        headers: {
+          "Set-Cookie": await checkoutAttemptCookie.serialize(
+            createCheckoutAttemptToken()
+          ),
+        },
+      }
+    );
+  }
+
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(
+      request,
+      MAX_STANDARD_FORM_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return cartError("Kundvagnen innehåller för mycket data.", true, {
+        status: 413,
+      });
+    }
+    throw error;
+  }
+
+  let untrustedItems: unknown;
+  try {
+    untrustedItems = JSON.parse(String(formData.get("items") ?? ""));
+  } catch {
+    return cartError("Kundvagnen kunde inte läsas. Ladda om sidan och försök igen.");
+  }
+
+  const parsedCart = cartSchema.safeParse(untrustedItems);
+  const parsedCustomer = customerSchema.safeParse({
+    firstname: formData.get("firstname"),
+    lastname: formData.get("lastname"),
+    postaddress: formData.get("postaddress"),
+    zipcode: formData.get("zipcode"),
+    city: formData.get("city"),
+    email: formData.get("email"),
+  });
+  if (!parsedCart.success) {
+    return cartError("Kundvagnen innehåller ogiltiga antal eller artiklar. Ladda om sidan.");
+  }
+  if (!parsedCustomer.success) {
+    return cartError("Kontrollera att leveransadress och e-postadress är korrekt ifyllda.");
+  }
+
+  const data = parsedCart.data;
+  const parentLines = data.filter((line) => !line.parentId);
+  const childLines = data.filter((line) => Boolean(line.parentId));
+  const parentIds = parentLines.map((line) => line.id);
+  if (
+    parentIds.length === 0 ||
+    new Set(parentIds).size !== parentIds.length ||
+    parentIds.some((id) => !mongoose.Types.ObjectId.isValid(id))
+  ) {
+    return cartError("Kundvagnen innehåller dubbla eller ogiltiga artiklar. Ladda om sidan.");
+  }
+
+  const products = await Items.find({
+    _id: { $in: parentIds },
+    domain: resolvedDomain.domain,
+  })
+    .select("headline price images amount collectionRef additionalItems")
+    .lean();
+  if (products.length !== parentLines.length) {
+    return cartError("En eller flera artiklar finns inte längre kvar. Ladda om sidan.");
+  }
+
+  const productsById = new Map(
+    products.map((product: any) => [String(product._id), product])
+  );
+  const itemErrors: ErrorItemVal = {};
+  for (const line of parentLines) {
+    const product: any = productsById.get(line.id);
+    if (!product) continue;
+    if (line.price !== undefined && toCents(line.price) !== toCents(product.price)) {
+      itemErrors[line.id] = {
+        error: "Priset är uppdaterat",
+        clientValue: `${line.price}`,
+        serverValue: `${product.price}`,
         type: ItemError.PRICE,
       };
     }
-
-    if (s.quantity > item.amount) {
-      acc[s.id] = {
-        error: `Saldot överstiger`,
-        clientValue: `${s.quantity}`,
-        serverValue: `${item.amount}`,
+    if (line.quantity > product.amount) {
+      itemErrors[line.id] = {
+        error: "Saldot överstiger",
+        clientValue: `${line.quantity}`,
+        serverValue: `${product.amount}`,
         type: ItemError.BALANCE,
       };
     }
-    return acc;
-  }, {});
-
-  if (Object.keys(itemErrors).length > 0)
-    return json({
-      key: new Date().getTime(),
-      errors: {
-        items: itemErrors,
-        message: itemErrors[Object.keys(itemErrors)[0]].error,
-      },
-    });
-
-  const totalSum = data.reduce((acc: number, item: any) => {
-    acc += item.price * item.quantity;
-    return acc;
-  }, 0);
-
-  const freightCost = getFreightCost(totalSum);
-
-  const cookie = createCookie("order", {
-    maxAge: 604_800, // one week
-  });
-
-  let discountData = { amount: 0 };
-
-  if (discount && discount.percentage && discount.balance) {
-    discountData = {
-      ...discount.toObject(),
-      amount: getDiscount(discount.balance, totalSum, discount.percentage),
-    };
+  }
+  if (Object.keys(itemErrors).length > 0) {
+    return cartError(itemErrors[Object.keys(itemErrors)[0]].error, itemErrors);
   }
 
-  const mappedItems = data
-    .filter((item: any) => !item.parentId)
-    .map((item: any) => {
-      return {
-        itemRef: item.id,
-        name: item.headline,
-        image: item.image,
-        price: item.price,
-        quantity: item.quantity,
-        additionalItems: data
-          .filter((a: any) => a.parentId === item.id)
-          .map((a: any) => {
-            return {
-              name: a.headline,
-              price: a.price,
-              packinfo: `Till artikel ${a.index + 1}`,
-            };
-          }),
-      };
+  const seenChildIds = new Set<string>();
+  const additionsByParent = new Map<string, Array<{
+    name: string;
+    price: number;
+    packinfo: string;
+  }>>();
+  let merchandiseCents = 0;
+
+  for (const line of parentLines) {
+    const product: any = productsById.get(line.id);
+    merchandiseCents += toCents(product.price) * line.quantity;
+    additionsByParent.set(line.id, []);
+  }
+
+  for (const line of childLines) {
+    const parts = line.id.split("_");
+    const parentId = line.parentId ?? "";
+    const parentLine = parentLines.find((parent) => parent.id === parentId);
+    const product: any = productsById.get(parentId);
+    const instanceIndex = Number(parts[1]);
+    const additionalIndex = Number(parts[2]);
+    const additionalItem = product?.additionalItems?.[additionalIndex];
+    const isValidAddition =
+      parts.length === 3 &&
+      parts[0] === parentId &&
+      line.quantity === 1 &&
+      !seenChildIds.has(line.id) &&
+      parentLine &&
+      Number.isInteger(instanceIndex) &&
+      instanceIndex >= 0 &&
+      instanceIndex < parentLine.quantity &&
+      Number.isInteger(additionalIndex) &&
+      additionalIndex >= 0 &&
+      additionalItem &&
+      Number.isFinite(additionalItem.price) &&
+      additionalItem.price >= 0;
+
+    if (!isValidAddition) {
+      return cartError("Ett tillval i kundvagnen är ogiltigt. Ladda om sidan.");
+    }
+
+    seenChildIds.add(line.id);
+    merchandiseCents += toCents(additionalItem.price);
+    additionsByParent.get(parentId)?.push({
+      name: additionalItem.name,
+      price: fromCents(toCents(additionalItem.price)),
+      packinfo: `Till artikel ${instanceIndex + 1}`,
     });
+  }
 
+  const totalSum = fromCents(merchandiseCents);
+  const freightCents = toCents(getFreightCost(totalSum));
+  const discountCode = String(formData.get("discount") ?? "").trim();
+  const now = new Date();
+  const discount: any = discountCode
+    ? await Discounts.findOne({
+        domain: resolvedDomain.domain,
+        code: discountCode,
+        balance: { $gt: 0 },
+        percentage: { $gt: 0, $lte: 100 },
+        $or: [
+          { expireAt: { $exists: false } },
+          { expireAt: null },
+          { expireAt: { $gt: now } },
+        ],
+      }).lean()
+    : null;
+  const discountCents = discount
+    ? Math.min(
+        merchandiseCents,
+        Math.round(merchandiseCents * (discount.percentage / 100))
+      )
+    : 0;
+  const orderTotalCents = merchandiseCents + freightCents - discountCents;
+  if (!Number.isSafeInteger(orderTotalCents) || orderTotalCents <= 0) {
+    return cartError("Ordersumman är ogiltig. Kontrollera kundvagnen och försök igen.");
+  }
 
+  const mappedItems = parentLines.map((line) => {
+    const product: any = productsById.get(line.id);
+    return {
+      itemRef: line.id,
+      name: product.headline,
+      image: product.images?.[0] ?? "",
+      price: fromCents(toCents(product.price)),
+      quantity: line.quantity,
+      additionalItems: additionsByParent.get(line.id) ?? [],
+    };
+  });
 
+  const discountData = discount
+    ? {
+        code: discount.code,
+        percentage: discount.percentage,
+        amount: fromCents(discountCents),
+      }
+    : { amount: 0 };
 
   const orderData = {
-    domain: domain?.domain,
+    domain: resolvedDomain.domain,
     items: mappedItems,
     status: "OPENED",
-    customer: {
-      firstname: body.get("firstname"),
-      lastname: body.get("lastname"),
-      postaddress: body.get("postaddress"),
-      zipcode: body.get("zipcode"),
-      city: body.get("city"),
-      email: body.get("email"),
-    },
-    totalSum: totalSum + freightCost - discountData.amount,
-    freightCost,
+    customer: parsedCustomer.data,
+    totalSum: fromCents(orderTotalCents),
+    freightCost: fromCents(freightCents),
     discount: discountData,
   };
 
-  let order = undefined;
-  let value = (await cookie.parse(request.headers.get("Cookie"))) || "";
-  if (value) {
-    order = await Orders.findOne({ _id: value });
-    if (order) {
-      await Orders.updateOne(
-        { _id: value },
-        {
-          updatedAt: new Date(),
-          ...orderData,
-        }
-      );
-    }
-  }
-  if (!order) {
-    order = await Orders.create({
-      createdAt: new Date(),
-      ...orderData,
-    });
-  }
-
-  return redirect(`/checkout?order=${order._id}`, {
-    headers: {
-      "Set-Cookie": await cookie.serialize(order._id),
-    },
-  });
-};
-
-const scrollToTop = () => {
+  const checkoutFingerprint = createCheckoutFingerprint(orderData);
+  let order: any;
+  // Index creation errors must not be mistaken for an upsert race.
+  await Orders.init();
   try {
-    window.scroll({
-      top: 0,
-      left: 0,
-      behavior: "auto",
-    });
-  } catch (error) {
-    window.scrollTo(0, 0);
-  }
-};
-
-type InputProps = {
-  name: string;
-  placeholder: string;
-};
-
-const Input: React.FC<InputProps> = ({ name, placeholder }): JSX.Element => {
-  const [value, setValue] = useStickyState("", name);
-  const [invalid, setInvalid] = useState(false);
-
-  return (
-    <input
-      type="text"
-      name={name}
-      value={value}
-      required={true}
-      onInvalid={() => {
-        setInvalid(true);
-      }}
-      onChange={(e) => {
-        setValue(e.target.value);
-      }}
-      className={classNames(
-        "focus:shadow-outline px-3 py-2 w-full text-gray-700 leading-tight border rounded focus:outline-none appearance-none",
-        invalid ? "border-red-400" : ""
-      )}
-      placeholder={placeholder}
-    />
-  );
-};
-
-const userDiscount = (code: string) => {
-  let fetcher = useFetcher();
-  useEffect(() => {
-    let handler = setTimeout(() => {
-      fetcher.submit({ code }, { action: "/discount", method: "post" });
-    }, 300);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [code]);
-
-  return { code, balance: 0, percentage: null, ...fetcher.data };
-};
-
-const getLastError = (data: any): string | undefined => {
-  if (!data) return undefined;
-  if (!data.errors) return undefined;
-  return data.errors.message;
-};
-
-function Cart() {
-  const { items, updateItemQuantity, cartTotal, removeItem } = useCart();
-  let cartFetcher = useFetcher();
-  let ref = useRef(null);
-  let navigation = useNavigate();
-  const [value, setValue] = useState<string>("");
-  const { code, percentage,  balance } = userDiscount(value);
-
-  const hasItemsError = () =>
-    cartFetcher.data &&
-    cartFetcher.data.errors &&
-    cartFetcher.data.errors.items;
-
-  const hasItemError = (key: string) =>
-    cartFetcher.data &&
-    cartFetcher.data.errors &&
-    cartFetcher.data.errors.items &&
-    cartFetcher.data.errors.items[key];
-
-  useEffect(() => {
-    scrollToTop();
-  }, []);
-
-  useEffect(() => {
-    if (hasItemsError()) {
-      scrollToTop();
-    }
-  }, [cartFetcher]);
-
-  useEffect(() => {
-    if (cartTotal === 0) {
-      navigation("/");
-    }
-  }, [cartTotal]);
-
-  const freightCost = getFreightCost(cartTotal);
-
-  const additionalData = (item) => {
-    const data = items.reduce((acc, additionalItem) => {
-      if (
-        additionalItem.parentId === item.id &&
-        additionalItem.parentId.includes(item.id)
-      ) {
-        const part = additionalItem.id.split("_");
-        const key = `${item.id}_${part[2]}`;
-        if (acc[key]) {
-          acc[key].balance += 1;
-        } else {
-          acc[key] = {
-            id: key,
-            name: additionalItem.headline,
-            balance: 1,
-            price: additionalItem.price,
-          };
-        }
-      }
-      return acc;
-    }, {});
-
-    return Object.keys(data).length > 0 ? (
-      <>
-        {Object.values(data).map((d, index) => {
-          const cl =
-            index === Object.keys(data).length - 1 ? "border-b py-10" : "";
-          return (
-            <tr key={d.id} className={`${cl} border-gray relative`}>
-              <td className="px-2 py-2  text-sm">
-                {" "}
-                {/* Adjust the colSpan as needed */}
-                <div className="flex items-center">
-                  <div className="flex-shrink-0 w-12 md:w-20"></div>
-                  <div className="ml-4">
-                    <div className="flex-wrap text-gray-900 text-xs">
-                      {d.name}
-                    </div>
-                  </div>
-                </div>
-              </td>
-              <td className="px-2 whitespace-nowrap">
-                <span className="inline-flex px-2 text-xs font-semibold leading-5 rounded-full text-green-800 bg-green-100">
-                  {d.balance}
-                </span>
-              </td>
-              <td className="px-2 text-gray-500 whitespace-nowrap text-xs">
-                {d.price}
-              </td>
-              <td></td>
-            </tr>
-          );
-        })}
-      </>
-    ) : (
-      <tr className="border-b border-gray">
-        <td></td>
-      </tr>
+    order = await Orders.findOneAndUpdate(
+      { domain: resolvedDomain.domain, checkoutToken },
+      {
+        $setOnInsert: {
+          ...orderData,
+          checkoutFingerprint,
+          checkoutToken,
+          createdAt: new Date(),
+        },
+      },
+      { new: true, setDefaultsOnInsert: true, upsert: true }
     );
-  };
+  } catch (error) {
+    if (!isDuplicateKeyError(error)) throw error;
+    order = await Orders.findOne({
+      domain: resolvedDomain.domain,
+      checkoutToken,
+    });
+  }
 
-  return (
-    <cartFetcher.Form ref={ref} method="post">
-      <div className="flex flex-col mt-20 pl-1 pr-1 pt-4">
-        {cartTotal > 0 ? (
-          <div className="grid gap-2 grid-cols-1 lg:grid-cols-2">
-            <div className="overflow auto">
-              <div className="inline-block align-middle p-3 py-2 min-w-full">
-                <div className="min-w-full border-b border-gray-200 shadow overflow-hidden sm:rounded-lg">
-                  <table className="min-w-full divide-gray-200 divide-y">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th
-                          scope="col"
-                          className="flex-wrap px-2 py-3 text-left text-gray-500 text-xs font-medium uppercase"
-                        >
-                          Namn
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-2 py-3 text-left text-gray-500 text-xs font-medium tracking-wider uppercase"
-                        >
-                          Antal
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-2 py-3 text-left text-gray-500 whitespace-nowrap text-xs font-medium tracking-wider uppercase"
-                        >
-                          St pris
-                        </th>
-                        <th scope="col" className="relative px-1 py-3">
-                          <span className="sr-only">Edit</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white">
-                      {items.map((item) => {
-                        if (item.parentId) return null;
-                        const error = hasItemError(item.id);
+  if (!order) throw new Error("Checkout order could not be created");
+  if (
+    order.checkoutFingerprint !== checkoutFingerprint ||
+    !["OPENED", "PENDING"].includes(order.status)
+  ) {
+    return cartError(
+      "Kundvagnen ändrades under betalningsförsöket. Kontrollera uppgifterna och försök igen.",
+      true,
+      {
+        status: 409,
+        headers: {
+          "Set-Cookie": await checkoutAttemptCookie.serialize(
+            createCheckoutAttemptToken()
+          ),
+        },
+      }
+    );
+  }
 
-                        return (
-                          <React.Fragment key={item.id}>
-                            <tr onClick={() => {}}>
-                              <td className="px-2 py-4">
-                                <HashLink
-                                  to={`/collections/${item.collectionRef}#${item.id}`}
-                                >
-                                  <div className="flex items-center">
-                                    <div className="flex-shrink-0 w-12 h-12 md:w-20 md:h-20">
-                                      <img
-                                        className="w-full h-full rounded-full object-cover object-center"
-                                        src={item.image}
-                                        alt=""
-                                      />
-                                    </div>
-                                    <div className="ml-4">
-                                      <div className="flex-wrap text-gray-900 text-sm font-medium border-b-2 border-dashed border-gray-300">
-                                        {item.headline}
-                                      </div>
-                                      {(error &&
-                                        error.type === ItemError.BALANCE) ||
-                                      item.balance < (item.quantity || 0) ? (
-                                        <div>
-                                          <div className="p-0.5 text-red-800 text-sm bg-red-100 rounded">
-                                            Max{" "}
-                                            {error
-                                              ? error.serverValue
-                                              : item.balance}{" "}
-                                            st
-                                          </div>
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                </HashLink>
-                              </td>
-                              <td className="px-2 py-4 whitespace-nowrap">
-                                <span
-                                  className={classNames(
-                                    "inline-flex px-2 text-xs font-semibold leading-5 rounded-full",
-                                    (error &&
-                                      error.type === ItemError.BALANCE) ||
-                                      item.balance < (item.quantity || 0)
-                                      ? "text-red-800 bg-red-100"
-                                      : "text-green-800 bg-green-100"
-                                  )}
-                                >
-                                  {item.quantity}
-                                </span>
-                              </td>
-                              <td
-                                className={classNames(
-                                  "px-2 py-4 text-gray-500 whitespace-nowrap text-sm",
-                                  error && error.type === ItemError.PRICE
-                                    ? "text-red-800"
-                                    : ""
-                                )}
-                              >
-                                {item.price}
-                              </td>
-                              <td className="px-1 py-4 text-right whitespace-nowrap text-base font-medium">
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
+  if (order.paymentIntent?.client_secret) {
+    return redirectToCheckout(String(order._id));
+  }
 
-                                    const index = item.quantity - 1;
-                                    const additionalItems = items.filter(
-                                      (i) =>
-                                        i.parentId === item.id &&
-                                        i.index === index
-                                    );
-
-                                    if (
-                                      additionalItems &&
-                                      additionalItems.length > 0
-                                    ) {
-                                      additionalItems.forEach((item) => {
-                                        removeItem(item.id);
-                                      });
-                                    }
-
-                                    updateItemQuantity(
-                                      item.id,
-                                      (item.quantity || 0) - 1
-                                    );
-                                  }}
-                                  className="px-2 py-0 text-gray-700 hover:text-indigo-900 bg-rosa rounded md:px-4 md:py-1 md:text-lg"
-                                >
-                                  -
-                                </button>
-                              </td>
-                            </tr>
-                            {additionalData(item)}
-                          </React.Fragment>
-                        );
-                      })}
-                      <tr>
-                        <td className="px-2 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0 w-12 h-12 md:w-20 md:h-20"></div>
-                            <div className="ml-4">
-                              <div className="text-gray-900 text-sm font-medium">
-                                Frakt
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-2 py-4 whitespace-nowrap">
-                          <span
-                            className={classNames(
-                              "inline-flex px-2 text-green-800 text-xs font-semibold leading-5 bg-green-100 rounded-full"
-                            )}
-                          >
-                            1
-                          </span>
-                        </td>
-                        <td className="px-2 py-4 text-gray-500 whitespace-nowrap text-sm">
-                          {freightCost === 0 ? "Fri frakt" : freightCost}
-                        </td>
-                        <td className="px-2 py-4 text-right whitespace-nowrap text-base font-medium"></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <div className="flex flex-row-reverse flex-grow mb-2 px-2">
-                    <div className="flex flex-col">
-                      <div className="flex flex-col items-end">
-                        <input
-                          onChange={(e) => {
-                            setValue(e.target.value);
-                          }}
-                          name="discount"
-                          type="text"
-                          style={{ width: 100 }}
-                          placeholder="Rabattkod"
-                          className={classNames(
-                            "focus:shadow-outline px-3 py-2 w-full text-gray-700 leading-tight border rounded focus:outline-none appearance-none",
-                            code && balance === 0 ? "border-red-400" : ""
-                          )}
-                        />
-                        <AnimatePresence>
-                          {code && balance > 0 ? (
-                            <motion.div
-                              exit={{ opacity: 0 }}
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              transition={{ ease: "easeInOut", duration: 0.3 }}
-                              className="mt-1 p-0.5 text-green-800 text-sm bg-green-100 rounded"
-                            >
-                              {percentage}% (
-                              {getDiscount(balance, percentage, cartTotal)} SEK)
-                            </motion.div>
-                          ) : null}
-                        </AnimatePresence>
-                      </div>
-                      <div className="lg:mb-20">
-                        Totalt:{" "}
-                        {cartTotal +
-                          freightCost -
-                          getDiscount(balance, percentage, cartTotal)}{" "}
-                        SEK
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <div className="inline-block align-middle p-3 py-2 min-w-full">
-                <div className="mb-20 border-b border-gray-200 shadow overflow-hidden sm:rounded-lg">
-                  <div className="p-2 bg-gray-50">
-                    <div className="mb-1 text-gray-700 text-xl">
-                      Leveransadress
-                    </div>
-
-                    <div className="mt-2">
-                      <label>Förnamn</label>
-                      <Input name="firstname" placeholder="Förnamn" />
-                    </div>
-                    <div className="mt-2">
-                      <label className="text-base">Efternamn</label>
-                      <Input name="lastname" placeholder="Efternamn" />
-                    </div>
-                    <div className="mt-2">
-                      <label className="text-base">Epost</label>
-                      <Input name="email" placeholder="Epost" />
-                    </div>
-                    <div className="mt-2">
-                      <label className="text-base">Postadress</label>
-                      <Input name="postaddress" placeholder="Postaddress" />
-                    </div>
-                    <div className="flex mt-2">
-                      <div className="w-1/3">
-                        <label className="">Postnummer</label>
-                        <Input name="zipcode" placeholder="Postnr" />
-                      </div>
-                      <div className="pl-2 w-2/3">
-                        <label className="">Ort</label>
-                        <Input name="city" placeholder="Ort" />
-                      </div>
-                    </div>
-                    <div className="flex flex-row-reverse flex-grow my-4">
-                      <input
-                        type="hidden"
-                        name="items"
-                        value={JSON.stringify(items)}
-                      />
-                      <button
-                        disabled={cartFetcher.state !== "idle"}
-                        className="p-2 text-gray-800 hover:text-white font-medium hover:bg-gray-500 bg-rosa rounded"
-                      >
-                        Till betalningen
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <Feedback
-              forceInvisble={cartTotal >= FREE_FREIGHT}
-              type="success"
-              onHandleClick={() => {
-                navigation("/");
-              }}
-              headline={`Köp för ${
-                FREE_FREIGHT - cartTotal
-              } till och du får fri frakt`}
-              message="Titta på fler kollektioner"
-            />
-          </div>
-        ) : null}
-      </div>
-      <Feedback
-        forceInvisble={!cartFetcher.data}
-        key={cartFetcher.data && cartFetcher.data.key}
-        type="error"
-        message={getLastError(cartFetcher.data)}
-        headline="Fel i formulär"
-        visibleInMillis={3000}
-      />
-
-      <Loader transition={cartFetcher} />
-    </cartFetcher.Form>
+  const theme = themes[resolvedDomain.domain];
+  const paymentIntentRequest = buildCheckoutPaymentIntent({
+    checkoutToken,
+    order,
+    paymentMethods: theme.paymentMethods,
+  });
+  const paymentIntent = await stripeClient.paymentIntents.create(
+    paymentIntentRequest.params,
+    paymentIntentRequest.options
   );
-}
+  if (!paymentIntent.client_secret) {
+    throw new Response("Betalningen kunde inte startas", { status: 502 });
+  }
+
+  const updatedOrder = await Orders.findOneAndUpdate(
+    {
+      _id: order._id,
+      checkoutFingerprint,
+      checkoutToken,
+      domain: resolvedDomain.domain,
+      status: "OPENED",
+      "paymentIntent.id": { $exists: false },
+    },
+    {
+      $set: {
+        status: "PENDING",
+        updatedAt: new Date(),
+        paymentIntent: {
+          id: paymentIntent.id,
+          client_secret: paymentIntent.client_secret,
+        },
+      },
+    },
+    { new: true }
+  );
+  const persistedOrder =
+    updatedOrder ??
+    (await Orders.findOne({
+      _id: order._id,
+      checkoutToken,
+      domain: resolvedDomain.domain,
+    }));
+  if (persistedOrder?.paymentIntent?.id !== paymentIntent.id) {
+    throw new Error(
+      `PaymentIntent ${paymentIntent.id} could not be attached to order ${String(
+        order._id
+      )}`
+    );
+  }
+
+  return redirectToCheckout(String(order._id));
+};
 
 export default function Index() {
-  return <ClientOnly fallback={null}>{() => <Cart />}</ClientOnly>;
+  return <ClientOnly fallback={null}>{() => <CartView />}</ClientOnly>;
 }

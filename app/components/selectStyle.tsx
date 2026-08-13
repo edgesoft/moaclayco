@@ -1,16 +1,15 @@
 import { StylesConfig } from "react-select";
 
-const createOption = (label: string) => ({
-  label,
-  value: label,
-});
-
-export type Option = ReturnType<typeof createOption>;
+export type Option = {
+  label: string;
+  value: string;
+  noValue?: boolean;
+};
 
 type IsMulti = true;
 
-export const selectStyle: StylesConfig<Option, IsMulti> = {
-  multiValueRemove: (styles, { data }) => {
+export const selectStyle = {
+  multiValueRemove: (styles: any) => {
     return {
       ...styles,
       borderColor: "rgb(209, 250, 229)",
@@ -26,14 +25,14 @@ export const selectStyle: StylesConfig<Option, IsMulti> = {
     };
   },
 
-  multiValue: (base, state) => ({
+  multiValue: (base: any) => ({
     ...base,
     color: "rgb(6, 95, 70)",
     borderColor: "rgb(209, 250, 229)",
     background: "rgb(209, 250, 229)",
     fontWeight: "bold",
   }),
-  multiValueLabel: (base, state) => ({
+  multiValueLabel: (base: any) => ({
     ...base,
     color: "rgb(6, 95, 70)",
     borderColor: "rgb(209, 250, 229)",
@@ -42,14 +41,14 @@ export const selectStyle: StylesConfig<Option, IsMulti> = {
     borderTopLeftRadius: 6,
     borderBottomLeftRadius: 6,
   }),
-  control: (base) => ({
+  control: (base: any) => ({
     ...base,
     boxShadow: "1px",
   }),
-  singleValue: (provided, state) => {
+  singleValue: (provided: any, state: { isDisabled: boolean }) => {
     const opacity = state.isDisabled ? 0.5 : 1;
     const transition = "opacity 300ms";
 
     return { ...provided, opacity, transition };
   },
-};
+} as StylesConfig<Option, IsMulti>;

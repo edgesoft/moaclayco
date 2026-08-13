@@ -1,0 +1,16 @@
+name: moaclayco-stage-smoke
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile-stage
+    env_file:
+      - ${APP_ENV_FILE:-.env.stage.local}
+    environment:
+      NODE_ENV: production
+      # Local-only signing key for the production-like smoke container.
+      SESSION_SECRET: moaclayco-stage-smoke-session-secret-not-for-deployment
+    ports:
+      - "127.0.0.1:${SMOKE_PORT:-3100}:3000"
+    init: true

@@ -1,24 +1,21 @@
 export const domains = [
   {
-    domain: "sgwoods",
-    hosts: [
-      "www.sgwoods.se",
-      "sgwoods.se",
-      "localhost",
-      "sgwoods-stage.fly.dev",
-      "sgwoods.fly.dev",
-    ],
-  },
-  {
     domain: "moaclayco",
-    hosts: ["www.moaclayco.com", "moaclayco.com", "moaclayco-stage.fly.dev", "moaclayco.fly.dev"],
+    hosts: [
+      "www.moaclayco.com",
+      "moaclayco.com",
+      "localhost",
+      "127.0.0.1",
+      "moaclayco-stage.fly.dev",
+      "moaclayco.fly.dev",
+    ],
   },
 ];
 
 export function getDomain(input: Request | string) {
   // Kontrollera om input är en Request eller en string
   let url: URL;
-  let hostname = null
+  let hostname: string;
   if (input instanceof Request) {
     url = new URL(input.url);
      hostname = url.hostname;
@@ -37,5 +34,10 @@ export function getDomain(input: Request | string) {
 
   // Hämta hostname och hitta matchande domän
 
-  return domains.find((d) => d.hosts.includes(hostname));
+  if (!hostname) {
+    return undefined;
+  }
+
+  const resolvedHostname = hostname;
+  return domains.find((domain) => domain.hosts.includes(resolvedHostname));
 }

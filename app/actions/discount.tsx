@@ -1,10 +1,17 @@
 import {
-  ActionFunction, json,
+  ActionFunction, data as json,
   redirect
-} from "@remix-run/node";
+} from "react-router";
 import { Discounts as DiscountEntity } from "../schemas/discounts";
-import { z } from "zod";
 import { getDomain } from "~/utils/domain";
+import { auth } from "~/services/auth.server";
+import { parseStockholmDateTime } from "~/utils/accountingDates";
+import { formSchema } from "~/schemas/discount-form";
+import {
+  MAX_STANDARD_FORM_REQUEST_SIZE,
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 const objectFromFormData = (formData: FormData) => {
   const obj: { [key: string]: string | File } = {};
@@ -18,41 +25,50 @@ const objectFromFormData = (formData: FormData) => {
   return obj;
 };
 
-const expireAtSchema = z.preprocess((input) => {
-  if (input === "") {
-    return "EMPTY";
-  }
-  return input;
-}, z.union([z.literal("EMPTY").transform(() => ""), z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/, "Formatet måste vara ÅÅÅÅ-MM-DD TT:mm")]));
-
-export const formSchema = z.object({
-  code: z.string().min(1, "Code måste vara minst 1 tecken"),
-  percentage: z.preprocess((val) => {
-    if (typeof val === "string") {
-      const parsed = parseFloat(val);
-      return isNaN(parsed) ? val : parsed;
-    }
-    return val;
-  }, z.number().min(1, "Discount måste vara minst 1%").max(100, "Discount kan inte vara mer än 100%")),
-  balance: z.preprocess((val) => {
-    if (typeof val === "string") {
-      const parsed = parseInt(val, 10);
-      return isNaN(parsed) ? val : parsed;
-    }
-    return val;
-  }, z.number().min(1, "Balance måste vara minst 1")),
-  expireAt: expireAtSchema,
-});
-
 let action: ActionFunction = async ({ request, params }) => {
-  let formData = await request.formData();
+  await auth.isAuthenticated(request, { failureRedirect: "/login" });
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(
+      request,
+      MAX_STANDARD_FORM_REQUEST_SIZE
+    );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json(
+        { errors: { form: "Formuläret är för stort" } },
+        { status: 413 }
+      );
+    }
+    throw error;
+  }
   let action = formData.get("action");
   const domain = getDomain(request)
 
   switch (action) {
-    case "save":
+    case "save": {
       const formObject = objectFromFormData(formData);
-      const result = formSchema.parse(formObject); // Validerar och omvandlar datatyp där det behövs
+      const validation = formSchema.safeParse(formObject);
+      if (!validation.success) {
+        const errors = Object.fromEntries(
+          Object.entries(validation.error.flatten().fieldErrors).map(([key, messages]) => [
+            key,
+            messages?.[0],
+          ])
+        );
+        return json({ errors }, { status: 400 });
+      }
+      const result = validation.data;
+      const expireAt = result.expireAt
+        ? parseStockholmDateTime(result.expireAt)
+        : null;
+      if (result.expireAt && !expireAt) {
+        return json(
+          { errors: { expireAt: "Sluttiden är inte giltig i svensk tid" } },
+          { status: 400 }
+        );
+      }
+      const discountData = { ...result, expireAt };
       const obj: any = await DiscountEntity.findOne({ domain: domain?.domain, code: result.code }).lean();
 
       if (params.id) {
@@ -66,9 +82,9 @@ let action: ActionFunction = async ({ request, params }) => {
         }
 
         await DiscountEntity.updateOne(
-          { _id: params.id },
+          { _id: params.id, domain: domain?.domain },
           {
-            ...result,
+            ...discountData,
             domain: domain?.domain
           }
         );
@@ -81,13 +97,15 @@ let action: ActionFunction = async ({ request, params }) => {
           
         }
 
-        await DiscountEntity.create({...result, domain: domain?.domain});
+        await DiscountEntity.create({...discountData, domain: domain?.domain});
       }
 
       break;
-    case "delete":
-      await DiscountEntity.deleteOne({ _id: params.id });
+    }
+    case "delete": {
+      await DiscountEntity.deleteOne({ _id: params.id, domain: domain?.domain });
       break;
+    }
     default:
       throw new Error(`Ogiltig åtgärd: ${action}`);
   }

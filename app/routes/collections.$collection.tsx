@@ -1,367 +1,831 @@
-import { MetaFunction, LoaderFunction, redirect, json } from "@remix-run/node";
+import type { LoaderFunction, MetaFunction } from "react-router";
 import {
-  useNavigation,
-  useLoaderData,
-  useOutletContext,
-  useParams,
-  useNavigate,
+  data as json,
   Link,
-} from "@remix-run/react";
-import { useEffect, useState } from "react";
-import { useSwipeable } from "react-swipeable";
-import { Items } from "../schemas/items";
+  redirect,
+  useLoaderData,
+  useNavigate,
+  useNavigation,
+  useOutletContext,
+} from "react-router";
+import { motion, useReducedMotion } from "framer-motion";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCart } from "react-use-cart";
-import { classNames } from "../utils/classnames";
-import { AdditionCartItemType, CollectionProps, ItemProps } from "~/types";
-import Loader from "../components/loader";
-import AdditionalCartItem from "~/components/item/additionalItem";
+import { useSwipeable } from "react-swipeable";
+import ClientOnly from "~/components/ClientOnly";
+import ArrowIcon from "~/components/ArrowIcon";
 import Magnifier from "~/components/item/magnifier";
-import { IndexProps } from "~/root";
+import Loader from "~/components/loader";
+import PlusMinusIcon from "~/components/PlusMinusIcon";
+import type { IndexProps } from "~/root";
 import { Collections } from "~/schemas/collections";
-import { domains, getDomain } from "~/utils/domain";
+import { Items } from "~/schemas/items";
+import type { CollectionProps, ItemProps } from "~/types";
+import { getDomain } from "~/utils/domain";
+import { toLoaderData } from "~/utils/loaderData";
+import {
+  collectionDetailProjection,
+  collectionItemProjection,
+} from "~/utils/queryProjections.server";
 
 type ItemLoaderProps = {
   collection: CollectionProps;
   items: ItemProps[];
 };
 
-export let loader: LoaderFunction = async ({ params, request }) => {
+const imageWithWidth = (image: string, width: number) =>
+  `${image}${image.includes("?") ? "&" : "?"}width=${width}`;
 
-  let domain = getDomain(request)
+export const loader: LoaderFunction = async ({ params, request }) => {
+  const domain = getDomain(request);
+  const [collection, items] = await Promise.all([
+    Collections.findOne({
+      shortUrl: params.collection,
+      domain: domain?.domain,
+    })
+      .select(collectionDetailProjection)
+      .lean()
+      .exec(),
+    Items.find({
+      collectionRef: params.collection,
+      domain: domain?.domain,
+    })
+      .select(collectionItemProjection)
+      .sort({ _id: -1 })
+      .lean(),
+  ]);
 
-  const collection = await Collections.findOne({ shortUrl: params.collection, domain: domain?.domain });
-  
-  if (!collection) {
-    return redirect("/");
-  }
+  if (!collection) return redirect("/");
 
   return json(
-    {
+    toLoaderData({
       collection,
-      items: await Items.find({ collectionRef: params.collection, domain: domain?.domain }).sort({
-        _id: -1,
-      }),
-    },
+      items,
+    }),
     {
       headers: {
-        "Cache-Control": "public, max-age=300", // Cache for 5 min
+        "Cache-Control": "public, max-age=300",
       },
     }
   );
 };
 
-export let meta: MetaFunction = ({data}) => {
-  const { collection } = data as ItemLoaderProps;
+export const meta: MetaFunction = ({ loaderData }) => {
+  const { collection } = loaderData as ItemLoaderProps;
+  const socialImage = imageWithWidth(collection.image, 1200);
+
   return [
-    {
-      title: `Moa Clay Collection - ${collection.headline}`,
-    },
-    {
-      name: "description",
-      content: `${collection.shortDescription}`,
-    },
-    {
-      property: "twitter:image",
-      content: `${collection.image}?width=700`,
-    },
-    {
-      property: "og:image",
-      content: `${collection.image}?width=700`,
-    },
+    { title: `${collection.headline} — Moa Clay Co` },
+    { name: "description", content: collection.shortDescription },
+    { property: "twitter:image", content: socialImage },
+    { property: "og:image", content: socialImage },
   ];
 };
 
-const Item: React.FC<ItemProps> = ({
-  _id,
-  images,
-  headline,
-  amount,
-  price,
-  productInfos,
-  additionalItems,
-  collectionRef,
-  instagram,
-  longDescription,
-}): JSX.Element => {
-  const [showInfo, setShowInfo] = useState(false);
-  const [showImage, setShowImage] = useState<string | undefined>(undefined);
-  const [index, setIndex] = useState(0);
-  const [additions, setAdditions] = useState<AdditionCartItemType[]>([]);
-  const { addItem, getItem, items } = useCart();
-  const { user } = useOutletContext<IndexProps>();
+function Product({
+  collectionTitle,
+  featured,
+  item,
+  position,
+  user,
+}: {
+  collectionTitle: string;
+  featured: boolean;
+  item: ItemProps;
+  position: number;
+  user: IndexProps["user"];
+}) {
+  const [failedImages, setFailedImages] = useState<string[]>([]);
+  const [unoptimizedImages, setUnoptimizedImages] = useState<string[]>([]);
+  const images = useMemo(
+    () =>
+      (item.images ?? []).filter(
+        (image): image is string =>
+          Boolean(image) && !failedImages.includes(image)
+      ),
+    [failedImages, item.images]
+  );
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [imageAttempt, setImageAttempt] = useState(0);
+  const [preloadDirection, setPreloadDirection] = useState<1 | -1>(1);
+  const [loadedImage, setLoadedImage] = useState<string | null>(null);
+  const [nearViewport, setNearViewport] = useState(position < 2);
+  const [selectedAdditions, setSelectedAdditions] = useState<number[]>([]);
+  const [additionGlowKey, setAdditionGlowKey] = useState(0);
+  const [showImage, setShowImage] = useState<string>();
+  const [added, setAdded] = useState(false);
+  const articleRef = useRef<HTMLElement>(null);
+  const cachedImageFrameRef = useRef<number | null>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const handledErrorAttemptRef = useRef<string | null>(null);
+  const preloadRef = useRef<HTMLImageElement[]>([]);
+  const retryCountsRef = useRef<Map<string, number>>(new Map());
+  const retryTimeoutRef = useRef<number | undefined>(undefined);
+  const { addItem, getItem } = useCart();
+  const reduceMotion = useReducedMotion();
+  const currentIndex = Math.min(
+    selectedImageIndex,
+    Math.max(0, images.length - 1)
+  );
+  const activeImage = images[currentIndex];
+  const useOriginalImage = activeImage
+    ? unoptimizedImages.includes(activeImage)
+    : false;
 
-  const handlers = useSwipeable({
-    onSwiped: (eventData) => {
-      if (eventData.dir === "Right") {
-        setIndex(index - 1 < 0 ? images.length - 1 : index - 1);
+  useEffect(() => {
+    if (nearViewport || !articleRef.current) return;
+
+    if (!("IntersectionObserver" in window)) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        setNearViewport(true);
+        observer.disconnect();
+      },
+      { rootMargin: "520px 0px" }
+    );
+
+    observer.observe(articleRef.current);
+    return () => observer.disconnect();
+  }, [nearViewport]);
+
+  useEffect(() => {
+    if (!nearViewport || images.length < 2) return;
+
+    const preloadTimer = window.setTimeout(
+      () => {
+        const nextIndex =
+          (currentIndex + preloadDirection + images.length) % images.length;
+        const preload = new Image();
+        preload.sizes = featured
+          ? "(max-width: 899px) 100vw, 62vw"
+          : "(max-width: 899px) 100vw, 47vw";
+        preload.srcset = `${imageWithWidth(
+          images[nextIndex],
+          480
+        )} 480w, ${imageWithWidth(images[nextIndex], 760)} 760w, ${imageWithWidth(
+          images[nextIndex],
+          1100
+        )} 1100w`;
+        preload.src = imageWithWidth(images[nextIndex], 1100);
+        preloadRef.current = [preload];
+      },
+      position < 2 ? 80 : 240
+    );
+
+    return () => window.clearTimeout(preloadTimer);
+  }, [
+    currentIndex,
+    featured,
+    images,
+    nearViewport,
+    position,
+    preloadDirection,
+  ]);
+
+  useEffect(() => {
+    if (!added) return;
+    const resetTimer = window.setTimeout(() => setAdded(false), 2200);
+    return () => window.clearTimeout(resetTimer);
+  }, [added]);
+
+  const previousImage = () => {
+    if (images.length < 2) return;
+    setPreloadDirection(-1);
+    setSelectedImageIndex(
+      currentIndex === 0 ? images.length - 1 : currentIndex - 1
+    );
+  };
+
+  const nextImage = () => {
+    if (images.length < 2) return;
+    setPreloadDirection(1);
+    setSelectedImageIndex((currentIndex + 1) % images.length);
+  };
+
+  const discardImage = useCallback(() => {
+    if (!activeImage) return;
+
+    if (retryTimeoutRef.current) {
+      window.clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = undefined;
+    }
+    retryCountsRef.current.delete(activeImage);
+    const remainingImages = images.filter((image) => image !== activeImage);
+    setLoadedImage(null);
+    setSelectedImageIndex(
+      remainingImages.length
+        ? Math.min(currentIndex, remainingImages.length - 1)
+        : 0
+    );
+    setFailedImages((current) =>
+      current.includes(activeImage) ? current : [...current, activeImage]
+    );
+  }, [activeImage, currentIndex, images]);
+
+  const handleImageError = useCallback(() => {
+    if (!activeImage) return;
+
+    const errorAttempt = `${activeImage}-${
+      useOriginalImage ? "original" : "responsive"
+    }-${imageAttempt}`;
+    if (handledErrorAttemptRef.current === errorAttempt) return;
+    handledErrorAttemptRef.current = errorAttempt;
+    setLoadedImage(null);
+
+    if (!useOriginalImage) {
+      setUnoptimizedImages((current) =>
+        current.includes(activeImage) ? current : [...current, activeImage]
+      );
+      return;
+    }
+
+    const retryCount = retryCountsRef.current.get(activeImage) ?? 0;
+    if (retryCount < 1) {
+      retryCountsRef.current.set(activeImage, retryCount + 1);
+      retryTimeoutRef.current = window.setTimeout(() => {
+        retryTimeoutRef.current = undefined;
+        setImageAttempt((current) => current + 1);
+      }, 320);
+      return;
+    }
+
+    discardImage();
+  }, [activeImage, discardImage, imageAttempt, useOriginalImage]);
+
+  const handleImageLoad = useCallback(() => {
+    if (!activeImage) return;
+
+    if (retryTimeoutRef.current) {
+      window.clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = undefined;
+    }
+    handledErrorAttemptRef.current = null;
+    retryCountsRef.current.delete(activeImage);
+    setLoadedImage(activeImage);
+  }, [activeImage]);
+
+  const setProductImageRef = useCallback(
+    (image: HTMLImageElement | null) => {
+      imageRef.current = image;
+      if (cachedImageFrameRef.current !== null) {
+        window.cancelAnimationFrame(cachedImageFrameRef.current);
+        cachedImageFrameRef.current = null;
       }
+      if (!image?.complete) return;
 
-      if (eventData.dir === "Left") {
-        setIndex(index + 1 === images.length ? 0 : index + 1);
+      cachedImageFrameRef.current = window.requestAnimationFrame(() => {
+        cachedImageFrameRef.current = null;
+        if (imageRef.current !== image) return;
+        if (image.naturalWidth > 0) handleImageLoad();
+        else handleImageError();
+      });
+    },
+    [handleImageError, handleImageLoad]
+  );
+
+  useEffect(
+    () => () => {
+      if (retryTimeoutRef.current) {
+        window.clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = undefined;
       }
     },
+    [activeImage]
+  );
+
+  const swipeHandlers = useSwipeable({
+    delta: 28,
+    onSwipedLeft: nextImage,
+    onSwipedRight: previousImage,
+    preventScrollOnSwipe: false,
+    trackMouse: true,
+    trackTouch: true,
   });
 
+  const additionsTotal = selectedAdditions.reduce(
+    (total, additionIndex) =>
+      total + (item.additionalItems?.[additionIndex]?.price ?? 0),
+    0
+  );
+  const totalPrice = item.price + additionsTotal;
+
+  const addToCart = () => {
+    const cartItem = getItem(item._id);
+    const itemIndex = cartItem?.quantity ?? 0;
+
+    addItem({
+      id: item._id,
+      parentId: null,
+      price: item.price,
+      balance: item.amount,
+      image: images[0] ?? null,
+      headline: item.headline,
+      collectionRef: item.collectionRef,
+    });
+
+    selectedAdditions.forEach((additionIndex) => {
+      const addition = item.additionalItems?.[additionIndex];
+      if (!addition) return;
+
+      addItem({
+        id: `${item._id}_${itemIndex}_${additionIndex}`,
+        parentId: item._id,
+        price: addition.price,
+        index: itemIndex,
+        image: null,
+        headline: addition.name,
+        collectionRef: null,
+      });
+    });
+
+    setAdded(true);
+  };
+
   return (
-    <>
-      <Magnifier imageUrl={showImage} close={setShowImage} />
-      <div
-        id={_id}
-        className="flex flex-col w-full bg-gray-50 rounded-lg shadow-lg overflow-hidden md:flex-row"
-      >
-        <div
-          className={classNames(
-            "relative w-full h-80 md:w-2/5",
-            showInfo ? "bg-gray-900 relative" : ""
-          )}
-        >
-          <img
-            {...handlers}
-            className={classNames(
-              "w-full h-full object-cover object-center",
-              showInfo ? "mix-blend-overlay" : ""
-            )}
-            src={images[index]}
-            loading="lazy"
-          />
-          {user ? (
-            <div className="absolute bottom-1 right-6 text-white">
-              <Link to={`/items/${collectionRef}/${_id}/edit`}>
-                <svg
-                  className="mt-0 h-5 w-5 cursor-pointer hover:text-violet-400"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <title>{`Ändra ${headline}`}</title>
-                  <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z"></path>
-                  <path
-                    fillRule="evenodd"
-                    d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-                    clipRule="evenodd"
-                  ></path>
-                </svg>
-              </Link>
-            </div>
-          ) : null}
-          <div
-            className="absolute bottom-1 right-1 text-white"
-            onClick={() => {
-              setShowImage(images[index]);
-            }}
+    <article
+      className={`mcc-shop-item${featured ? " mcc-shop-item--featured" : ""}${
+        images.length ? "" : " mcc-shop-item--without-media"
+      }`}
+      data-banner-context-eyebrow="Produkt"
+      data-banner-context-href={`/collections/${item.collectionRef}#${item._id}`}
+      data-banner-context-kind="item"
+      data-banner-context-title={item.headline}
+      id={item._id}
+      ref={articleRef}
+    >
+      {images.length ? (
+        <div className="mcc-shop-item__gallery">
+          <motion.div
+            className="mcc-shop-item__media"
+            initial={reduceMotion ? false : { opacity: 0, y: 34 }}
+            transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
+            viewport={{ amount: 0.12, once: true }}
+            whileInView={{ opacity: 1, y: 0 }}
+            {...swipeHandlers}
           >
-            <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M7 9a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9z" />
-              <path d="M5 3a2 2 0 00-2 2v6a2 2 0 002 2V5h8a2 2 0 00-2-2H5z" />
-            </svg>
-          </div>
-          {showInfo ? (
-            <div className="absolute left-1 top-1 flex flex-col p-3 text-white font-medium">
-              <span className="text-2xl font-bold">Produktinfo</span>
-              {productInfos?.map((p, i) => {
-                return (
-                  <span
-                    key={i}
-                    className={classNames("text-lg", i === 0 ? "mt-5" : "")}
-                  >
-                    {p}
-                  </span>
-                );
-              })}
+            <div
+              aria-busy={loadedImage !== activeImage}
+              className={`mcc-shop-item__image-stage${
+                loadedImage === activeImage ? " is-loaded" : ""
+              }`}
+            >
+              <img
+                alt={`${item.headline}, bild ${currentIndex + 1} av ${
+                  images.length
+                }`}
+                className={loadedImage === activeImage ? "is-loaded" : ""}
+                draggable={false}
+                key={`${activeImage}-${
+                  useOriginalImage ? "original" : "responsive"
+                }-${imageAttempt}`}
+                loading={position < 2 ? "eager" : "lazy"}
+                onError={handleImageError}
+                onLoad={handleImageLoad}
+                ref={setProductImageRef}
+                sizes={
+                  featured
+                    ? "(max-width: 899px) 100vw, 62vw"
+                    : "(max-width: 899px) 100vw, 47vw"
+                }
+                src={
+                  useOriginalImage
+                    ? activeImage
+                    : imageWithWidth(activeImage, 1100)
+                }
+                srcSet={
+                  !useOriginalImage
+                    ? `${imageWithWidth(
+                        activeImage,
+                        480
+                      )} 480w, ${imageWithWidth(
+                        activeImage,
+                        760
+                      )} 760w, ${imageWithWidth(activeImage, 1100)} 1100w`
+                    : undefined
+                }
+              />
             </div>
-          ) : (
-            <div className="flex flex-grow items-center -my-5">
-              <div className="flex flex-grow justify-center">
-                {images.length > 1 &&
-                  images.map((_, i) => {
-                    return (
-                      <div
-                        key={i}
-                        onClick={() => {
-                          if (index !== i) {
-                            setIndex(i);
-                          }
-                        }}
-                        className={classNames(
-                          "mx-2 w-2 h-2  rounded-full ring-1 ring-offset-2",
-                          index === i ? "bg-green-500" : "bg-white"
-                        )}
-                      ></div>
-                    );
-                  })}
+
+            <div className="mcc-shop-item__gallery-meta">
+              <div className="mcc-shop-item__gallery-meta-start">
+                <span className="mcc-shop-item__number">
+                  {String(position + 1).padStart(2, "0")}
+                </span>
+                <div
+                  aria-label="Välj produktbild"
+                  className="mcc-shop-item__dots"
+                >
+                  {images.map((image, imageIndex) => (
+                    <button
+                      aria-current={
+                        imageIndex === currentIndex ? "true" : undefined
+                      }
+                      aria-label={`Visa bild ${imageIndex + 1} av ${
+                        item.headline
+                      }`}
+                      key={image}
+                      onClick={() => {
+                        setPreloadDirection(
+                          imageIndex >= currentIndex ? 1 : -1
+                        );
+                        setSelectedImageIndex(imageIndex);
+                      }}
+                      type="button"
+                    />
+                  ))}
+                </div>
+              </div>
+              <span className="mcc-shop-item__gallery-count">
+                {String(currentIndex + 1).padStart(2, "0")} /{" "}
+                {String(images.length).padStart(2, "0")}
+              </span>
+              <div className="mcc-shop-item__gallery-actions">
+                <button
+                  aria-label={`Visa ${item.headline} i större format`}
+                  className="mcc-shop-item__zoom"
+                  onClick={() => setShowImage(activeImage)}
+                  type="button"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 20 20">
+                    <circle cx="8.25" cy="8.25" r="4.75" />
+                    <path d="m11.75 11.75 4 4" />
+                  </svg>
+                </button>
+
+                {images.length > 1 ? (
+                  <div className="mcc-shop-item__arrows">
+                    <button
+                      aria-label={`Föregående bild av ${item.headline}`}
+                      onClick={previousImage}
+                      type="button"
+                    >
+                      <ArrowIcon direction="left" />
+                    </button>
+                    <button
+                      aria-label={`Nästa bild av ${item.headline}`}
+                      onClick={nextImage}
+                      type="button"
+                    >
+                      <ArrowIcon />
+                    </button>
+                  </div>
+                ) : null}
+
+                {user ? (
+                  <Link
+                    aria-label={`Redigera ${item.headline}`}
+                    className="mcc-shop-item__edit"
+                    prefetch="intent"
+                    to={`/items/${item.collectionRef}/${item._id}/edit`}
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 20 20">
+                      <path d="M4.25 14.8 5 11.6 13.9 2.7a1.35 1.35 0 0 1 1.9 0l1.5 1.5a1.35 1.35 0 0 1 0 1.9L8.4 15l-3.2.75Z" />
+                      <path d="m12.65 4 3.35 3.35" />
+                    </svg>
+                  </Link>
+                ) : null}
               </div>
             </div>
-          )}
+          </motion.div>
         </div>
+      ) : null}
 
-        <div className="relative p-6 w-full text-left space-y-2 md:p-4 md:w-3/5">
-          <div className="flex">
-            <p className="text-gray-700 text-2xl font-bold flex">
-              <span>{headline}</span>
-            </p>
-
-            {amount === 0 ? (
-              <span className="ml-1 p-1 text-green-800 bg-green-100 rounded">
-                Slut i lager
-              </span>
-            ) : null}
+      <motion.div
+        className="mcc-shop-item__copy"
+        initial={reduceMotion ? false : { opacity: 0, y: 22 }}
+        transition={{ delay: 0.08, duration: 0.5 }}
+        viewport={{ amount: 0.18, once: true }}
+        whileInView={{ opacity: 1, y: 0 }}
+      >
+        <div className="mcc-shop-item__summary">
+          <p className="mcc-kicker">Handgjort / {collectionTitle}</p>
+          <div className="mcc-shop-item__heading">
+            <h2>{item.headline}</h2>
+            <p>{item.price} SEK</p>
           </div>
-          {longDescription ? (
-            <p className="text-gray-500 text-base font-normal leading-relaxed">
-              {longDescription}
+
+          {item.longDescription ? (
+            <p className="mcc-shop-item__description">
+              {item.longDescription}
             </p>
           ) : null}
-          <p className="text-gray-700 text-lg font-bold">{price} SEK</p>
-          <div className="flex justify-start space-x-2">
-            {productInfos && productInfos.length > 0 ? (
-              <svg
-                onClick={() => {
-                  setShowInfo(!showInfo);
-                }}
-                className="w-6 h-6 text-gray-500 hover:text-pink-600 fill-current"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            ) : null}
-            {instagram ? (
-              <svg
-                onClick={(e) => {
-                  window.open(instagram, "_blank");
-                }}
-                className="w-6 h-6 hover:animate-ping"
-                aria-hidden="true"
-                fill="#C13584"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.067.06 1.407.06 4.123v.08c0 2.643-.012 2.987-.06 4.043-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.067.048-1.407.06-4.123.06h-.08c-2.643 0-2.987-.012-4.043-.06-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.047-1.024-.06-1.379-.06-3.808v-.63c0-2.43.013-2.784.06-3.808.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 015.45 2.525c.636-.247 1.363-.416 2.427-.465C8.901 2.013 9.256 2 11.685 2h.63zm-.081 1.802h-.468c-2.456 0-2.784.011-3.807.058-.975.045-1.504.207-1.857.344-.467.182-.8.398-1.15.748-.35.35-.566.683-.748 1.15-.137.353-.3.882-.344 1.857-.047 1.023-.058 1.351-.058 3.807v.468c0 2.456.011 2.784.058 3.807.045.975.207 1.504.344 1.857.182.466.399.8.748 1.15.35.35.683.566 1.15.748.353.137.882.3 1.857.344 1.054.048 1.37.058 4.041.058h.08c2.597 0 2.917-.01 3.96-.058.976-.045 1.505-.207 1.858-.344.466-.182.8-.398 1.15-.748.35-.35.566-.683.748-1.15.137-.353.3-.882.344-1.857.048-1.055.058-1.37.058-4.041v-.08c0-2.597-.01-2.917-.058-3.96-.045-.976-.207-1.505-.344-1.858a3.097 3.097 0 00-.748-1.15 3.098 3.098 0 00-1.15-.748c-.353-.137-.882-.3-1.857-.344-1.023-.047-1.351-.058-3.807-.058zM12 6.865a5.135 5.135 0 110 10.27 5.135 5.135 0 010-10.27zm0 1.802a3.333 3.333 0 100 6.666 3.333 3.333 0 000-6.666zm5.338-3.205a1.2 1.2 0 110 2.4 1.2 1.2 0 010-2.4z"
-                  clipRule="evenodd"
-                ></path>
-              </svg>
-            ) : null}
-          </div>
-          <div className={additionalItems ? `pb-10` : ``}>
-            {additionalItems
-              ? additionalItems.map((item, index) => {
-                  return (
-                    <div key={index}>
-                      <AdditionalCartItem
-                        item={item}
-                        additionalIndex={index}
-                        handleSwitch={(item, on, additionalIndex) => {
-                          if (on) {
-                            // add
-                            additions.push({ item, additionalIndex, index });
-                          } else {
-                            // remove
-                            const i = additions.findIndex(
-                              (item) => item.index === index
-                            );
-                            additions.splice(i, 1);
-                          }
-                          setAdditions(additions);
-                        }}
-                      />
-                    </div>
-                  );
-                })
-              : null}
-          </div>
-          {amount > 0 ? (
-            <button
-              onClick={() => {
-                const item = getItem(_id);
-                const itemIndex = item ? item.quantity : 0;
 
-                addItem({
-                  id: _id,
-                  parentId: null,
-                  price,
-                  balance: amount,
-                  image: images[0],
-                  headline,
-                  collectionRef,
-                });
-
-                additions.forEach((a) => {
-                  addItem({
-                    id: `${_id}_${itemIndex}_${a.additionalIndex}`,
-                    parentId: _id,
-                    price: a.item.price,
-                    index: itemIndex,
-                    image: null,
-                    headline: a.item.name,
-                    collectionRef: null,
-                  });
-                });
-              }}
-              className="absolute bottom-2 right-2 flex-row-reverse px-4 py-2 text-gray-800 hover:text-white font-medium hover:bg-gray-500 bg-rosa rounded"
-            >
-              Lägg i kundvagn
-            </button>
-          ) : null}
+          <p className="mcc-shop-item__stock">
+            {item.amount > 0
+              ? item.amount === 1
+                ? "Ett exemplar finns i lager"
+                : `${item.amount} exemplar finns i lager`
+              : "Tillfälligt slut"}
+          </p>
         </div>
-      </div>
-    </>
+
+        {item.amount > 0 && item.additionalItems?.length ? (
+          <div className="mcc-shop-item__additions">
+            {item.additionalItems.map((addition, additionIndex) => {
+              const selected = selectedAdditions.includes(additionIndex);
+              return (
+                <label
+                  key={addition._id ?? `${addition.name}-${addition.price}`}
+                >
+                  <input
+                    checked={selected}
+                    onChange={() => {
+                      if (!selected) {
+                        setAdditionGlowKey((current) => current + 1);
+                      }
+                      setSelectedAdditions((current) =>
+                        selected
+                          ? current.filter((index) => index !== additionIndex)
+                          : [...current, additionIndex]
+                      );
+                    }}
+                    type="checkbox"
+                  />
+                  <span aria-hidden="true" className="mcc-shop-item__check" />
+                  <span>{addition.name}</span>
+                  <strong>+{addition.price} SEK</strong>
+                </label>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {item.amount > 0 || item.instagram ? (
+          <div className="mcc-shop-item__actions">
+            {item.amount > 0 ? (
+              <button
+                aria-live="polite"
+                className={added ? "is-added" : ""}
+                onClick={addToCart}
+                type="button"
+              >
+                {additionGlowKey > 0 && !reduceMotion ? (
+                  <span
+                    aria-hidden="true"
+                    className="mcc-shop-item__addition-glow"
+                    key={additionGlowKey}
+                  />
+                ) : null}
+                <span>
+                  {added ? "Tillagd i varukorgen" : "Lägg i varukorgen"}
+                </span>
+                <span>
+                  {totalPrice} SEK
+                  <ArrowIcon className="mcc-shop-item__buy-arrow" />
+                </span>
+              </button>
+            ) : null}
+
+            {item.instagram ? (
+              <a href={item.instagram} rel="noreferrer" target="_blank">
+                Se på Instagram <ArrowIcon direction="up-right" />
+              </a>
+            ) : null}
+          </div>
+        ) : null}
+
+        {item.productInfos?.length ? (
+          <details className="mcc-shop-item__details">
+            <summary>
+              Material & detaljer <PlusMinusIcon />
+            </summary>
+            <ul>
+              {item.productInfos.map((info) => (
+                <li key={info}>{info}</li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+      </motion.div>
+
+      <ClientOnly fallback={null}>
+        {() => (
+          <Magnifier
+            alt={`${item.headline} i större format`}
+            close={setShowImage}
+            currentIndex={currentIndex}
+            images={showImage ? images : []}
+            onIndexChange={(nextIndex) => {
+              setPreloadDirection(nextIndex >= currentIndex ? 1 : -1);
+              setSelectedImageIndex(nextIndex);
+            }}
+          />
+        )}
+      </ClientOnly>
+    </article>
   );
-};
+}
 
-const hash = typeof window === "undefined" ? "" : window.location.hash;
-
-function useScroll(hash: string) {
+function useCollectionScroll() {
   useEffect(() => {
-    if (!hash) window.scrollTo(0, 0);
+    const targetId = decodeURIComponent(window.location.hash.slice(1));
+    if (!targetId) {
+      window.scrollTo(0, 0);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      document.getElementById(targetId)?.scrollIntoView({ block: "start" });
+    }, 80);
+
+    return () => window.clearTimeout(timer);
   }, []);
 }
 
 export default function Collection() {
-  const hash = typeof window === "undefined" ? "" : window.location.hash;
-  useScroll(hash);
-  let { items } = useLoaderData<ItemLoaderProps>();
+  const { collection, items } = useLoaderData<ItemLoaderProps>();
   const { user } = useOutletContext<IndexProps>();
-  let transition = useNavigation();
-  let navigation = useNavigate();
-  let { collection } = useParams();
+  const navigation = useNavigation();
+  const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
+  const [heroLoaded, setHeroLoaded] = useState(false);
+  const [heroFailed, setHeroFailed] = useState(false);
+  const [heroUseOriginal, setHeroUseOriginal] = useState(false);
+  const [renderedHeroImage, setRenderedHeroImage] = useState(collection.image);
+  const heroCachedImageFrameRef = useRef<number | null>(null);
+  const heroImageRef = useRef<HTMLImageElement>(null);
+  const heroAvailable = Boolean(collection.image) && !heroFailed;
+  useCollectionScroll();
+
+  if (renderedHeroImage !== collection.image) {
+    setRenderedHeroImage(collection.image);
+    setHeroLoaded(false);
+    setHeroFailed(false);
+    setHeroUseOriginal(false);
+  }
+
+  const handleHeroError = useCallback(() => {
+    setHeroLoaded(false);
+    if (!heroUseOriginal) {
+      setHeroUseOriginal(true);
+      return;
+    }
+    setHeroFailed(true);
+  }, [heroUseOriginal]);
+
+  const setHeroImageRef = useCallback(
+    (image: HTMLImageElement | null) => {
+      heroImageRef.current = image;
+      if (heroCachedImageFrameRef.current !== null) {
+        window.cancelAnimationFrame(heroCachedImageFrameRef.current);
+        heroCachedImageFrameRef.current = null;
+      }
+      if (!image?.complete) return;
+
+      heroCachedImageFrameRef.current = window.requestAnimationFrame(() => {
+        heroCachedImageFrameRef.current = null;
+        if (heroImageRef.current !== image) return;
+        if (image.naturalWidth > 0) setHeroLoaded(true);
+        else handleHeroError();
+      });
+    },
+    [handleHeroError]
+  );
+
   return (
-    <>
-      <Loader transition={transition} />
-      <section className="mx-auto px-4 py-5 max-w-6xl sm:px-6 lg:px-4">
-        <div className="grid gap-6 grid-cols-1 my-20 lg:grid-cols-2">
-          {items.map((item: ItemProps) => (
-            <Item key={item._id} {...item} />
-          ))}
-        </div>
-        {user ? (
-          <div className="fixed right-5 md:right-10 bottom-16 md:bottom-20">
-            <button
-              onClick={() => {
-                navigation(`/items/${collection}/new`);
-              }}
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold p-2 rounded-full inline-flex items-center justify-center shadow-lg transform transition duration-150 ease-in-out hover:scale-110"
-              style={{ width: "3rem", height: "3rem" }} // Adjust the size as needed
-            >
-              <svg
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                className="w-6 h-6"
+    <main className="collection-page">
+      <Loader transition={navigation} />
+
+      <section
+        className={`mcc-collection-hero${
+          heroAvailable ? "" : " mcc-collection-hero--without-media"
+        }`}
+      >
+        <motion.div
+          className="mcc-collection-hero__copy"
+          initial={reduceMotion ? false : { opacity: 0.96, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            duration: reduceMotion ? 0 : 0.24,
+            ease: [0.22, 1, 0.36, 1],
+          }}
+        >
+          <Link
+            className="mcc-collection-back"
+            prefetch="intent"
+            to="/#collections"
+          >
+            <ArrowIcon direction="left" /> Alla Collections
+          </Link>
+          <p className="mcc-kicker">Moa Clay Co / Collection</p>
+          <h1 lang="sv">{collection.headline}</h1>
+          {collection.shortDescription ? (
+            <strong>{collection.shortDescription}</strong>
+          ) : null}
+          {collection.longDescription ? (
+            <p>{collection.longDescription}</p>
+          ) : null}
+          <div className="mcc-collection-hero__footer">
+            <a href="#pieces">
+              Upptäck kollektionen <ArrowIcon direction="down" />
+            </a>
+            {user ? (
+              <Link
+                prefetch="intent"
+                to={`/collections/${collection.shortUrl}/edit`}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-            </button>
+                Redigera Collection <ArrowIcon direction="up-right" />
+              </Link>
+            ) : null}
+            <span>
+              {String(items.length).padStart(2, "0")} handgjorda favoriter
+            </span>
           </div>
+        </motion.div>
+
+        {heroAvailable ? (
+          <motion.figure
+            className="mcc-collection-hero__media"
+            initial={
+              reduceMotion
+                ? false
+                : { opacity: 0.97, rotate: 0.3, scale: 0.992 }
+            }
+            animate={{ opacity: 1, rotate: 0, scale: 1 }}
+            transition={{
+              delay: reduceMotion ? 0 : 0.03,
+              duration: reduceMotion ? 0 : 0.3,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+          >
+            <img
+              alt={collection.headline}
+              className={heroLoaded ? "is-loaded" : ""}
+              key={heroUseOriginal ? "original" : "responsive"}
+              loading="eager"
+              onError={handleHeroError}
+              onLoad={() => setHeroLoaded(true)}
+              ref={setHeroImageRef}
+              sizes="(max-width: 767px) 100vw, 52vw"
+              src={
+                heroUseOriginal
+                  ? collection.image
+                  : imageWithWidth(collection.image, 1200)
+              }
+              srcSet={
+                heroUseOriginal
+                  ? undefined
+                  : `${imageWithWidth(
+                      collection.image,
+                      560
+                    )} 560w, ${imageWithWidth(
+                      collection.image,
+                      840
+                    )} 840w, ${imageWithWidth(collection.image, 1200)} 1200w`
+              }
+            />
+            <figcaption>
+              Formad för hand <span>·</span> Gjord för att bäras ofta
+            </figcaption>
+          </motion.figure>
         ) : null}
       </section>
-    </>
+
+      <section className="mcc-collection-products" id="pieces">
+        {items.length ? (
+          <div className="mcc-collection-products__grid">
+            {items.map((item, index) => (
+              <Product
+                collectionTitle={collection.headline}
+                featured={index === 0}
+                item={item}
+                key={item._id}
+                position={index}
+                user={user}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="mcc-collection-empty">
+            <p className="mcc-kicker">Snart här</p>
+            <h2>Nya former håller på att ta plats.</h2>
+            <p>Den här kollektionen fylls på så snart nästa par är klart.</p>
+          </div>
+        )}
+      </section>
+
+      <section className="mcc-collection-closing">
+        <p className="mcc-kicker">Färg · form · personlighet</p>
+        <h2>Handgjort får gärna synas.</h2>
+        <Link prefetch="intent" to="/#collections">
+          Se en annan Collection <ArrowIcon direction="up-right" />
+        </Link>
+      </section>
+
+      {user ? (
+        <button
+          aria-label="Skapa en ny produkt"
+          className="mcc-admin-add"
+          onClick={() => navigate(`/items/${collection.shortUrl}/new`)}
+          type="button"
+        >
+          <PlusMinusIcon />
+        </button>
+      ) : null}
+    </main>
   );
 }

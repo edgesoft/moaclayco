@@ -1,156 +1,168 @@
-import { LoaderFunction } from "@remix-run/node";
+import type { LoaderFunction } from "react-router";
+import { Link, Outlet, useLoaderData, useLocation } from "react-router";
+import { useEffect, useRef, useState } from "react";
 import { Discounts as DiscountEntity } from "../schemas/discounts";
-import {
-  Outlet,
-  useLoaderData,
-  useNavigate,
-  useOutletContext,
-} from "@remix-run/react";
-import React, { useEffect } from "react";
 import { auth } from "~/services/auth.server";
-import { formatDateToUTC } from "~/utils/formatDateToUTC";
-import { DiscountType } from "~/types";
-import { IndexProps } from "~/root";
+import type { DiscountType } from "~/types";
 import { getDomain } from "~/utils/domain";
+import { toLoaderData } from "~/utils/loaderData";
+import ArrowIcon from "~/components/ArrowIcon";
+import PlusMinusIcon from "~/components/PlusMinusIcon";
+import { discountProjection } from "~/utils/queryProjections.server";
 
-export let loader: LoaderFunction = async ({ request }) => {
+export const loader: LoaderFunction = async ({ request }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
   const domain = getDomain(request);
 
-  return await DiscountEntity.find({ domain: domain?.domain }).sort({
-    code: 1,
-  });
-};
-
-const getLabel = (balance: number) => {
-  if (!balance || balance === 0) {
-    return {
-      headline: `Slut`,
-      color: "bg-blue-600",
-    };
-  }
-  return { headline: `${balance}`, color: "bg-green-600" };
-};
-
-type DiscountLabelProp = {
-  balance: number;
-};
-
-const DiscountLabel: React.FC<DiscountLabelProp> = ({
-  balance,
-}): JSX.Element | null => {
-  const label = getLabel(balance);
-  return (
-    <span
-      className={`${label.color} text-white inline-flex px-2 text-xs font-semibold leading-5 rounded-full`}
-    >
-      {label.headline}
-    </span>
+  return toLoaderData(
+    await DiscountEntity.find({ domain: domain?.domain })
+      .select(discountProjection)
+      .sort({ code: 1 })
+      .lean()
   );
 };
 
-export default function Orders() {
-  let data = useLoaderData<DiscountType[]>();
-  let navigate = useNavigate();
-  const { user } = useOutletContext<IndexProps>();
+const listDate = new Intl.DateTimeFormat("sv-SE", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "Europe/Stockholm",
+});
 
-  const handleRowClick = (id: string) => {
-    sessionStorage.setItem("scrollPosition", window.scrollY.toString());
-    navigate(`/admin/discounts/${id}`);
-  };
+const listTime = new Intl.DateTimeFormat("sv-SE", {
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "Europe/Stockholm",
+});
+
+const formatValidity = (value: DiscountType["expireAt"]) => {
+  if (!value) return "Utan slutdatum";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Datum saknas";
+  return `${listDate.format(date)} · ${listTime.format(date)}`;
+};
+
+const getDiscountState = (discount: DiscountType) => {
+  if (discount.balance <= 0) return { label: "Slut", tone: "is-empty" };
+  if (discount.expireAt && new Date(discount.expireAt).getTime() < Date.now()) {
+    return { label: "Utgången", tone: "is-expired" };
+  }
+  return { label: "Aktiv", tone: "is-active" };
+};
+
+export default function Discounts() {
+  const discounts = useLoaderData<DiscountType[]>();
+  const location = useLocation();
+  const titleRef = useRef<HTMLDivElement>(null);
+  const [showStickyTitle, setShowStickyTitle] = useState(false);
 
   useEffect(() => {
-    return () => {
-      const scrollY = sessionStorage.getItem("scrollPosition");
-      window.scrollTo(0, scrollY ? parseInt(scrollY, 10) : 0);
-    };
-  }, []);
+    const title = titleRef.current;
+    if (!title) return;
+    const siteHeaderHeight =
+      document.querySelector<HTMLElement>(".mcc-site-header")?.getBoundingClientRect().height ?? 72;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowStickyTitle(!entry.isIntersecting),
+      { rootMargin: `-${siteHeaderHeight}px 0px 0px 0px`, threshold: 0 }
+    );
+
+    observer.observe(title);
+    return () => observer.disconnect();
+  }, [location.pathname]);
+
+  if (location.pathname.replace(/\/$/, "") !== "/admin/discounts") {
+    return <Outlet />;
+  }
+
+  const activeCount = discounts.filter((discount) => getDiscountState(discount).label === "Aktiv").length;
 
   return (
-    <>
-      <Outlet />
-
-      {data.length === 0 ? (
-        <div className="m-2 mt-[100px]  text-sm border p-2 pt-4 pb-4 text-white border-sky-950 bg-sky-700 rounded-lg">
-          Inga rabatter inlagda
-        </div>
-      ) : (
-        <div className="w-full mt-20 p-1 pt-4 mb-20">
-          <div className="overflow-x-auto shadow-md sm:rounded-lg">
-            <table className="min-w-full text-sm text-left text-gray-500">
-              <thead>
-                <tr>
-                  <th
-                    scope="col"
-                    className="pl-2 pr-4 py-3 w-1/4 md:w-1/5 lg:w-1/4"
-                  >
-                    KOD
-                  </th>
-                  <th scope="col" className="pr-4 py-3 w-1/4 md:w-1/5 lg:w-1/4">
-                    ANTAL
-                  </th>
-                  <th scope="col" className="pr-4 py-3 w-1/4 md:w-1/5 lg:w-1/4">
-                    PROCENT
-                  </th>
-                  <th
-                    scope="col"
-                    className="pr-4 py-3 w-1/4 md:w-1/5 lg:w-1/4 md:block hidden whitespace-nowrap"
-                  >
-                    T.O.M.
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((d) => (
-                  <tr
-                    key={d._id}
-                    className="bg-white border-b border-gray-200 cursor-pointer"
-                    onClick={() => handleRowClick(d._id)}
-                  >
-                    <td className="pl-2 pr-4 py-4 w-1/4 md:w-1/5 lg:w-1/4">
-                      {d.code}
-                    </td>
-                    <td className="pr-4 py-4 w-1/4 md:w-1/5 lg:w-1/4">
-                      <DiscountLabel balance={d.balance} />
-                    </td>
-                    <td className="pr-4 py-4 w-1/4 md:w-1/5 lg:w-1/4">
-                      {d.percentage}
-                    </td>
-                    <td className="pr-4 py-3 w-1/4 md:w-1/5 lg:w-1/4 md:block hidden whitespace-nowrap">
-                      {d.expireAt ? formatDateToUTC(d.expireAt) : ""}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+    <main className="mcc-editor-page mcc-discount-list-page">
+      <div className="mcc-editor-form">
+        <header className="mcc-editor-header">
+          <div className="mcc-editor-header__topline">
+            <Link to="/"><span aria-hidden="true"><ArrowIcon direction="left" /></span> Tillbaka till butiken</Link>
           </div>
+          <div className="mcc-editor-header__title mcc-discount-list-title" ref={titleRef}>
+            <div>
+              <p className="mcc-kicker">Ateljé / Försäljning</p>
+              <h1>Rabatter</h1>
+              <p className="mcc-discount-list-intro">
+                {discounts.length
+                  ? `${activeCount} ${activeCount === 1 ? "aktiv kod" : "aktiva koder"} av ${discounts.length}.`
+                  : "Skapa tydliga rabattkoder för kampanjer och återkommande kunder."}
+              </p>
+            </div>
+            <Link className="mcc-discount-create" to="/admin/discounts/new">
+              <span>Ny rabatt</span><span aria-hidden="true"><PlusMinusIcon /></span>
+            </Link>
+          </div>
+        </header>
+
+        <div
+          aria-hidden={!showStickyTitle}
+          className={`mcc-discount-mobile-sticky${showStickyTitle ? " is-visible" : ""}`}
+        >
+          <strong>Rabatter</strong>
+          <Link aria-label="Ny rabatt" tabIndex={showStickyTitle ? undefined : -1} to="/admin/discounts/new">
+            <span aria-hidden="true"><PlusMinusIcon /></span>
+          </Link>
         </div>
-      )}
-      {user ? (
-        <div className="fixed right-5 md:right-10 bottom-16 md:bottom-20">
-          <button
-            onClick={() => {
-              navigate(`/admin/discounts/new`);
-            }}
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold p-2 rounded-full inline-flex items-center justify-center shadow-lg transform transition duration-150 ease-in-out hover:scale-110"
-            style={{ width: "3rem", height: "3rem" }} // Adjust the size as needed
-          >
-            <svg
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              className="w-6 h-6"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-          </button>
-        </div>
-      ) : null}
-    </>
+
+        <section className="mcc-discount-index" aria-labelledby="discount-list-heading">
+          <div className="mcc-discount-index__heading">
+            <div>
+              <p className="mcc-editor-eyebrow">Översikt</p>
+              <h2 id="discount-list-heading">Alla koder</h2>
+            </div>
+            <span>{String(discounts.length).padStart(2, "0")}</span>
+          </div>
+
+          {discounts.length ? (
+            <div className="mcc-discount-list">
+              <div className="mcc-discount-list__labels" aria-hidden="true">
+                <span>Kod</span>
+                <span>Rabatt</span>
+                <span>Kvar</span>
+                <span>Giltighet</span>
+                <span>Status</span>
+                <span />
+              </div>
+              {discounts.map((discount) => {
+                const state = getDiscountState(discount);
+                return (
+                  <Link className="mcc-discount-row" key={discount._id} to={`/admin/discounts/${discount._id}`}>
+                    <span className="mcc-discount-row__code" data-label="Kod">{discount.code}</span>
+                    <span className="mcc-discount-row__percentage" data-label="Rabatt">
+                      <strong>{discount.percentage}</strong><small>%</small>
+                    </span>
+                    <span className="mcc-discount-row__balance" data-label="Kvar">
+                      {discount.balance} {discount.balance === 1 ? "gång" : "gånger"}
+                    </span>
+                    <span className="mcc-discount-row__validity" data-label="Giltighet">
+                      {formatValidity(discount.expireAt)}
+                    </span>
+                    <span className={`mcc-discount-row__state ${state.tone}`} data-label="Status">
+                      <i /> {state.label}
+                    </span>
+                    <span className="mcc-discount-row__arrow" aria-hidden="true"><ArrowIcon /></span>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mcc-discount-empty">
+              <span>01</span>
+              <div>
+                <h3>Här är det tomt än så länge.</h3>
+                <p>Skapa din första rabattkod. Du väljer procentsats, antal användningar och om koden ska ha ett slutdatum.</p>
+                <Link to="/admin/discounts/new">Skapa en rabatt <span aria-hidden="true"><ArrowIcon /></span></Link>
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
+    </main>
   );
 }

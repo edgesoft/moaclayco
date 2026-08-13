@@ -1,79 +1,129 @@
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { ActionFunction } from "@remix-run/node";
+import { data as json } from "react-router";
+import type { ActionFunction } from "react-router";
+import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
+import { auth } from "~/services/auth.server";
 import { s3Client } from "~/services/s3.server";
-import { ItemProps } from "~/types";
+import type { ItemProps } from "~/types";
+import { getDomain } from "~/utils/domain";
+import { itemImageStorageKey } from "~/utils/itemImageStorage.server";
+import {
+  MAX_STANDARD_FORM_REQUEST_SIZE,
+  parseFormDataWithinLimit,
+  RequestBodyTooLargeError,
+} from "~/utils/requestBody.server";
 
 const AWS_ITEM_PATH = process.env.AWS_ITEM_PATH;
 
-export async function deleteFileFromS3(
+async function deleteFileFromS3(
   id: string | null,
   collection: string,
-  fileKey: string
+  requestedFileName: string,
+  domain: string
 ) {
-  const item: ItemProps | null = id 
-    ? await Items.findOne({ _id: id }).lean()
-    : null
+  if (!AWS_ITEM_PATH) return false;
+  const fileName = requestedFileName.split("/").pop()?.split("?")[0];
+  if (!fileName || fileName !== requestedFileName.split("?")[0]) return false;
+
+  const item = id
+    ? await Items.findOne({
+        _id: id,
+        collectionRef: collection,
+        domain,
+      }).lean<ItemProps>()
+    : null;
+
+  if (id && !item) return false;
 
   if (item) {
-    const image = item.images.find((i) => i.endsWith(fileKey));
-    const rest = item.images.filter((i) => !i.endsWith(fileKey));
+    const image = item.images.find((candidate) =>
+      candidate.split("?")[0].endsWith(`/${fileName}`)
+    );
+    if (!image) return false;
+    const key = itemImageStorageKey(image, AWS_ITEM_PATH, collection);
+    if (!key) return false;
 
-    if (image) {
-      const [nameOnS3, collectionOns3] = image.split("/").reverse().slice(0, 2);
+    const updateResult = await Items.updateOne(
+      { _id: id, collectionRef: collection, domain, images: image },
+      { $pull: { images: image } }
+    );
+    if (updateResult.modifiedCount !== 1) return false;
 
-      const deleteParams = {
-        Bucket: process.env.AWS_S3_BUCKET_NAME,
-        Key: `${AWS_ITEM_PATH}/${collectionOns3}/${nameOnS3}`,
-      };
-
-      try {
-        await s3Client.send(new DeleteObjectCommand(deleteParams));
-        console.log(`File deleted: ${fileKey}`);
-        await Items.updateOne(
-          { _id: id },
-          {
-            images: rest,
-          }
-        );
-
-        return true;
-      } catch (error) {
-        console.error("Error deleting file:", error);
-        return false;
-      }
-    } else {
-      // this item might now have been saved yet. Try to remove it from S3
-      const deleteParams = {
-        Bucket: process.env.AWS_S3_BUCKET_NAME,
-        Key: `${AWS_ITEM_PATH}/${collection}/${fileKey}`,
-      };
-
-      try {
-        await s3Client.send(new DeleteObjectCommand(deleteParams));
-        console.log(`File deleted: ${fileKey}`);
-        return true;
-      } catch (e) {
-        return false;
-      }
+    try {
+      await s3Client.send(
+        new DeleteObjectCommand({
+          Bucket: process.env.AWS_S3_BUCKET_NAME,
+          Key: key,
+        })
+      );
+    } catch (error) {
+      // The database is the source of truth. A stale, unreferenced S3 object is
+      // safer than leaving the product with a permanently broken image URL.
+      console.error("Unreferenced item image could not be removed from S3", error);
     }
+    return true;
   }
-  return false;
+
+  await s3Client.send(
+    new DeleteObjectCommand({
+      Bucket: process.env.AWS_S3_BUCKET_NAME,
+      Key: `${AWS_ITEM_PATH}/${collection}/${fileName}`,
+    })
+  );
+  return true;
 }
 
 export const action: ActionFunction = async ({ request }) => {
-  const formData = await request.formData();
-  const imageName = formData.get("imageName");
-  const id = formData.get("id");
-  const collection = formData.get("collection");
+  await auth.isAuthenticated(request, { failureRedirect: "/login" });
+  const domain = getDomain(request);
+  if (!domain) return json({ error: "Okänd domän." }, { status: 400 });
 
-  if (imageName && collection) {
-    await deleteFileFromS3(
-      id ? id.toString() : null,
-      collection.toString(),
-      imageName.toString()
+  let formData: FormData;
+  try {
+    formData = await parseFormDataWithinLimit(
+      request,
+      MAX_STANDARD_FORM_REQUEST_SIZE
     );
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return json(
+        { error: "Formuläret är för stort.", success: false },
+        { status: 413 }
+      );
+    }
+    throw error;
+  }
+  const imageName = formData.get("imageName")?.toString();
+  const id = formData.get("id")?.toString() || null;
+  const collection = formData.get("collection")?.toString();
+  if (!imageName || !collection) {
+    return json({ error: "Bild eller kollektion saknas." }, { status: 400 });
   }
 
-  return null;
+  const collectionExists = await Collections.exists({
+    domain: domain.domain,
+    shortUrl: collection,
+  });
+  if (!collectionExists) {
+    return json({ error: "Kollektionen kunde inte hittas." }, { status: 404 });
+  }
+
+  try {
+    const success = await deleteFileFromS3(
+      id,
+      collection,
+      imageName,
+      domain.domain
+    );
+    return success
+      ? json({ success: true })
+      : json({ error: "Bilden kunde inte hittas.", success: false }, { status: 404 });
+  } catch (error) {
+    console.error("Image delete failed", error);
+    return json(
+      { error: "Bilden kunde inte tas bort.", success: false },
+      { status: 500 }
+    );
+  }
 };

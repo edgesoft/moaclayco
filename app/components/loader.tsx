@@ -1,47 +1,47 @@
-import { useNavigation } from "@remix-run/react";
+import { useNavigation } from "react-router";
+import { useEffect, useState } from "react";
+import ViewportPortal from "./ViewportPortal";
+
 type Navigation = ReturnType<typeof useNavigation>;
-import {useEffect, useState} from 'react'
 
 type Fetcher = {
-  state: string
-}
+  state: string;
+};
 
 type LoaderProps = {
-  transition: Navigation | Fetcher
-  forceSpinner?: boolean
+  transition: Navigation | Fetcher;
+  forceSpinner?: boolean;
+};
+
+const loadingState = ["loading", "submitting"];
+
+const hasLoadingState = ({ transition }: LoaderProps): boolean =>
+  loadingState.includes(transition.state);
+
+export default function Loader({ transition, forceSpinner }: LoaderProps) {
+  if (!forceSpinner && !hasLoadingState({ transition })) return null;
+
+  return <DelayedLoader />;
 }
 
-const loadingState = ["loading", "submitting"]
+function DelayedLoader() {
+  const [show, setShow] = useState(false);
 
-const hasLoadingState = ({transition}: LoaderProps): boolean => {
-    return loadingState.indexOf(transition.state) !== -1
-}
-
-export default function Loader({transition, forceSpinner}: LoaderProps) {
-  const [show, setShow] = useState<boolean>(false)
-  let handle: NodeJS.Timeout | undefined = undefined
   useEffect(() => {
-    if (forceSpinner || hasLoadingState({transition})) {
-      handle = setTimeout(() => {
-        if (forceSpinner || hasLoadingState({transition})) {
-          setShow(true)
-        }
-      }, 1000)
-    } else {
-      setShow(false)
-    }
-    return () => {
-      if (handle)
-      clearTimeout(handle)
-    }
-  }, [transition, forceSpinner])
+    const handle = setTimeout(() => setShow(true), 650);
+    return () => clearTimeout(handle);
+  }, []);
 
-
-  if (!show) return null
+  if (!show) return null;
 
   return (
-    <div className="fixed z-20 left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2">
-      <div className="w-32 h-32 bg-green-500 rounded-full animate-ping ring-2 ring-green-800"></div>
-    </div>
-  )
+    <ViewportPortal>
+      <div aria-live="polite" className="mcc-route-loader" role="status">
+        <span aria-hidden="true" className="mcc-route-loader-mark">
+          <span />
+        </span>
+        <span>Laddar nästa vy</span>
+      </div>
+    </ViewportPortal>
+  );
 }

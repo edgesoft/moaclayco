@@ -1,61 +1,56 @@
-import { ActionFunction, LoaderFunction, json } from "@remix-run/node";
+import type { LoaderFunction } from "react-router";
+import { data as json, useLoaderData, useNavigate } from "react-router";
+import LoginModal from "~/components/LoginModal";
 import { auth } from "~/services/auth.server";
-import { sessionStorage } from "../services/session.server";
-import { Form, useLoaderData, useNavigation } from "@remix-run/react";
-import useLocalStorage from "~/hooks/useLocalStorage";
-import { useTheme } from "~/components/Theme";
+import { isGoogleAuthenticationConfigured } from "~/services/google-auth.server";
+import { getSafeAuthenticationReturnTo } from "~/utils/authRedirect";
 
-export const action: ActionFunction = async ({ request }) => {
-  return await auth.authenticate("email-link", request, {
-    successRedirect: "/",
-    failureRedirect: `/login`,
+const ERROR_MESSAGES: Record<string, string> = {
+  configuration:
+    "Google-inloggningen är inte färdigkonfigurerad. Kontakta administratören.",
+  invalid_flow: "Inloggningen hann löpa ut. Försök igen.",
+  not_allowed: "Det här Google-kontot har inte behörighet till administrationen.",
+  not_verified: "Google-kontots e-postadress är inte verifierad.",
+  account_conflict:
+    "Google-kontot är redan kopplat till en annan användare. Kontakta administratören.",
+  provider_error: "Google-inloggningen kunde inte slutföras. Försök igen.",
+};
+
+type LoaderData = {
+  configured: boolean;
+  errorMessage: string | null;
+  returnTo: string;
+};
+
+export const loader: LoaderFunction = async ({ request }) => {
+  const url = new URL(request.url);
+  const returnTo = getSafeAuthenticationReturnTo(
+    url.searchParams.get("returnTo")
+  );
+  await auth.isAuthenticated(request, {
+    successRedirect: returnTo,
+  });
+
+  const error = url.searchParams.get("error");
+  return json<LoaderData>({
+    configured: isGoogleAuthenticationConfigured(),
+    errorMessage: error ? ERROR_MESSAGES[error] ?? ERROR_MESSAGES.provider_error : null,
+    returnTo,
   });
 };
 
-export let loader: LoaderFunction = async ({ request }) => {
-  await auth.isAuthenticated(request, { successRedirect: "/" });
-
-  let session = await sessionStorage.getSession(request.headers.get("Cookie"));
-  if (session.has("auth:magiclink")) return json({ magicLinkSent: true });
-  return json({ magicLinkSent: false });
-};
-
 export default function Login() {
-  const { magicLinkSent } = useLoaderData();
-  let transition = useNavigation();
-  let [email, setEmail] = useLocalStorage("mcc-email", "");
-  const theme = useTheme()
+  const { configured, errorMessage, returnTo } = useLoaderData<LoaderData>();
+  const navigate = useNavigate();
 
   return (
-    <div className="flex items-center justify-center min-h-screen px-3">
-      <div className="relative w-full max-w-md p-6 bg-white rounded-md shadow-md">
-        <Form method="post">
-          <h3 className="text-lg font-medium leading-6 text-gray-900">
-            Logga in på ditt konto
-          </h3>
-          <div className="mt-2 text-black">
-            {magicLinkSent
-              ? `Länk skickad. Kolla din epost för mail från ${theme?.email}`
-              : transition.state !== "submitting" && (
-                  <input
-                    onChange={(e) => setEmail(e.target.value)}
-                    defaultValue={email}
-                    required
-                    name="email"
-                    placeholder="Epost"
-                    type="text"
-                    className="focus:shadow-outline w-full appearance-none rounded border border-slate-300 bg-white py-2 px-3 leading-tight text-slate-700 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-100 focus:ring-offset-2"
-                  />
-                )}
-          </div>
-
-          <div className="mt-4">
-            <button type="submit" className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-500 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:border-blue-700 focus:ring-blue active:bg-blue-700 transition duration-150 ease-in-out">
-              {magicLinkSent ? `Länk skickad` : `Skicka länk`}
-            </button>
-          </div>
-        </Form>
-      </div>
+    <div className="mcc-login-page">
+      <LoginModal
+        configured={configured}
+        errorMessage={errorMessage}
+        onClose={() => navigate("/")}
+        returnTo={returnTo}
+      />
     </div>
   );
 }

@@ -1,71 +1,62 @@
-import Select, { ActionMeta } from "react-select";
 import { Option, selectStyle } from "./selectStyle";
-import { useEffect, useRef, useState } from "react";
-import CreatableSelect from 'react-select/creatable';
+import { useState } from "react";
+import CreatableSelect from "react-select/creatable";
 
 type DropDownProps = {
   label: string;
-  name: string;
+  name?: string;
   options: Option[];
   currentOptions: Option[];
   required: boolean;
   isMulti?: boolean;
   error?: string;
-  onChange?: (value: ReadonlyArray<Option> | Readonly<Option>) => void;
+  onChange?: (value: Option | null) => void;
 };
 
 export function DropDown({
+  ...props
+}: DropDownProps) {
+  const initialOption = props.currentOptions[0] ?? null;
+  return (
+    <DropDownControl
+      key={`${initialOption?.label ?? ""}:${initialOption?.value ?? ""}`}
+      {...props}
+      initialOption={initialOption}
+    />
+  );
+}
+
+function DropDownControl({
   label,
   name,
   options,
-  currentOptions,
-  required = false,
-  isMulti = false,
-  error = undefined,
   onChange = undefined,
-}: DropDownProps) {
-  const [selectedOptions, setSelectedOptions] =
-    useState<ReadonlyArray<Option>>(currentOptions);
-  const ref = useRef<HTMLInputElement>(null);
+  initialOption,
+}: DropDownProps & { initialOption: Option | null }) {
+  const [selectedOption, setSelectedOption] = useState<Option | null>(initialOption);
 
-  useEffect(() => {
-    if (ref.current) {
-      ref.current.value = currentOptions
-        .map((option) => option.value)
-        .join(", ");
-    }
-  }, []);
-
-  const handleChange = (
-    value: ReadonlyArray<Option>,
-    meta: ActionMeta<Option>
-  ) => {
-    if (ref && ref.current) {
-      if (isMulti) {
-        setSelectedOptions(value);
-        ref.current.value = value.map((option) => option.value).join(",");
-        onChange && onChange(value);
-      } else {
-        let option = (meta.option || []) as ReadonlyArray<Option>;
-        setSelectedOptions(option);
-        ref.current.value = meta.option?.value || "";
-        onChange && onChange(option);
-      }
-    }
+  const handleChange = (value: Option | null) => {
+    setSelectedOption(value);
+    onChange?.(value);
   };
 
   return (
-   <div className="w-full">
+    <div className="w-full">
       <CreatableSelect
         placeholder={label}
         options={options}
-        value={selectedOptions}
+        value={selectedOption}
         onChange={handleChange}
-        isMulti
-        styles={selectStyle}
+        isMulti={false}
+        styles={selectStyle as any}
         isClearable={true}
       ></CreatableSelect>
-      <input type="hidden" name={name} id="name" ref={ref} />
-      </div>
+      <input
+        type="hidden"
+        name={name}
+        value={selectedOption?.value ?? ""}
+        readOnly
+      />
+    </div>
   );
 }
