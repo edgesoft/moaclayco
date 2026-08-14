@@ -32,6 +32,8 @@ const cache =
 export const catalogCacheKeys = {
   collections: "catalog:collections",
   collection: (shortUrl: string) => `catalog:collection:${shortUrl}`,
+  collectionPreview: (shortUrl: string) =>
+    `catalog:collection-preview:${shortUrl}`,
   latestItems: "catalog:latest-items",
 };
 

@@ -1,5 +1,6 @@
 import {
   Link,
+  useFetcher,
   useLoaderData,
   useLocation,
   useNavigate,
@@ -13,6 +14,7 @@ import React, {
   useSyncExternalStore,
 } from "react";
 import { useCart } from "react-use-cart";
+import type { CollectionPreviewData } from "~/routes/collections.$collection_.preview";
 import { CollectionProps, User } from "~/types";
 import ArrowIcon from "./ArrowIcon";
 import ClientOnly from "./ClientOnly";
@@ -292,9 +294,202 @@ function NavigationWordmark() {
   );
 }
 
+const navigationImageWithWidth = (image: string, width: number) =>
+  `${image}${image.includes("?") ? "&" : "?"}width=${width}`;
+
+function NavigationCollection({
+  closeAfterNavigation,
+  collection,
+  expanded,
+  index,
+  onToggle,
+}: {
+  closeAfterNavigation: () => void;
+  collection: CollectionProps;
+  expanded: boolean;
+  index: number;
+  onToggle: () => void;
+}) {
+  const preview = useFetcher<CollectionPreviewData>();
+  const reduceMotion = useReducedMotion();
+  const itemRef = useRef<HTMLElement>(null);
+  const previewId = `mcc-collection-preview-${collection.shortUrl}`;
+  const items =
+    preview.data?.collectionRef === collection.shortUrl
+      ? preview.data.items
+      : undefined;
+
+  useEffect(() => {
+    if (!expanded || items || preview.state !== "idle") return;
+    preview.load(`/collections/${collection.shortUrl}/preview`);
+  }, [collection.shortUrl, expanded, items, preview]);
+
+  useEffect(() => {
+    if (!expanded) return;
+
+    const scrollFrame = window.requestAnimationFrame(() => {
+      itemRef.current?.scrollIntoView({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "start",
+        inline: "nearest",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(scrollFrame);
+  }, [expanded, reduceMotion]);
+
+  return (
+    <motion.article
+      animate={{ opacity: 1, y: 0 }}
+      className={`mcc-navigation-collection-item${
+        expanded ? " is-expanded" : ""
+      }`}
+      initial={{ opacity: 0, y: 14 }}
+      ref={itemRef}
+      transition={{
+        delay: expanded ? 0 : 0.14 + Math.min(index, 10) * 0.035,
+        duration: reduceMotion ? 0 : 0.4,
+      }}
+    >
+      <div className="mcc-navigation-collection">
+        <motion.button
+          aria-controls={previewId}
+          aria-expanded={expanded}
+          aria-label={`${expanded ? "Dölj" : "Visa"} produkterna i ${
+            collection.headline
+          }`}
+          className="mcc-navigation-collection-media"
+          onClick={onToggle}
+          type="button"
+        >
+          <img
+            alt=""
+            decoding="async"
+            loading={index > 3 ? "lazy" : "eager"}
+            sizes="(max-width: 899px) 46vw, 9vw"
+            src={navigationImageWithWidth(collection.image, 520)}
+            srcSet={`${navigationImageWithWidth(
+              collection.image,
+              180
+            )} 180w, ${navigationImageWithWidth(
+              collection.image,
+              360
+            )} 360w, ${navigationImageWithWidth(
+              collection.image,
+              520
+            )} 520w`}
+          />
+        </motion.button>
+
+        <Link
+          aria-label={`Öppna ${collection.headline}`}
+          className="mcc-navigation-collection-link"
+          onClick={closeAfterNavigation}
+          prefetch="intent"
+          to={`/collections/${collection.shortUrl}`}
+        >
+          <span className="mcc-navigation-collection-copy">
+            <small>Collection {String(index + 1).padStart(2, "0")}</small>
+            <strong>{collection.headline}</strong>
+          </span>
+          <span className="mcc-navigation-collection-arrow">
+            <Icon name="arrow" />
+          </span>
+        </Link>
+      </div>
+
+      {expanded ? (
+        <motion.div
+          animate={{ opacity: 1, y: 0 }}
+          aria-busy={!items}
+          className="mcc-navigation-product-preview"
+          id={previewId}
+          initial={{ opacity: 0, y: 10 }}
+          transition={{
+            delay: reduceMotion ? 0 : 0.12,
+            duration: reduceMotion ? 0 : 0.34,
+            ease: [0.22, 1, 0.36, 1],
+          }}
+        >
+          {items ? (
+            items.length ? (
+              <div
+                aria-label={`Produkter i ${collection.headline}`}
+                className="mcc-navigation-product-list"
+              >
+                {items.map((item, itemIndex) => (
+                  <motion.div
+                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0, y: 12 }}
+                    key={item._id}
+                    transition={{
+                      delay: reduceMotion ? 0 : Math.min(itemIndex, 8) * 0.045,
+                      duration: reduceMotion ? 0 : 0.36,
+                    }}
+                  >
+                    <Link
+                      aria-label={`Öppna ${item.headline}`}
+                      className="mcc-navigation-product"
+                      onClick={closeAfterNavigation}
+                      prefetch="intent"
+                      to={`/collections/${collection.shortUrl}#${item._id}`}
+                    >
+                      <span className="mcc-navigation-product-media">
+                        <img
+                          alt=""
+                          decoding="async"
+                          loading={itemIndex < 3 ? "eager" : "lazy"}
+                            sizes="(max-width: 899px) 32vw, 10vw"
+                          src={navigationImageWithWidth(item.image, 420)}
+                          srcSet={`${navigationImageWithWidth(
+                            item.image,
+                            220
+                          )} 220w, ${navigationImageWithWidth(
+                            item.image,
+                            420
+                          )} 420w`}
+                        />
+                      </span>
+                      <span className="mcc-navigation-product-copy">
+                        <small>{String(itemIndex + 1).padStart(2, "0")}</small>
+                        <strong>{item.headline}</strong>
+                        {item.amount <= 0 ? <em>Slutsåld</em> : null}
+                      </span>
+                    </Link>
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <p className="mcc-navigation-product-empty">
+                Den här Collection har inga produkter just nu.
+              </p>
+            )
+          ) : (
+            <div
+              aria-label="Hämtar produkter"
+              className="mcc-navigation-product-list mcc-navigation-product-list--loading"
+              role="status"
+            >
+              {[0, 1, 2].map((placeholder) => (
+                <span
+                  className="mcc-navigation-product-placeholder"
+                  key={placeholder}
+                />
+              ))}
+            </div>
+          )}
+        </motion.div>
+      ) : null}
+    </motion.article>
+  );
+}
+
 function Hamburger({ onLogin }: { onLogin: () => void }) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [mobileMenuCompact, setMobileMenuCompact] = React.useState(false);
+  const [expandedCollection, setExpandedCollection] = React.useState<
+    string | null
+  >(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const mobileCloseButtonRef = useRef<HTMLButtonElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -312,6 +507,7 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
 
   const closeMenu = (restoreFocus = false) => {
     pendingAdminTargetRef.current = null;
+    setExpandedCollection(null);
     setMenuOpen(false);
     setMobileMenuCompact(false);
     if (restoreFocus) {
@@ -444,7 +640,7 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
                     <Icon name="home" />
                   </Link>
                   <button
-                    aria-label={data.user ? "Logga ut" : "Logga in"}
+                    aria-label={data.user ? "Logga ut" : "Administration"}
                     className="mcc-navigation-shortcut"
                     form={data.user ? "mcc-logout-form" : undefined}
                     onClick={data.user ? undefined : onAccount}
@@ -569,7 +765,7 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
                       <Icon name="account" />
                     </span>
                     <span>
-                      <small>Konto</small>
+                      <small>Administration</small>
                       {data.user ? "Logga ut" : "Logga in"}
                     </span>
                     <Icon name="arrow" />
@@ -594,7 +790,7 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
                           <small>
                             {pendingAdminPath === "/admin/orders"
                               ? "Hämtar"
-                              : "Admin"}
+                              : "Administration"}
                           </small>
                           Ordrar
                         </span>
@@ -621,7 +817,7 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
                           <small>
                             {pendingAdminPath === "/admin/verifications"
                               ? "Öppnar"
-                              : "Admin"}
+                              : "Administration"}
                           </small>
                           Bokföring
                         </span>
@@ -640,7 +836,7 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
                           <Icon name="discount" />
                         </span>
                         <span>
-                          <small>Admin</small>
+                          <small>Administration</small>
                           Rabatter
                         </span>
                         <Icon name="arrow" />
@@ -687,40 +883,20 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
 
                 <div className="mcc-navigation-collection-grid">
                   {data.collections.map((collection, index) => (
-                    <motion.div
-                      animate={{ opacity: 1, y: 0 }}
-                      initial={{ opacity: 0, y: 14 }}
+                    <NavigationCollection
+                      closeAfterNavigation={closeAfterNavigation}
+                      collection={collection}
+                      expanded={expandedCollection === collection.shortUrl}
                       key={collection._id ?? collection.shortUrl}
-                      transition={{
-                        delay: 0.14 + Math.min(index, 10) * 0.035,
-                        duration: 0.4,
-                      }}
-                    >
-                      <Link
-                        aria-label={`Öppna ${collection.headline}`}
-                        className="mcc-navigation-collection"
-                        onClick={closeAfterNavigation}
-                        prefetch="intent"
-                        to={`/collections/${collection.shortUrl}`}
-                      >
-                        <span className="mcc-navigation-collection-media">
-                          <img
-                            alt=""
-                            loading={index > 3 ? "lazy" : "eager"}
-                            src={collection.image}
-                          />
-                        </span>
-                        <span className="mcc-navigation-collection-copy">
-                          <small>
-                            Collection {String(index + 1).padStart(2, "0")}
-                          </small>
-                          <strong>{collection.headline}</strong>
-                        </span>
-                        <span className="mcc-navigation-collection-arrow">
-                          <Icon name="arrow" />
-                        </span>
-                      </Link>
-                    </motion.div>
+                      index={index}
+                      onToggle={() =>
+                        setExpandedCollection((current) =>
+                          current === collection.shortUrl
+                            ? null
+                            : collection.shortUrl
+                        )
+                      }
+                    />
                   ))}
                 </div>
               </motion.section>

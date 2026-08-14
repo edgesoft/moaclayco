@@ -9,6 +9,7 @@ import {
 import {
   journalEntryAmountsForSide,
   journalEntrySide,
+  suggestedJournalEntry,
 } from "../app/components/admin/JournalEntryAmountField";
 
 test("moves the full journal-entry amount when debit or credit is switched", () => {
@@ -21,6 +22,41 @@ test("moves the full journal-entry amount when debit or credit is switched", () 
     { debit: 42, credit: 0 }
   );
   assert.equal(journalEntrySide({ debit: 0, credit: 42 }), "credit");
+});
+
+test("suggests the side and remaining amount needed to balance a new row", () => {
+  assert.deepEqual(
+    suggestedJournalEntry([{ debit: 125.5, credit: 0 }], "debit"),
+    { debit: 0, credit: 125.5, side: "credit" }
+  );
+  assert.deepEqual(
+    suggestedJournalEntry([{ debit: 0, credit: 42 }], "credit"),
+    { debit: 42, credit: 0, side: "debit" }
+  );
+  assert.deepEqual(
+    suggestedJournalEntry([
+      { debit: 100, credit: 0 },
+      { debit: 0, credit: 35.25 },
+    ]),
+    { debit: 0, credit: 64.75, side: "credit" }
+  );
+});
+
+test("suggests the opposite empty side when existing rows already balance", () => {
+  assert.deepEqual(
+    suggestedJournalEntry([{ debit: 0, credit: 0 }], "debit"),
+    { debit: 0, credit: 0, side: "credit" }
+  );
+  assert.deepEqual(
+    suggestedJournalEntry(
+      [
+        { debit: 100, credit: 0 },
+        { debit: 0, credit: 100 },
+      ],
+      "credit"
+    ),
+    { debit: 0, credit: 0, side: "debit" }
+  );
 });
 
 test("normalizes and accepts a balanced verification", () => {

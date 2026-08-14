@@ -145,6 +145,10 @@ function Product({
   const [added, setAdded] = useState(false);
   const articleRef = useRef<HTMLElement>(null);
   const cachedImageFrameRef = useRef<number | null>(null);
+  const detailPreloadRef = useRef<{
+    image: HTMLImageElement;
+    source: string;
+  } | null>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const handledErrorAttemptRef = useRef<string | null>(null);
   const preloadRef = useRef<HTMLImageElement[]>([]);
@@ -350,8 +354,43 @@ function Product({
   );
 
   const handleZoomIntent = useCallback(() => {
-    if (activeImage) setDetailImage(activeImage);
-  }, [activeImage]);
+    if (!activeImage || useOriginalImage || detailImage === activeImage) return;
+
+    const source = imageWithWidth(activeImage, 2200);
+    if (detailPreloadRef.current?.source === source) return;
+
+    const preload = new Image();
+    const request = { image: preload, source };
+    detailPreloadRef.current = request;
+
+    const clearRequest = () => {
+      if (detailPreloadRef.current === request) {
+        detailPreloadRef.current = null;
+      }
+    };
+    const commitDetailImage = () => {
+      if (detailPreloadRef.current !== request) return;
+      detailPreloadRef.current = null;
+      setDetailImage(activeImage);
+    };
+
+    preload.onload = () => {
+      void preload.decode().then(commitDetailImage).catch(clearRequest);
+    };
+    preload.onerror = clearRequest;
+    preload.src = source;
+  }, [activeImage, detailImage, useOriginalImage]);
+
+  useEffect(
+    () => () => {
+      const request = detailPreloadRef.current;
+      if (!request) return;
+      request.image.onload = null;
+      request.image.onerror = null;
+      detailPreloadRef.current = null;
+    },
+    [activeImage]
+  );
   const inlineZoom = useInlineImageZoom({
     imageKey: activeImage,
     onNext: nextImage,
@@ -462,7 +501,7 @@ function Product({
                 key={`${activeImage}-${
                   useOriginalImage ? "original" : "responsive"
                 }-${imageAttempt}`}
-                loading="lazy"
+                loading={position < 2 ? "eager" : "lazy"}
                 onError={handleImageError}
                 onLoad={handleImageLoad}
                 ref={setProductImageRef}

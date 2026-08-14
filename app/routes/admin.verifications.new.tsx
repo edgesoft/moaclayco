@@ -44,7 +44,11 @@ import {
   validateVerificationFile,
 } from "~/services/verification-files.server";
 import { AccountingDateField } from "~/components/admin/AccountingDateField";
-import JournalEntryAmountField from "~/components/admin/JournalEntryAmountField";
+import JournalEntryAmountField, {
+  journalEntrySide,
+  suggestedJournalEntry,
+  type JournalEntrySide,
+} from "~/components/admin/JournalEntryAmountField";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
 import {
@@ -626,17 +630,34 @@ export default function Verification() {
     control,
     name: "journalEntries",
   });
+  const [journalEntrySides, setJournalEntrySides] = useState<
+    Record<string, JournalEntrySide>
+  >({});
 
   const handleAddRow = () => {
     const journalEntries = getValues("journalEntries");
+    const lastIndex = journalEntries.length - 1;
+    const lastEntry = journalEntries[lastIndex];
+    const lastSelectedSide =
+      journalEntrySide(lastEntry) ??
+      journalEntrySides[fields[lastIndex]?.id] ??
+      "debit";
+    const suggestedEntry = suggestedJournalEntry(
+      journalEntries,
+      lastSelectedSide
+    );
+    const appendSuggestedEntry = () =>
+      append({
+        account: 0,
+        debit: suggestedEntry.debit,
+        credit: suggestedEntry.credit,
+      });
 
     // Kontrollera om det finns fler än en rad
     if (journalEntries.length > 1) {
-      append({ account: 0, debit: 0, credit: 0 });
+      appendSuggestedEntry();
       return;
     }
-
-    const lastEntry = journalEntries[journalEntries.length - 1];
 
     // Hitta det senaste kontot i accounts listan baserat på account-value
     const lastAccount = accounts.find((acc) => acc.value === lastEntry.account);
@@ -649,7 +670,7 @@ export default function Verification() {
         lastEntry.account,
         vatAccount, // Moms-kontot från accounts
         () => {
-          const debitOrCredit = lastEntry.debit ? "debit" : "credit";
+          const debitOrCredit = lastSelectedSide;
           const baseAmount = Number(lastEntry[debitOrCredit]) || 0; // Omvandla till nummer
           const vatAmount = Number(baseAmount * 0.25); // Beräkna moms
 
@@ -674,13 +695,13 @@ export default function Verification() {
           });
         },
         () => {
-          append({ account: 0, debit: 0, credit: 0 });
+          appendSuggestedEntry();
         }
       );
       return;
     }
 
-    append({ account: 0, debit: 0, credit: 0 });
+    appendSuggestedEntry();
   };
 
   const applySuggestion = (
@@ -1304,11 +1325,24 @@ export default function Verification() {
                 </div>
                 ) : null}
 
-                {fields.map((entry, index) => (
-                  <div
-                    key={entry.id}
-                    className="verification-entry-card w-full min-w-0 max-w-full rounded-[1.25rem] border border-stone-200 bg-[#fbfaf8] p-4 shadow-[0_1px_0_rgba(41,37,36,0.03)] sm:p-5"
-                  >
+                {fields.map((entry, index) => {
+                  const previousIndex = index - 1;
+                  const previousEntry = currentEntries[previousIndex];
+                  const previousSide = previousEntry
+                    ? journalEntrySide(previousEntry) ??
+                      journalEntrySides[fields[previousIndex]?.id] ??
+                      "debit"
+                    : "credit";
+                  const suggestedSide = suggestedJournalEntry(
+                    currentEntries.slice(0, index),
+                    previousSide
+                  ).side;
+
+                  return (
+                    <div
+                      key={entry.id}
+                      className="verification-entry-card w-full min-w-0 max-w-full rounded-[1.25rem] border border-stone-200 bg-[#fbfaf8] p-4 shadow-[0_1px_0_rgba(41,37,36,0.03)] sm:p-5"
+                    >
                     <div className="mb-4 flex min-h-[2rem] items-center border-b border-stone-200 pb-3">
                       <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-stone-500">
                         Konteringsrad {index + 1}
@@ -1354,6 +1388,13 @@ export default function Verification() {
                         id={`journal-entry-${index}`}
                         debit={Number(currentEntries[index]?.debit || 0)}
                         credit={Number(currentEntries[index]?.credit || 0)}
+                        side={journalEntrySides[entry.id] ?? suggestedSide}
+                        onSideChange={(side) =>
+                          setJournalEntrySides((current) => ({
+                            ...current,
+                            [entry.id]: side,
+                          }))
+                        }
                         onChange={({ debit, credit }) => {
                           setValue(`journalEntries.${index}.debit`, debit, {
                             shouldDirty: true,
@@ -1366,8 +1407,9 @@ export default function Verification() {
                         }}
                       />
                     </div>
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
                 </div>
 
                 <button

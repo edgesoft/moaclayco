@@ -53,6 +53,16 @@ test("the main app never renders a trash-can icon", async () => {
   assert.deepEqual(violations, []);
 });
 
+test("the navigation uses Administration consistently", async () => {
+  const header = await readFile(
+    path.resolve("app/components/header.tsx"),
+    "utf8"
+  );
+
+  assert.match(header, /<small>Administration<\/small>/);
+  assert.doesNotMatch(header, /<small>Admin<\/small>|:\s*"Admin"/);
+});
+
 test("journal-entry headers never render a removal control", async () => {
   const route = await readFile(
     path.resolve("app/routes/admin.verifications.new.tsx"),

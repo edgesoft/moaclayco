@@ -10,6 +10,8 @@ type JournalEntryAmounts = {
 type JournalEntryAmountFieldProps = JournalEntryAmounts & {
   id: string;
   onChange: (amounts: JournalEntryAmounts) => void;
+  onSideChange?: (side: JournalEntrySide) => void;
+  side?: JournalEntrySide;
 };
 
 const amountValue = (value: number) =>
@@ -32,6 +34,31 @@ export const journalEntryAmountsForSide = (
     : { debit: 0, credit: amount };
 };
 
+export const suggestedJournalEntry = (
+  entries: readonly JournalEntryAmounts[],
+  lastSelectedSide: JournalEntrySide = "debit"
+): JournalEntryAmounts & { side: JournalEntrySide } => {
+  const totals = entries.reduce(
+    (sum, entry) => ({
+      debit: sum.debit + Math.round(amountValue(entry.debit) * 100),
+      credit: sum.credit + Math.round(amountValue(entry.credit) * 100),
+    }),
+    { debit: 0, credit: 0 }
+  );
+  const differenceInCents = totals.debit - totals.credit;
+
+  if (differenceInCents > 0) {
+    return { debit: 0, credit: differenceInCents / 100, side: "credit" };
+  }
+  if (differenceInCents < 0) {
+    return { debit: Math.abs(differenceInCents) / 100, credit: 0, side: "debit" };
+  }
+
+  return lastSelectedSide === "debit"
+    ? { debit: 0, credit: 0, side: "credit" }
+    : { debit: 0, credit: 0, side: "debit" };
+};
+
 const sideOptions: Array<{ side: JournalEntrySide; label: string }> = [
   { side: "debit", label: "Debet" },
   { side: "credit", label: "Kredit" },
@@ -42,21 +69,25 @@ export default function JournalEntryAmountField({
   debit,
   id,
   onChange,
+  onSideChange,
+  side,
 }: JournalEntryAmountFieldProps) {
   const [emptySide, setEmptySide] = useState<JournalEntrySide>(
     () => journalEntrySide({ debit, credit }) ?? "debit"
   );
-  const activeSide = journalEntrySide({ debit, credit }) ?? emptySide;
+  const activeSide = journalEntrySide({ debit, credit }) ?? side ?? emptySide;
   const amount = amountValue(activeSide === "debit" ? debit : credit);
   const amountInputId = `${id}-amount`;
 
   const selectSide = (side: JournalEntrySide) => {
     setEmptySide(side);
+    onSideChange?.(side);
     onChange(journalEntryAmountsForSide({ debit, credit }, side));
   };
 
   const updateAmount = (value: string) => {
     const nextAmount = value === "" ? 0 : Number(value);
+    onSideChange?.(activeSide);
     onChange(
       activeSide === "debit"
         ? { debit: nextAmount, credit: 0 }

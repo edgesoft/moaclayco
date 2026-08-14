@@ -325,7 +325,6 @@ export function useInlineImageZoom({
     if (event.pointerType !== "mouse" || !supportsHoverZoom()) return;
     if (scaleRef.current > MIN_SCALE) return;
 
-    onZoomIntent();
     previewScaleRef.current = MIN_SCALE;
     setHoverView({ x: event.clientX, y: event.clientY }, MIN_SCALE);
     setIsHovering(true);
