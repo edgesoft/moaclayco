@@ -18,7 +18,7 @@ import {
 } from "framer-motion";
 import { useEffect, useRef } from "react";
 import ArrowIcon from "~/components/ArrowIcon";
-import PlusMinusIcon from "~/components/PlusMinusIcon";
+import CollectionAtelier from "~/components/admin/CollectionAtelier";
 import { theme } from "~/components/Theme";
 import useMediaQuery from "~/hooks/useMediaQuery";
 import { Items } from "~/schemas/items";
@@ -684,15 +684,7 @@ export default function Index() {
         </motion.div>
       </section>
 
-      {user ? (
-        <Link
-          aria-label="Skapa en ny collection"
-          className="mcc-admin-add"
-          to="/collections/new"
-        >
-          <PlusMinusIcon />
-        </Link>
-      ) : null}
+      {user ? <CollectionAtelier collections={collections} /> : null}
     </main>
   );
 }
