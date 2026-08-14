@@ -18,7 +18,7 @@ import {
   useRouteError,
 } from "react-router";
 import { motion, useReducedMotion } from "framer-motion";
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import ArrowIcon from "./components/ArrowIcon";
 import Header from "./components/header";
 import Footer from "./components/footer";
@@ -26,12 +26,8 @@ import { CartProvider } from "react-use-cart";
 import Cookies from "./components/cookies";
 import tailwindStyles from "./styles/tailwind.css?url";
 import appStyles from "./styles/app.css?url";
-import itemEditorStyles from "./styles/item-editor.css?url";
-import toastStyles from "./styles/toast.css?url";
 import { Collections } from "./schemas/collections";
 import { auth } from "./services/auth.server";
-import s from "react-toastify/dist/ReactToastify.css?url";
-import { ToastContainer } from "react-toastify";
 import { CollectionProps, User } from "./types";
 import { theme } from "./components/Theme";
 import { toLoaderData } from "./utils/loaderData";
@@ -39,6 +35,17 @@ import { isGoogleAuthenticationConfigured } from "./services/google-auth.server"
 import { connectToDatabase } from "./services/database.server";
 import { shouldRevalidateRoot } from "./utils/rootRevalidation";
 import { collectionCardProjection } from "./utils/queryProjections.server";
+import {
+  catalogCacheKeys,
+  readCatalogCache,
+} from "./services/catalog-cache.server";
+import {
+  formatServerTiming,
+  measureServerTiming,
+  type ServerTimingMetric,
+} from "./utils/serverTiming.server";
+import { privateRootHeaders } from "./utils/responseHeaders";
+import { scheduleExpiredImageDraftCleanup } from "./services/image-drafts.server";
 
 export type IndexProps = {
   user?: User;
@@ -49,17 +56,15 @@ export type IndexProps = {
   googleAuthenticationConfigured: boolean;
 };
 
+const ToastRegion = lazy(() => import("./components/ToastRegion"));
+
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: appStyles },
-  { rel: "stylesheet", href: itemEditorStyles },
   { rel: "stylesheet", href: tailwindStyles },
-  { rel: "stylesheet", href: s },
-  { rel: "stylesheet", href: toastStyles },
 ];
 
-export const headers: HeadersFunction = () => ({
-  "Cache-Control": "private, no-store",
-});
+export const headers: HeadersFunction = ({ loaderHeaders }) =>
+  privateRootHeaders(loaderHeaders);
 
 export const middleware: MiddlewareFunction[] = [
   async (_args, next) => {
@@ -69,6 +74,8 @@ export const middleware: MiddlewareFunction[] = [
 ];
 
 export const loader: LoaderFunction = async ({ request }) => {
+  scheduleExpiredImageDraftCleanup();
+  const timings: ServerTimingMetric[] = [];
   const url = new URL(request.url);
   const hostname = url.hostname;
   const proto = request.headers.get("X-Forwarded-Proto") ?? url.protocol;
@@ -87,15 +94,38 @@ export const loader: LoaderFunction = async ({ request }) => {
     });
   }
 
-  const [collectionDocuments, user] = await Promise.all([
-    Collections.find({})
-      .select(collectionCardProjection)
-      .sort({ sortOrder: 1 })
-      .lean()
-      .exec(),
-    auth.isAuthenticated(request),
+  let catalogCacheStatus = "miss";
+  const [collections, user] = await Promise.all([
+    measureServerTiming(
+      timings,
+      "root-catalog",
+      () =>
+        readCatalogCache(
+          catalogCacheKeys.collections,
+          async () =>
+            toLoaderData(
+              await Collections.find({})
+                .select(collectionCardProjection)
+                .sort({ sortOrder: 1 })
+                .lean()
+                .exec()
+            ),
+          { onStatus: (status) => (catalogCacheStatus = status) }
+        ),
+      "collections"
+    ),
+    measureServerTiming(
+      timings,
+      "root-auth",
+      () => auth.isAuthenticated(request),
+      "session"
+    ),
   ]);
-  const collections = toLoaderData(collectionDocuments);
+  timings.push({
+    description: catalogCacheStatus,
+    duration: 0,
+    name: "root-cache",
+  });
 
   return json(
     {
@@ -109,6 +139,7 @@ export const loader: LoaderFunction = async ({ request }) => {
     {
       headers: {
         "Cache-Control": "private, no-store",
+        "Server-Timing": formatServerTiming(timings),
       },
     }
   );
@@ -137,6 +168,10 @@ function Document({
 }) {
   let data: { ENV: { STRIPE_PUBLIC_KEY: string } } =
   useLoaderData<IndexProps>();
+  const location = useLocation();
+  const usesToasts =
+    location.pathname.startsWith("/admin/discounts") ||
+    location.pathname === "/admin/verifications/new";
   return (
     <html lang="sv">
       <head>
@@ -169,13 +204,11 @@ function Document({
       <body>
         <Header />
         {children}
-        <ToastContainer
-          position="top-right"
-          theme="light"
-          hideProgressBar
-          newestOnTop
-          limit={3}
-        />
+        {usesToasts ? (
+          <Suspense fallback={null}>
+            <ToastRegion />
+          </Suspense>
+        ) : null}
         <ScrollRestoration />
         <Scripts />
         <div id="portal" />

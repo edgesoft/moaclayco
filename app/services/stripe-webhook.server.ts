@@ -21,6 +21,7 @@ import {
   getStripeWebhookSecret,
 } from "~/services/stripe-config.server";
 import { STORE_ID } from "~/utils/store";
+import { invalidateCatalogCache } from "~/services/catalog-cache.server";
 
 const MAX_STRIPE_WEBHOOK_SIZE = 1024 * 1024;
 
@@ -28,6 +29,7 @@ export type StripeWebhookDependencies = {
   createVerification: typeof createVerification;
   discounts: typeof Discounts;
   items: typeof Items;
+  invalidateCatalogCache?: () => void;
   now: () => Date;
   orders: typeof Orders;
   sendOrderEmail: typeof sendOrderEmail;
@@ -40,6 +42,7 @@ const defaultDependencies: StripeWebhookDependencies = {
   createVerification,
   discounts: Discounts,
   items: Items,
+  invalidateCatalogCache,
   now: () => new Date(),
   orders: Orders,
   sendOrderEmail,
@@ -294,6 +297,7 @@ export const fromPaymentIntent = async (
 
   const session = await dependencies.startSession();
   let transitionedOrder: Order | null = null;
+  let stockChanged = false;
   try {
     await session.withTransaction(async () => {
       transitionedOrder = await dependencies.orders.findOneAndUpdate(
@@ -339,6 +343,8 @@ export const fromPaymentIntent = async (
           );
         }
       }
+
+      stockChanged = true;
     });
   } catch (error) {
     if (!(error instanceof PaidOrderNeedsReviewError)) throw error;
@@ -359,6 +365,8 @@ export const fromPaymentIntent = async (
   } finally {
     await session.endSession();
   }
+
+  if (stockChanged) dependencies.invalidateCatalogCache?.();
 
   const orderForEmail =
     transitionedOrder ??

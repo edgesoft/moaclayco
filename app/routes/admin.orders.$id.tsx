@@ -74,6 +74,28 @@ const formatDateTime = (value?: Date | string) => {
     .replace(" kl. ", " · ");
 };
 
+function OrderItemMedia({ image, index }: { image?: string; index: number }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!image || failed) {
+    return (
+      <span className="order-detail-item__image-placeholder" aria-hidden="true">
+        {String(index + 1).padStart(2, "0")}
+      </span>
+    );
+  }
+
+  return (
+    <img
+      alt=""
+      className="order-detail-item__image"
+      loading="lazy"
+      onError={() => setFailed(true)}
+      src={image}
+    />
+  );
+}
+
 export let loader: LoaderFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
 
@@ -541,18 +563,11 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
           <ol className="order-detail-items">
             {items.map((item, index) => (
               <li className="order-detail-item" key={item._id ?? item.itemRef}>
-                {item.image ? (
-                  <img
-                    alt=""
-                    className="order-detail-item__image"
-                    loading="lazy"
-                    src={item.image}
-                  />
-                ) : (
-                  <span className="order-detail-item__image-placeholder" aria-hidden="true">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                )}
+                <OrderItemMedia
+                  image={item.image}
+                  index={index}
+                  key={item.image || "missing-image"}
+                />
                 <div className="order-detail-item__copy">
                   <strong>{item.name}</strong>
                   <small>

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Order } from "~/types";
 
 type OrderSummaryProps = {
@@ -18,6 +19,16 @@ const sekFormatter = new Intl.NumberFormat("sv-SE", {
 });
 
 const formatSek = (amount: number) => `${sekFormatter.format(amount)} SEK`;
+
+function OrderItemMedia({ image }: { image?: string }) {
+  const [failed, setFailed] = useState(false);
+
+  return image && !failed ? (
+    <img alt="" onError={() => setFailed(true)} src={image} />
+  ) : (
+    <span aria-hidden="true">M</span>
+  );
+}
 
 export default function OrderSummary({
   discount,
@@ -57,11 +68,10 @@ export default function OrderSummary({
           return (
             <article className="mcc-purchase-item" key={item._id ?? item.itemRef}>
               <div className="mcc-purchase-item__media">
-                {item.image ? (
-                  <img alt="" src={item.image} />
-                ) : (
-                  <span aria-hidden="true">M</span>
-                )}
+                <OrderItemMedia
+                  image={item.image}
+                  key={item.image || "missing-image"}
+                />
               </div>
               <div className="mcc-purchase-item__copy">
                 <h3>{item.name}</h3>

@@ -10,6 +10,11 @@ import type { CSSProperties } from "react";
 import type { CollectionProps } from "~/types";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
+import { cleanupImageDraftUrl, createImageDraftId } from "~/utils/imageDraft.shared";
+import {
+  acceptedImageFileNamePattern,
+  MAX_IMAGE_SIZE,
+} from "~/utils/imageUpload.shared";
 
 type LoaderData = {
   collection: (CollectionProps & { _id: string }) | null;
@@ -38,9 +43,6 @@ type UploadSummary = {
   error: boolean;
   ready: boolean;
 };
-
-const MAX_IMAGE_SIZE = 18 * 1024 * 1024;
-const acceptedImagePattern = /\.(jpe?g|png|webp|heic|heif)$/i;
 
 const formatFileSize = (bytes: number) => {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} kB`;
@@ -80,6 +82,9 @@ function CollectionImageUpload({
   const inputRef = useRef<HTMLInputElement>(null);
   const requestRef = useRef<XMLHttpRequest | undefined>(undefined);
   const objectUrlsRef = useRef(new Set<string>());
+  const draftIdRef = useRef("");
+  const draftIdInputRef = useRef<HTMLInputElement>(null);
+  const draftUrlsRef = useRef(new Set<string>());
   const [dragging, setDragging] = useState(false);
   const [image, setImage] = useState<ImageDraft | null>(() =>
     collection?.image
@@ -105,8 +110,33 @@ function CollectionImageUpload({
     () => () => {
       requestRef.current?.abort();
       objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      draftUrlsRef.current.forEach((url) => {
+        void cleanupImageDraftUrl(draftIdRef.current, url, true);
+      });
     }, []
   );
+
+  const releaseObjectUrl = useCallback((url?: string) => {
+    if (!url || !objectUrlsRef.current.has(url)) return;
+    URL.revokeObjectURL(url);
+    objectUrlsRef.current.delete(url);
+  }, []);
+
+  const releaseDraftUrl = useCallback((url?: string) => {
+    if (!url || !draftUrlsRef.current.has(url)) return;
+    draftUrlsRef.current.delete(url);
+    void cleanupImageDraftUrl(draftIdRef.current, url);
+  }, []);
+
+  const ensureDraftId = useCallback(() => {
+    if (!draftIdRef.current) {
+      draftIdRef.current = createImageDraftId();
+      if (draftIdInputRef.current) {
+        draftIdInputRef.current.value = draftIdRef.current;
+      }
+    }
+    return draftIdRef.current;
+  }, []);
 
   const uploadFile = useCallback((file: File, previewUrl: string) => {
     const request = new XMLHttpRequest();
@@ -154,9 +184,9 @@ function CollectionImageUpload({
     request.onload = () => {
       requestRef.current = undefined;
       const response = request.response as
-        | { error?: string; key?: string; sizeBytes?: number; uniqueFileName?: string }
+        | { error?: string; key?: string; sizeBytes?: number; uniqueFileName?: string; url?: string }
         | null;
-      if (request.status < 200 || request.status >= 300 || !response?.key) {
+      if (request.status < 200 || request.status >= 300 || !response?.url) {
         setImage((current) =>
           current
             ? {
@@ -172,7 +202,9 @@ function CollectionImageUpload({
         return;
       }
 
-      const url = `https://38vabcm3.twic.pics/${response.key}`;
+      releaseObjectUrl(previewUrl);
+      const url = response.url;
+      draftUrlsRef.current.add(url);
       setImage({
         name: response.uniqueFileName ?? file.name,
         optimizedSize: response.sizeBytes,
@@ -185,14 +217,15 @@ function CollectionImageUpload({
 
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("draftId", ensureDraftId());
     request.send(formData);
-  }, []);
+  }, [ensureDraftId, releaseObjectUrl]);
 
   const chooseFile = useCallback(
     (file?: File) => {
       if (!file) return;
       onDirty();
-      const extensionAccepted = acceptedImagePattern.test(file.name);
+      const extensionAccepted = acceptedImageFileNamePattern.test(file.name);
       const sizeAccepted = file.size <= MAX_IMAGE_SIZE;
       const previewUrl = extensionAccepted ? URL.createObjectURL(file) : undefined;
       if (previewUrl) objectUrlsRef.current.add(previewUrl);
@@ -210,15 +243,19 @@ function CollectionImageUpload({
         return;
       }
 
+      draftUrlsRef.current.forEach((url) => releaseDraftUrl(url));
+      releaseObjectUrl(image?.previewUrl);
       uploadFile(file, previewUrl);
     },
-    [onDirty, uploadFile]
+    [image, onDirty, releaseDraftUrl, releaseObjectUrl, uploadFile]
   );
 
   const removeImage = () => {
     requestRef.current?.abort();
     requestRef.current = undefined;
     onDirty();
+    releaseDraftUrl(image?.url);
+    releaseObjectUrl(image?.previewUrl);
     setImage(null);
   };
 
@@ -319,6 +356,7 @@ function CollectionImageUpload({
           : "Lägg till en bild för att kunna spara Collection."}
       </p>
       <input name="image" readOnly type="hidden" value={image?.status === "complete" ? image.url ?? "" : ""} />
+      <input defaultValue="" name="imageDraftId" ref={draftIdInputRef} type="hidden" />
     </section>
   );
 }
@@ -515,10 +553,14 @@ export default function CollectionEditor() {
             ) : (
               <div className="mcc-collection-danger__confirmation" role="alert">
                 <strong>Är du helt säker?</strong>
-                <span>Det går inte att ångra.</span>
+                <span>
+                  {uploadSummary.busy
+                    ? "Vänta tills bilduppladdningen är klar så att utkastbilden kan hanteras säkert."
+                    : "Det går inte att ångra."}
+                </span>
                 <div>
                   <button onClick={() => setDeleteConfirmation(false)} type="button">Avbryt</button>
-                  <button disabled={isDeleting} name="intent" type="submit" value="delete">{isDeleting ? "Tar bort…" : "Ta bort permanent"}</button>
+                  <button disabled={isDeleting || uploadSummary.busy} name="intent" type="submit" value="delete">{isDeleting ? "Tar bort…" : "Ta bort permanent"}</button>
                 </div>
               </div>
             )}

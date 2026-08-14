@@ -108,6 +108,25 @@ test("save actions stay hidden while a file still needs attention", async () => 
   assert.doesNotMatch(route, /sticky bottom-0/);
 });
 
+test("the product editor keeps save in document flow and hides it during uploads", async () => {
+  const route = await readFile(
+    path.resolve("app/components/admin/item.tsx"),
+    "utf8"
+  );
+  const styles = await readFile(
+    path.resolve("app/styles/item-editor.css"),
+    "utf8"
+  );
+  const savebarRule = styles.match(/\.mcc-editor-savebar\s*\{[^}]+\}/)?.[0] ?? "";
+
+  assert.match(
+    route,
+    /\{!uploadSummary\.busy \? \(\s*<div className="mcc-editor-savebar">/
+  );
+  assert.doesNotMatch(savebarRule, /position:\s*sticky/);
+  assert.doesNotMatch(savebarRule, /bottom:\s*0/);
+});
+
 test("long journal forms keep a compact balance monitor separate from save", async () => {
   const route = await readFile(
     path.resolve("app/routes/admin.verifications.new.tsx"),

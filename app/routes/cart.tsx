@@ -14,6 +14,7 @@ import mongoose from "mongoose";
 import stripeClient from "~/stripeClient";
 import { theme } from "~/components/Theme";
 import { orderCookie } from "~/services/order-cookie.server";
+import { archiveOrderImages } from "~/services/order-image-storage.server";
 import CartView from "~/components/cart/CartView";
 import {
   buildCheckoutPaymentIntent,
@@ -380,6 +381,10 @@ export let action: ActionFunction = async ({ request }) => {
       }
     );
   }
+
+  // Order rows must point to a permanent snapshot before payment and email.
+  // If S3 is temporarily unavailable, the original URL remains as a safe fallback.
+  await archiveOrderImages(order);
 
   if (order.paymentIntent?.client_secret) {
     return redirectToCheckout(String(order._id));

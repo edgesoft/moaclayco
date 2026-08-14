@@ -5,6 +5,7 @@ import { AccountingYears } from "../app/schemas/accounting-years";
 import { Collections } from "../app/schemas/collections";
 import { Discounts } from "../app/schemas/discounts";
 import { Items } from "../app/schemas/items";
+import { ImageDrafts } from "../app/schemas/image-drafts";
 import { Orders } from "../app/schemas/orders";
 import { VerificationCounters } from "../app/schemas/verification-counters";
 
@@ -161,6 +162,7 @@ test("single-store Mongo schemas and indexes contain no domain key", () => {
     AccountingYears,
     Collections,
     Discounts,
+    ImageDrafts,
     Items,
     Orders,
     VerificationCounters,

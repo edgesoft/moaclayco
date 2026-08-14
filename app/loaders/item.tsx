@@ -4,6 +4,7 @@ import {
 } from "react-router";
 import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
+import { Orders } from "~/schemas/orders";
 import { auth } from "~/services/auth.server";
 import { toLoaderData } from "~/utils/loaderData";
 import {
@@ -39,7 +40,23 @@ import {
       return redirect(`/collections/${params.collection}`);
     }
   
-    return toLoaderData({ collection, item });
+    const [activeOrderCount, orderCount] = item
+      ? await Promise.all([
+          Orders.countDocuments({
+            "items.itemRef": String(item._id),
+            status: { $in: ["OPENED", "PENDING"] },
+          }),
+          Orders.countDocuments({
+            "items.itemRef": String(item._id),
+          }),
+        ])
+      : [0, 0];
+
+    return toLoaderData({
+      collection,
+      item,
+      orderImpact: { activeOrderCount, orderCount },
+    });
   };
 
 export const ItemLoader = loader

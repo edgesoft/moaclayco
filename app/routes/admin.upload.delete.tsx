@@ -4,9 +4,11 @@ import type { ActionFunction } from "react-router";
 import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
 import { auth } from "~/services/auth.server";
+import { canDeleteItemImageSource } from "~/services/order-image-storage.server";
 import { s3Client } from "~/services/s3.server";
 import type { ItemProps } from "~/types";
-import { itemImageStorageKey } from "~/utils/itemImageStorage.server";
+import { itemStorageKeyFromUrl } from "~/utils/itemImageStorage.server";
+import { invalidateCatalogCache } from "~/services/catalog-cache.server";
 import {
   MAX_STANDARD_FORM_REQUEST_SIZE,
   parseFormDataWithinLimit,
@@ -16,7 +18,7 @@ import {
 const AWS_ITEM_PATH = process.env.AWS_ITEM_PATH;
 
 async function deleteFileFromS3(
-  id: string | null,
+  id: string,
   collection: string,
   requestedFileName: string
 ) {
@@ -24,22 +26,23 @@ async function deleteFileFromS3(
   const fileName = requestedFileName.split("/").pop()?.split("?")[0];
   if (!fileName || fileName !== requestedFileName.split("?")[0]) return false;
 
-  const item = id
-    ? await Items.findOne({
-        _id: id,
-        collectionRef: collection,
-      }).lean<ItemProps>()
-    : null;
-
-  if (id && !item) return false;
+  const item = await Items.findOne({
+    _id: id,
+    collectionRef: collection,
+  }).lean<ItemProps>();
 
   if (item) {
     const image = item.images.find((candidate) =>
       candidate.split("?")[0].endsWith(`/${fileName}`)
     );
     if (!image) return false;
-    const key = itemImageStorageKey(image, AWS_ITEM_PATH, collection);
+    const key = itemStorageKeyFromUrl(image, AWS_ITEM_PATH);
     if (!key) return false;
+
+    const canDeleteSource = await canDeleteItemImageSource({
+      itemId: id,
+      sourceKey: key,
+    });
 
     const updateResult = await Items.updateOne(
       { _id: id, collectionRef: collection, images: image },
@@ -47,6 +50,7 @@ async function deleteFileFromS3(
     );
     if (updateResult.modifiedCount !== 1) return false;
 
+    if (!canDeleteSource) return true;
     try {
       await s3Client.send(
         new DeleteObjectCommand({
@@ -61,14 +65,7 @@ async function deleteFileFromS3(
     }
     return true;
   }
-
-  await s3Client.send(
-    new DeleteObjectCommand({
-      Bucket: process.env.AWS_S3_BUCKET_NAME,
-      Key: `${AWS_ITEM_PATH}/${collection}/${fileName}`,
-    })
-  );
-  return true;
+  return false;
 }
 
 export const action: ActionFunction = async ({ request }) => {
@@ -90,10 +87,10 @@ export const action: ActionFunction = async ({ request }) => {
     throw error;
   }
   const imageName = formData.get("imageName")?.toString();
-  const id = formData.get("id")?.toString() || null;
+  const id = formData.get("id")?.toString();
   const collection = formData.get("collection")?.toString();
-  if (!imageName || !collection) {
-    return json({ error: "Bild eller kollektion saknas." }, { status: 400 });
+  if (!imageName || !collection || !id) {
+    return json({ error: "Bild, produkt eller kollektion saknas." }, { status: 400 });
   }
 
   const collectionExists = await Collections.exists({
@@ -105,6 +102,7 @@ export const action: ActionFunction = async ({ request }) => {
 
   try {
     const success = await deleteFileFromS3(id, collection, imageName);
+    if (success) invalidateCatalogCache();
     return success
       ? json({ success: true })
       : json({ error: "Bilden kunde inte hittas.", success: false }, { status: 404 });

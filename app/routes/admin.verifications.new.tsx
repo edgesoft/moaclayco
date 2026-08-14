@@ -1,6 +1,7 @@
 import {
   ActionFunction,
   data as json,
+  LinksFunction,
   useActionData,
   useFetcher,
   useNavigate,
@@ -63,6 +64,13 @@ import {
   parseFormDataWithinLimit,
   RequestBodyTooLargeError,
 } from "~/utils/requestBody.server";
+import reactToastifyStyles from "react-toastify/dist/ReactToastify.css?url";
+import toastStyles from "~/styles/toast.css?url";
+
+export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: reactToastifyStyles },
+  { rel: "stylesheet", href: toastStyles },
+];
 
 const formSchema = z.object({
   description: z.string().min(1, "Beskrivning är obligatorisk"),

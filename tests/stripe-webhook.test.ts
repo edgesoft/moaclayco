@@ -183,6 +183,7 @@ test("signed payment success runs accounting, inventory, discount and email once
   let itemDecrements = 0;
   let discountDecrements = 0;
   let emails = 0;
+  let catalogInvalidations = 0;
 
   const succeededOrder = { ...order, status: "SUCCESS" as const };
   const dependencies = makeDependencies({
@@ -202,6 +203,9 @@ test("signed payment success runs accounting, inventory, discount and email once
         return { modifiedCount: 1 };
       },
     } as never,
+    invalidateCatalogCache: () => {
+      catalogInvalidations += 1;
+    },
     orders: {
       findOne: () => leanResult(order),
       findOneAndUpdate: () => leanResult(succeededOrder),
@@ -260,6 +264,7 @@ test("signed payment success runs accounting, inventory, discount and email once
     assert.equal(itemDecrements, 1);
     assert.equal(discountDecrements, 1);
     assert.equal(emails, 1);
+    assert.equal(catalogInvalidations, 1);
     assert.equal(orderUpdates.length, 1);
     assert.deepEqual(eventUpdates.at(-1), {
       $set: { lastError: null, status: "completed" },
@@ -630,6 +635,7 @@ test("insufficient stock moves a paid order to review without decrementing disco
   let transitionCalls = 0;
   let discountDecrements = 0;
   let emails = 0;
+  let catalogInvalidations = 0;
   let sessionEnded = false;
   const transitionUpdates: Array<Record<string, unknown>> = [];
   const reviewOrder = {
@@ -647,6 +653,9 @@ test("insufficient stock moves a paid order to review without decrementing disco
     items: {
       updateOne: async () => ({ modifiedCount: 0 }),
     } as never,
+    invalidateCatalogCache: () => {
+      catalogInvalidations += 1;
+    },
     orders: {
       findOneAndUpdate: (_filter: unknown, update: Record<string, unknown>) => {
         transitionCalls += 1;
@@ -672,6 +681,7 @@ test("insufficient stock moves a paid order to review without decrementing disco
   assert.equal(transitionCalls, 2);
   assert.equal(discountDecrements, 0);
   assert.equal(emails, 1);
+  assert.equal(catalogInvalidations, 0);
   assert.equal(sessionEnded, true);
   assert.equal(
     (transitionUpdates[1].$set as Record<string, unknown>).paidReviewReason,
