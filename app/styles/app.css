@@ -334,8 +334,8 @@ body {
 .mcc-product-journey__visual-cta {
   align-items: center;
   backdrop-filter: blur(12px);
-  background: rgba(255, 255, 255, 0.93);
-  border: 1px solid rgba(255, 255, 255, 0.75);
+  background: rgba(245, 244, 240, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.82);
   border-radius: 999px;
   bottom: 1rem;
   color: var(--mcc-ink);
@@ -355,8 +355,8 @@ body {
 .mcc-product-journey__visual-link:hover .mcc-product-journey__visual-cta,
 .mcc-product-journey__visual-link:focus-visible
   .mcc-product-journey__visual-cta {
-  background: var(--mcc-accent);
-  color: var(--mcc-white);
+  background: var(--mcc-white);
+  color: var(--mcc-ink);
   transform: translateY(-0.15rem);
 }
 
@@ -8658,6 +8658,10 @@ body.mcc-menu-open .mcc-collection-atelier-root {
   max-width: 34rem;
 }
 
+.mcc-atelier-instruction-mobile {
+  display: none;
+}
+
 .mcc-atelier-new-sticky {
   backdrop-filter: blur(14px);
   background-color: rgba(244, 239, 231, 0.94);
@@ -9107,6 +9111,14 @@ body.mcc-menu-open .mcc-collection-atelier-root {
     font-size: 0.68rem;
   }
 
+  .mcc-atelier-instruction-desktop {
+    display: none;
+  }
+
+  .mcc-atelier-instruction-mobile {
+    display: inline;
+  }
+
   .mcc-atelier-new-sticky {
     padding: 0.8rem 0.75rem 0.9rem;
   }
@@ -9124,6 +9136,22 @@ body.mcc-menu-open .mcc-collection-atelier-root {
     gap: 0.35rem;
     grid-template-columns: 1.35rem minmax(0, 1fr);
     padding-inline: 0.35rem;
+  }
+
+  .mcc-atelier-collection {
+    touch-action: pan-y;
+    -webkit-touch-callout: none;
+  }
+
+  .mcc-atelier-collection.is-long-press-ready {
+    background: rgba(255, 253, 249, 0.9);
+    box-shadow: 0 0.55rem 1.3rem rgba(43, 34, 29, 0.13);
+    transform: scale(1.008);
+    z-index: 2;
+  }
+
+  .mcc-atelier-drag-overlay {
+    touch-action: none;
   }
 
   .mcc-atelier-collection__edit {

@@ -1,6 +1,7 @@
 import {
   AnimatePresence,
   motion,
+  useDragControls,
   useReducedMotion,
 } from "framer-motion";
 import {
@@ -188,8 +189,36 @@ function SortableCollectionRow({
   onDragStart: (collectionId: string, pointerY: number) => void;
   onDrop: (collectionId: string, pointerX: number, pointerY: number) => void;
 }) {
+  const dragControls = useDragControls();
   const reduceMotion = useReducedMotion();
   const didDragRef = useRef(false);
+  const longPressTimerRef = useRef<number | null>(null);
+  const touchPointerIdRef = useRef<number | null>(null);
+  const touchDragActiveRef = useRef(false);
+  const touchGestureCleanupRef = useRef<() => void>(() => {});
+  const [longPressReady, setLongPressReady] = useState(false);
+
+  const cleanupTouchGesture = useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    touchPointerIdRef.current = null;
+    touchDragActiveRef.current = false;
+    setLongPressReady(false);
+    touchGestureCleanupRef.current();
+    touchGestureCleanupRef.current = () => {};
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (longPressTimerRef.current !== null) {
+        window.clearTimeout(longPressTimerRef.current);
+      }
+      touchGestureCleanupRef.current();
+    },
+    []
+  );
 
   const preventEditAfterDrag = (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (!didDragRef.current) return;
@@ -197,19 +226,106 @@ function SortableCollectionRow({
     event.stopPropagation();
   };
 
+  const startPointerDrag = (event: React.PointerEvent<HTMLLIElement>) => {
+    if (disabled || event.button !== 0 || !event.isPrimary) return;
+
+    if (event.pointerType !== "touch") {
+      dragControls.start(event);
+      return;
+    }
+
+    cleanupTouchGesture();
+    const pointerId = event.pointerId;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const pointerDownEvent = event.nativeEvent;
+    touchPointerIdRef.current = pointerId;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (
+        moveEvent.pointerId !== pointerId ||
+        touchDragActiveRef.current
+      ) {
+        return;
+      }
+
+      const movement = Math.hypot(
+        moveEvent.clientX - startX,
+        moveEvent.clientY - startY
+      );
+      if (movement > 10) cleanupTouchGesture();
+    };
+    const handlePointerFinish = (finishEvent: PointerEvent) => {
+      if (finishEvent.pointerId !== pointerId) return;
+      const preventedEdit = touchDragActiveRef.current;
+      cleanupTouchGesture();
+      if (preventedEdit) {
+        window.setTimeout(() => {
+          didDragRef.current = false;
+        }, 0);
+      }
+    };
+    const preventNativeScrollWhileDragging = (moveEvent: TouchEvent) => {
+      if (touchDragActiveRef.current && moveEvent.cancelable) {
+        moveEvent.preventDefault();
+      }
+    };
+
+    window.addEventListener("pointermove", handlePointerMove, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("pointerup", handlePointerFinish, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("pointercancel", handlePointerFinish, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("touchmove", preventNativeScrollWhileDragging, {
+      capture: true,
+      passive: false,
+    });
+    touchGestureCleanupRef.current = () => {
+      window.removeEventListener("pointermove", handlePointerMove, true);
+      window.removeEventListener("pointerup", handlePointerFinish, true);
+      window.removeEventListener("pointercancel", handlePointerFinish, true);
+      window.removeEventListener(
+        "touchmove",
+        preventNativeScrollWhileDragging,
+        true
+      );
+    };
+
+    longPressTimerRef.current = window.setTimeout(() => {
+      if (touchPointerIdRef.current !== pointerId) return;
+      longPressTimerRef.current = null;
+      touchDragActiveRef.current = true;
+      didDragRef.current = true;
+      setLongPressReady(true);
+      window.navigator.vibrate?.(10);
+      dragControls.start(pointerDownEvent, { distanceThreshold: 2 });
+    }, 340);
+  };
+
   return (
     <motion.li
       aria-label={`Dra för att flytta ${collection.headline}`}
       className={`mcc-atelier-collection${index < 2 ? " is-featured" : ""}${
         dragging ? " is-dragging" : ""
-      }`}
+      }${longPressReady ? " is-long-press-ready" : ""}`}
       data-collection-id={collection._id}
       dragConstraints={{ bottom: 0, top: 0 }}
+      dragControls={dragControls}
       dragElastic={0}
-      dragListener={!disabled}
+      dragListener={false}
       layout={reduceMotion || dragging ? undefined : "position"}
       drag="y"
       dragMomentum={false}
+      onContextMenu={(event) => {
+        if (touchPointerIdRef.current !== null) event.preventDefault();
+      }}
       onDrag={(_event, info) =>
         onDragMove(
           collection._id,
@@ -218,6 +334,7 @@ function SortableCollectionRow({
         )
       }
       onDragEnd={(_event, info) => {
+        cleanupTouchGesture();
         onDrop(
           collection._id,
           info.point.x - window.scrollX,
@@ -231,6 +348,7 @@ function SortableCollectionRow({
         didDragRef.current = true;
         onDragStart(collection._id, info.point.y - window.scrollY)
       }}
+      onPointerDown={startPointerDrag}
       transition={{
         duration: reduceMotion ? 0 : 0.28,
         ease: [0.22, 1, 0.36, 1],
@@ -879,8 +997,14 @@ export default function CollectionAtelier({
                     </div>
                     <h2 id="mcc-atelier-title">Hantera Collections</h2>
                     <p id="mcc-atelier-description">
-                      De två första blir startsidans blickfång. Ta tag i en rad
-                      för att ändra ordningen.
+                      De två första blir startsidans blickfång.{" "}
+                      <span className="mcc-atelier-instruction-desktop">
+                        Ta tag i en rad för att ändra ordningen.
+                      </span>
+                      <span className="mcc-atelier-instruction-mobile">
+                        Scrolla som vanligt. Håll fingret stilla på en rad för
+                        att sortera.
+                      </span>
                     </p>
                   </header>
 

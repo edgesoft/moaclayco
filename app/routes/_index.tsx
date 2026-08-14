@@ -517,8 +517,7 @@ export default function Index() {
   const attemptedEmptyDataRepairRef = useRef(false);
   const reduceMotion = useReducedMotion();
   const heroCollections = collections.slice(0, 2);
-  const featuredItem =
-    latestItems.find((item) => item.images?.length > 1) ?? latestItems[0];
+  const featuredItem = latestItems[0];
 
   useEffect(() => {
     if (

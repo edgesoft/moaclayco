@@ -271,7 +271,14 @@ test("collection gallery controls are touch-friendly", async ({ page }) => {
         })
     )
     .toBe(true);
-  await page.waitForTimeout(260);
+
+  const renderedImageScale = () =>
+    stage.locator("img").evaluate((image) => {
+      const productImage = image as HTMLImageElement;
+      if (!productImage.offsetWidth) return 0;
+      return productImage.getBoundingClientRect().width / productImage.offsetWidth;
+    });
+  await expect.poll(renderedImageScale).toBeGreaterThan(1.95);
 
   const imageBoxAtTwo = await stage
     .locator("img")
@@ -290,7 +297,7 @@ test("collection gallery controls are touch-friendly", async ({ page }) => {
     )
   );
   await expect(stage).toHaveAttribute("data-zoom-scale", "1.65");
-  await page.waitForTimeout(260);
+  await expect.poll(renderedImageScale).toBeLessThan(1.7);
   const imageBoxAfterMinus = await stage
     .locator("img")
     .evaluate((image) => {

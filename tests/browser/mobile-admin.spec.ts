@@ -43,6 +43,36 @@ async function acceptCookiesIfNeeded(page: Page) {
   await expect(acceptButton).toBeHidden();
 }
 
+async function dispatchSyntheticTouchPointer(
+  page: Page,
+  type: "pointerdown" | "pointermove" | "pointerup",
+  point: { x: number; y: number },
+  targetSelector?: string
+) {
+  await page.evaluate(
+    ({ point, targetSelector, type }) => {
+      const target = targetSelector
+        ? document.querySelector(targetSelector)
+        : window;
+      if (!target) throw new Error(`Saknar mål för ${type}`);
+      target.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          button: 0,
+          buttons: type === "pointerup" ? 0 : 1,
+          cancelable: true,
+          clientX: point.x,
+          clientY: point.y,
+          isPrimary: true,
+          pointerId: 71,
+          pointerType: "touch",
+        })
+      );
+    },
+    { point, targetSelector, type }
+  );
+}
+
 test.describe("authenticated mobile admin", () => {
   test.skip(
     !isLocalRun,
@@ -51,6 +81,144 @@ test.describe("authenticated mobile admin", () => {
 
   test.beforeEach(async ({ context }) => {
     await authenticateLocalAdmin(context);
+  });
+
+  test("the Collection atelier keeps mobile scroll separate from long-press sorting", async ({
+    browserName,
+    context,
+    page,
+  }) => {
+    let orderSaves = 0;
+    await page.route("**/admin/collections/order*", async (route) => {
+      orderSaves += 1;
+      await route.abort();
+    });
+
+    await page.goto("/");
+    await acceptCookiesIfNeeded(page);
+    await page
+      .getByRole("button", { name: "Öppna Collection-verktyget" })
+      .tap();
+
+    const dialog = page.getByRole("dialog", { name: "Hantera Collections" });
+    await expect(dialog).toBeVisible();
+    const rows = dialog.locator(".mcc-atelier-collection");
+    test.skip(
+      (await rows.count()) < 3,
+      "Gesttestet behöver minst tre Collections."
+    );
+
+    const row = rows.nth(2);
+    const rowId = await row.getAttribute("data-collection-id");
+    const rowBox = await row.boundingBox();
+    expect(rowId).not.toBeNull();
+    expect(rowBox).not.toBeNull();
+    await expect(row).toHaveCSS("touch-action", "pan-y");
+
+    const startPoint = {
+      x: rowBox!.x + rowBox!.width / 2,
+      y: rowBox!.y + rowBox!.height / 2,
+    };
+    const rowSelector = `.mcc-atelier-collection[data-collection-id="${rowId}"]`;
+
+    if (browserName === "chromium") {
+      const scrollArea = dialog.locator(".mcc-atelier-panel__scroll");
+      const devtools = await context.newCDPSession(page);
+      const touchPoint = (y: number) => [
+        {
+          id: 1,
+          radiusX: 7,
+          radiusY: 7,
+          x: startPoint.x,
+          y,
+        },
+      ];
+
+      await devtools.send("Input.dispatchTouchEvent", {
+        touchPoints: touchPoint(startPoint.y),
+        type: "touchStart",
+      });
+      await page.waitForTimeout(45);
+      for (const offset of [28, 64, 100]) {
+        await devtools.send("Input.dispatchTouchEvent", {
+          touchPoints: touchPoint(startPoint.y - offset),
+          type: "touchMove",
+        });
+        await page.waitForTimeout(35);
+      }
+      await devtools.send("Input.dispatchTouchEvent", {
+        touchPoints: [],
+        type: "touchEnd",
+      });
+
+      await expect
+        .poll(() => scrollArea.evaluate((element) => element.scrollTop))
+        .toBeGreaterThan(20);
+      await expect(page.locator(".mcc-atelier-drag-overlay")).toHaveCount(0);
+      expect(orderSaves).toBe(0);
+      await scrollArea.evaluate((element) => {
+        element.scrollTop = 0;
+      });
+
+      await devtools.send("Input.dispatchTouchEvent", {
+        touchPoints: touchPoint(startPoint.y),
+        type: "touchStart",
+      });
+      await expect(row).toHaveClass(/is-long-press-ready/, { timeout: 700 });
+      await devtools.send("Input.dispatchTouchEvent", {
+        touchPoints: touchPoint(startPoint.y + 6),
+        type: "touchMove",
+      });
+      await expect(page.locator(".mcc-atelier-drag-overlay")).toBeVisible();
+      await devtools.send("Input.dispatchTouchEvent", {
+        touchPoints: [],
+        type: "touchEnd",
+      });
+      await expect(page.locator(".mcc-atelier-drag-overlay")).toHaveCount(0);
+      expect(orderSaves).toBe(0);
+    }
+
+    await dispatchSyntheticTouchPointer(
+      page,
+      "pointerdown",
+      startPoint,
+      rowSelector
+    );
+    await page.waitForTimeout(60);
+    await dispatchSyntheticTouchPointer(page, "pointermove", {
+      x: startPoint.x,
+      y: startPoint.y - 36,
+    });
+    await page.waitForTimeout(360);
+    await dispatchSyntheticTouchPointer(page, "pointerup", {
+      x: startPoint.x,
+      y: startPoint.y - 36,
+    });
+
+    await expect(row).not.toHaveClass(/is-long-press-ready|is-dragging/);
+    await expect(page.locator(".mcc-atelier-drag-overlay")).toHaveCount(0);
+    expect(orderSaves).toBe(0);
+
+    await dispatchSyntheticTouchPointer(
+      page,
+      "pointerdown",
+      startPoint,
+      rowSelector
+    );
+    await expect(row).toHaveClass(/is-long-press-ready/, { timeout: 700 });
+    await dispatchSyntheticTouchPointer(page, "pointermove", {
+      x: startPoint.x,
+      y: startPoint.y + 6,
+    });
+    await expect(page.locator(".mcc-atelier-drag-overlay")).toBeVisible();
+    await dispatchSyntheticTouchPointer(page, "pointerup", {
+      x: startPoint.x,
+      y: startPoint.y + 6,
+    });
+
+    await expect(page.locator(".mcc-atelier-drag-overlay")).toHaveCount(0);
+    await expect(row).not.toHaveClass(/is-long-press-ready|is-dragging/);
+    expect(orderSaves).toBe(0);
   });
 
   test("the Collection atelier fills mobile and auto-scrolls a long order", async ({
