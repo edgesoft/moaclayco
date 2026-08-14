@@ -3131,6 +3131,7 @@ input[type="search"]::-ms-reveal {
   }
 
   .mcc-navigation-shell {
+    overflow-anchor: none;
     overflow-x: hidden;
     overflow-y: auto;
     pointer-events: auto;
@@ -3323,7 +3324,7 @@ input[type="search"]::-ms-reveal {
 
   .mcc-navigation-collection-item {
     border: 0;
-    scroll-margin-top: 4.45rem;
+    scroll-margin-top: 5.25rem;
   }
 
   .mcc-navigation-collection-item.is-expanded {
@@ -3356,6 +3357,7 @@ input[type="search"]::-ms-reveal {
     border-radius: 0.35rem;
     height: auto;
     margin-bottom: 0.62rem;
+    transition: none;
     width: 100%;
   }
 

@@ -328,10 +328,31 @@ function NavigationCollection({
     if (!expanded) return;
 
     const scrollFrame = window.requestAnimationFrame(() => {
-      itemRef.current?.scrollIntoView({
-        behavior: reduceMotion ? "auto" : "smooth",
-        block: "start",
-        inline: "nearest",
+      const item = itemRef.current;
+      if (!item) return;
+
+      const mobileViewport = window.matchMedia("(max-width: 899px)").matches;
+      const scrollContainer = item.closest<HTMLElement>(
+        mobileViewport
+          ? ".mcc-navigation-shell"
+          : ".mcc-navigation-collection-grid"
+      );
+      if (!scrollContainer) return;
+
+      const itemBounds = item.getBoundingClientRect();
+      const containerBounds = scrollContainer.getBoundingClientRect();
+      const scrollMargin =
+        Number.parseFloat(window.getComputedStyle(item).scrollMarginTop) || 0;
+
+      scrollContainer.scrollTo({
+        behavior: reduceMotion || mobileViewport ? "auto" : "smooth",
+        top: Math.max(
+          0,
+          scrollContainer.scrollTop +
+            itemBounds.top -
+            containerBounds.top -
+            scrollMargin
+        ),
       });
     });
 
@@ -605,10 +626,11 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
                 mobileMenuCompact ? " mcc-navigation-shell--compact" : ""
               }`}
               onScroll={(event) => {
-                const compact = event.currentTarget.scrollTop > 190;
-                setMobileMenuCompact((current) =>
-                  current === compact ? current : compact
-                );
+                const scrollTop = event.currentTarget.scrollTop;
+                setMobileMenuCompact((current) => {
+                  if (current) return scrollTop > 120;
+                  return scrollTop > 220;
+                });
               }}
               role="dialog"
             >
