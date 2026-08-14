@@ -9,11 +9,6 @@ const VerificationsSchema = new Schema({
       required: true,
       default: "journal",
     },
-    domain: {
-      type: String,
-      required: true,
-      default: "moaclayco"
-    },
     description: {
       type: String,
       required: true,
@@ -107,18 +102,17 @@ VerificationsSchema.pre("validate", function () {
   this.journalEntries = normalizeJournalEntries(this.journalEntries) as any;
 });
 
-VerificationsSchema.index({ domain: 1, verificationNumber: 1 }, { unique: true });
+VerificationsSchema.index({ verificationNumber: 1 }, { unique: true });
 VerificationsSchema.index(
-  { domain: 1, idempotencyKey: 1 },
+  { idempotencyKey: 1 },
   {
     unique: true,
     partialFilterExpression: { idempotencyKey: { $type: "string" } },
   }
 );
-VerificationsSchema.index({ domain: 1, verificationDate: 1 });
-VerificationsSchema.index({ domain: 1, verificationDate: 1, verificationNumber: 1 });
-VerificationsSchema.index({ domain: 1, recordType: 1, verificationDate: 1 });
-VerificationsSchema.index({ domain: 1, "metadata.key": 1, "metadata.value": 1 });
-VerificationsSchema.index({ domain: 1, "metadata.key": 1, verificationDate: 1 });
+VerificationsSchema.index({ verificationDate: 1, verificationNumber: 1 });
+VerificationsSchema.index({ recordType: 1, verificationDate: 1 });
+VerificationsSchema.index({ "metadata.key": 1, "metadata.value": 1 });
+VerificationsSchema.index({ "metadata.key": 1, verificationDate: 1 });
 
 export const Verifications = mongoose.models.Verifications || mongoose.model('Verifications', VerificationsSchema);

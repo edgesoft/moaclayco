@@ -16,10 +16,21 @@ import {
 import type { CollectionProps, ItemProps } from "~/types";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
+import { cleanupImageDraftUrl, createImageDraftId } from "~/utils/imageDraft.shared";
+import {
+  acceptedImageFileNamePattern,
+  MAX_IMAGE_SIZE,
+  MAX_ITEM_IMAGES,
+  MAX_PARALLEL_IMAGE_UPLOADS,
+} from "~/utils/imageUpload.shared";
 
 type LoaderDataItemProps = {
   collection: CollectionProps;
   item: ItemProps | null;
+  orderImpact: {
+    activeOrderCount: number;
+    orderCount: number;
+  };
 };
 
 type ActionData = {
@@ -39,7 +50,7 @@ type AdditionalItemDraft = {
   value: string | number;
 };
 
-type UploadStatus = "complete" | "uploading" | "processing" | "deleting" | "error";
+type UploadStatus = "complete" | "queued" | "uploading" | "processing" | "deleting" | "error";
 
 type ImageDraft = {
   id: string;
@@ -58,10 +69,6 @@ type UploadSummary = {
   completeCount: number;
   failedCount: number;
 };
-
-const MAX_IMAGE_SIZE = 18 * 1024 * 1024;
-const MAX_IMAGES = 12;
-const acceptedImagePattern = /\.(jpe?g|png|webp|heic|heif)$/i;
 
 const productInfoOptions = [
   { label: "Längd", value: "Längd" },
@@ -400,6 +407,13 @@ function FileUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const xhrRequestsRef = useRef(new Map<string, XMLHttpRequest>());
   const objectUrlsRef = useRef(new Set<string>());
+  const pendingUploadsRef = useRef<Array<{ file: File; id: string }>>([]);
+  const activeUploadsRef = useRef(0);
+  const startUploadRef = useRef<(id: string, file: File) => void>(() => undefined);
+  const unmountedRef = useRef(false);
+  const draftIdRef = useRef("");
+  const draftIdInputRef = useRef<HTMLInputElement>(null);
+  const draftUrlsRef = useRef(new Set<string>());
   const [dragging, setDragging] = useState(false);
   const [notice, setNotice] = useState<string>();
   const [images, setImages] = useState<ImageDraft[]>(() =>
@@ -425,23 +439,80 @@ function FileUpload({
     ).length;
     const failedCount = images.filter((image) => image.status === "error").length;
     const busy = images.some(
-      (image) => image.status === "uploading" || image.status === "processing" || image.status === "deleting"
+      (image) =>
+        image.status === "queued" ||
+        image.status === "uploading" ||
+        image.status === "processing" ||
+        image.status === "deleting"
     );
     onStateChange({ busy, completeCount, failedCount });
   }, [images, onStateChange]);
 
   useEffect(
     () => () => {
+      unmountedRef.current = true;
+      pendingUploadsRef.current = [];
       xhrRequestsRef.current.forEach((request) => request.abort());
       objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      draftUrlsRef.current.forEach((url) => {
+        void cleanupImageDraftUrl(draftIdRef.current, url, true);
+      });
     }, []
   );
 
-  const uploadImage = useCallback(
+  const releaseObjectUrl = useCallback((url?: string) => {
+    if (!url || !objectUrlsRef.current.has(url)) return;
+    URL.revokeObjectURL(url);
+    objectUrlsRef.current.delete(url);
+  }, []);
+
+  const ensureDraftId = useCallback(() => {
+    if (!draftIdRef.current) {
+      draftIdRef.current = createImageDraftId();
+      if (draftIdInputRef.current) {
+        draftIdInputRef.current.value = draftIdRef.current;
+      }
+    }
+    return draftIdRef.current;
+  }, []);
+
+  const pumpUploadQueue = useCallback(() => {
+    if (unmountedRef.current) return;
+    while (
+      activeUploadsRef.current < MAX_PARALLEL_IMAGE_UPLOADS &&
+      pendingUploadsRef.current.length
+    ) {
+      const next = pendingUploadsRef.current.shift();
+      if (!next) break;
+      activeUploadsRef.current += 1;
+      startUploadRef.current(next.id, next.file);
+    }
+  }, []);
+
+  const finishUploadSlot = useCallback(() => {
+    activeUploadsRef.current = Math.max(0, activeUploadsRef.current - 1);
+    pumpUploadQueue();
+  }, [pumpUploadQueue]);
+
+  const startUpload = useCallback(
     (id: string, file: File) => {
-      updateImage(id, { error: undefined, progress: 2, status: "uploading" });
+      const previewUrl = URL.createObjectURL(file);
+      objectUrlsRef.current.add(previewUrl);
+      updateImage(id, {
+        error: undefined,
+        previewUrl,
+        progress: 2,
+        status: "uploading",
+      });
 
       const request = new XMLHttpRequest();
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        xhrRequestsRef.current.delete(id);
+        finishUploadSlot();
+      };
       xhrRequestsRef.current.set(id, request);
       request.open("POST", "/admin/upload");
       request.responseType = "json";
@@ -457,32 +528,41 @@ function FileUpload({
         updateImage(id, { progress: 94, status: "processing" });
 
       request.onerror = () => {
-        xhrRequestsRef.current.delete(id);
+        releaseObjectUrl(previewUrl);
         updateImage(id, {
           error: "Uppladdningen tappade kontakten. Försök igen.",
+          previewUrl: undefined,
           progress: 0,
           status: "error",
         });
+        finish();
       };
 
-      request.onabort = () => xhrRequestsRef.current.delete(id);
+      request.onabort = () => {
+        releaseObjectUrl(previewUrl);
+        finish();
+      };
 
       request.onload = () => {
-        xhrRequestsRef.current.delete(id);
         const response = request.response as
-          | { key?: string; uniqueFileName?: string; sizeBytes?: number; error?: string }
+          | { key?: string; uniqueFileName?: string; sizeBytes?: number; error?: string; url?: string }
           | null;
 
-        if (request.status < 200 || request.status >= 300 || !response?.key) {
+        if (request.status < 200 || request.status >= 300 || !response?.url) {
+          releaseObjectUrl(previewUrl);
           updateImage(id, {
             error: response?.error ?? "Bilden kunde inte bearbetas. Prova en annan fil.",
+            previewUrl: undefined,
             progress: 0,
             status: "error",
           });
+          finish();
           return;
         }
 
-        const url = `https://38vabcm3.twic.pics/${response.key}`;
+        releaseObjectUrl(previewUrl);
+        const url = response.url;
+        draftUrlsRef.current.add(url);
         updateImage(id, {
           name: response.uniqueFileName ?? file.name,
           optimizedSize: response.sizeBytes,
@@ -491,48 +571,66 @@ function FileUpload({
           status: "complete",
           url,
         });
+        finish();
       };
 
       const formData = new FormData();
       formData.append("file", file);
       formData.append("collectionRef", collection);
+      formData.append("draftId", ensureDraftId());
       request.send(formData);
     },
-    [collection, updateImage]
+    [collection, ensureDraftId, finishUploadSlot, releaseObjectUrl, updateImage]
+  );
+
+  startUploadRef.current = startUpload;
+
+  const queueImageUpload = useCallback(
+    (id: string, file: File) => {
+      pendingUploadsRef.current = pendingUploadsRef.current.filter(
+        (candidate) => candidate.id !== id
+      );
+      updateImage(id, {
+        error: undefined,
+        previewUrl: undefined,
+        progress: 0,
+        status: "queued",
+      });
+      pendingUploadsRef.current.push({ file, id });
+      pumpUploadQueue();
+    },
+    [pumpUploadQueue, updateImage]
   );
 
   const addFiles = useCallback(
     (fileList: FileList | File[]) => {
-      const availableSlots = Math.max(0, MAX_IMAGES - images.length);
+      const availableSlots = Math.max(0, MAX_ITEM_IMAGES - images.length);
       const selectedFiles = Array.from(fileList).slice(0, availableSlots);
 
       if (!availableSlots) {
-        setNotice(`Du kan ha högst ${MAX_IMAGES} bilder per produkt.`);
+        setNotice(`Du kan ha högst ${MAX_ITEM_IMAGES} bilder per produkt.`);
         return;
       }
 
       onDirty();
 
       if (Array.from(fileList).length > availableSlots) {
-        setNotice(`De första ${availableSlots} bilderna lades till. Max är ${MAX_IMAGES}.`);
+        setNotice(`De första ${availableSlots} bilderna lades till. Max är ${MAX_ITEM_IMAGES}.`);
       } else {
         setNotice(undefined);
       }
 
       const drafts = selectedFiles.map((file) => {
-        const extensionAccepted = acceptedImagePattern.test(file.name);
+        const extensionAccepted = acceptedImageFileNamePattern.test(file.name);
         const sizeAccepted = file.size <= MAX_IMAGE_SIZE;
         const uploadAccepted = extensionAccepted && sizeAccepted;
-        const previewUrl = extensionAccepted ? URL.createObjectURL(file) : undefined;
-        if (previewUrl) objectUrlsRef.current.add(previewUrl);
 
         return {
           id: makeId(),
           name: file.name,
-          previewUrl,
           file: uploadAccepted ? file : undefined,
           progress: 0,
-          status: uploadAccepted ? "uploading" : "error",
+          status: uploadAccepted ? "queued" : "error",
           error: !extensionAccepted
             ? "Välj JPG, PNG, WebP eller HEIC."
             : !sizeAccepted
@@ -543,19 +641,25 @@ function FileUpload({
 
       setImages((current) => [...current, ...drafts]);
       drafts.forEach((draft) => {
-        if (draft.status === "uploading" && draft.file) uploadImage(draft.id, draft.file);
+        if (draft.status === "queued" && draft.file) {
+          queueImageUpload(draft.id, draft.file);
+        }
       });
     },
-    [images.length, onDirty, uploadImage]
+    [images.length, onDirty, queueImageUpload]
   );
 
   const removeImage = async (image: ImageDraft) => {
     onDirty();
+    pendingUploadsRef.current = pendingUploadsRef.current.filter(
+      (candidate) => candidate.id !== image.id
+    );
     const request = xhrRequestsRef.current.get(image.id);
     if (request) {
       request.abort();
       xhrRequestsRef.current.delete(image.id);
     }
+    releaseObjectUrl(image.previewUrl);
 
     if (!image.url) {
       setImages((current) => current.filter((candidate) => candidate.id !== image.id));
@@ -563,6 +667,23 @@ function FileUpload({
     }
 
     updateImage(image.id, { error: undefined, status: "deleting" });
+    if (draftUrlsRef.current.has(image.url)) {
+      try {
+        const success = await cleanupImageDraftUrl(draftIdRef.current, image.url);
+        if (!success) throw new Error("Draft cleanup failed");
+        draftUrlsRef.current.delete(image.url);
+        setImages((current) =>
+          current.filter((candidate) => candidate.id !== image.id)
+        );
+      } catch {
+        updateImage(image.id, {
+          error: "Bilden kunde inte tas bort. Kontrollera anslutningen.",
+          status: "complete",
+        });
+      }
+      return;
+    }
+
     const formData = new FormData();
     formData.append("imageName", image.name);
     formData.append("collection", collection);
@@ -617,7 +738,7 @@ function FileUpload({
           <p className="mcc-editor-eyebrow">Bildserie</p>
           <h2>Bilder</h2>
         </div>
-        <span>{completeImages.length}/{MAX_IMAGES}</span>
+        <span>{completeImages.length}/{MAX_ITEM_IMAGES}</span>
       </div>
 
       <div
@@ -666,15 +787,15 @@ function FileUpload({
       {images.length ? (
         <ol className="mcc-editor-image-grid">
           {images.map((image, index) => {
-            const isBusy = image.status === "uploading" || image.status === "processing" || image.status === "deleting";
+            const isBusy = image.status === "queued" || image.status === "uploading" || image.status === "processing" || image.status === "deleting";
             return (
               <li className={`mcc-editor-image is-${image.status}`} key={image.id}>
                 <div className="mcc-editor-image__preview">
                   {image.previewUrl ? <img alt="" src={image.previewUrl} /> : <span>Ingen förhandsvisning</span>}
                   {isBusy ? (
                     <div className="mcc-editor-image__progress">
-                      <span>{image.status === "processing" ? "Optimerar" : image.status === "deleting" ? "Tar bort" : "Laddar upp"}</span>
-                      {image.status !== "deleting" ? <strong>{image.progress}%</strong> : null}
+                      <span>{image.status === "queued" ? "Väntar" : image.status === "processing" ? "Optimerar" : image.status === "deleting" ? "Tar bort" : "Laddar upp"}</span>
+                      {image.status !== "deleting" && image.status !== "queued" ? <strong>{image.progress}%</strong> : null}
                       <i style={{ "--upload-progress": `${image.progress}%` } as React.CSSProperties} />
                     </div>
                   ) : null}
@@ -724,7 +845,7 @@ function FileUpload({
                       <button
                         onClick={() => {
                           onDirty();
-                          uploadImage(image.id, image.file!);
+                          queueImageUpload(image.id, image.file!);
                         }}
                         type="button"
                       >
@@ -745,7 +866,7 @@ function FileUpload({
       )}
 
       <p className="mcc-editor-upload-status" aria-live="polite">
-        {images.some((image) => image.status === "uploading" || image.status === "processing")
+        {images.some((image) => image.status === "queued" || image.status === "uploading" || image.status === "processing")
           ? "Bilderna bearbetas. Du kan fortsätta fylla i resten under tiden."
           : completeImages.length
           ? `${completeImages.length} ${completeImages.length === 1 ? "bild är" : "bilder är"} redo att sparas.`
@@ -753,14 +874,16 @@ function FileUpload({
       </p>
 
       <input name="images" readOnly type="hidden" value={completeImages.map((image) => image.url).join(",")} />
+      <input defaultValue="" name="imageDraftId" ref={draftIdInputRef} type="hidden" />
     </section>
   );
 }
 
 export default function ItemComponent() {
   const actionData = useActionData<ActionData>();
-  const { collection, item } = useLoaderData<LoaderDataItemProps>();
+  const { collection, item, orderImpact } = useLoaderData<LoaderDataItemProps>();
   const navigation = useNavigation();
+  const [deleteConfirmation, setDeleteConfirmation] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [uploadSummary, setUploadSummary] = useState<UploadSummary>({
     busy: false,
@@ -771,9 +894,13 @@ export default function ItemComponent() {
     setUploadSummary(summary);
   }, []);
   const handleEditorDirty = useCallback(() => setDirty(true), []);
-  const isSubmitting = navigation.state === "submitting";
+  const isDeleting =
+    navigation.state === "submitting" &&
+    navigation.formData?.get("intent") === "delete";
+  const isSaving = navigation.state === "submitting" && !isDeleting;
   const hasErrors = Boolean(actionData?.errors && Object.keys(actionData.errors).length);
-  const saveDisabled = isSubmitting || uploadSummary.busy || uploadSummary.completeCount === 0;
+  const saveDisabled =
+    navigation.state !== "idle" || uploadSummary.completeCount === 0;
 
   return (
     <main className="mcc-editor-page">
@@ -911,25 +1038,80 @@ export default function ItemComponent() {
           <AdditionalItemsEditor item={item} />
         </div>
 
-        <div className="mcc-editor-savebar">
-          <div aria-live="polite">
-            <span className={dirty ? "is-dirty" : ""} />
-            <p>
-              <strong>{uploadSummary.busy ? "Bilder laddas upp" : dirty ? "Ändringar ej sparade" : "Redo att redigera"}</strong>
-              <small>
-                {uploadSummary.failedCount
-                  ? `${uploadSummary.failedCount} bild behöver din uppmärksamhet.`
-                  : uploadSummary.busy
-                  ? "Du kan fortsätta arbeta medan vi optimerar."
-                  : "Spara när allt känns klart."}
-              </small>
-            </p>
+        {item ? (
+          <section className="mcc-collection-danger">
+            <div>
+              <p className="mcc-editor-eyebrow">Riskzon</p>
+              <h2>Ta bort produkt</h2>
+              <p>
+                {orderImpact.orderCount
+                  ? `${item.headline} förekommer i ${orderImpact.orderCount} ${
+                      orderImpact.orderCount === 1 ? "order" : "ordrar"
+                    }. Namn, pris, antal, tillval och orderbild behålls som historisk dokumentation. Övriga produktbilder tas bort.`
+                  : `${item.headline} och samtliga produktbilder tas bort permanent.`}
+                {orderImpact.activeOrderCount
+                  ? ` ${orderImpact.activeOrderCount} ${
+                      orderImpact.activeOrderCount === 1
+                        ? "pågående betalning berörs"
+                        : "pågående betalningar berörs"
+                    }; en senare betalning går till manuell kontroll.`
+                  : ""}
+              </p>
+            </div>
+            {!deleteConfirmation ? (
+              <button onClick={() => setDeleteConfirmation(true)} type="button">
+                Ta bort produkt
+              </button>
+            ) : (
+              <div className="mcc-collection-danger__confirmation" role="alert">
+                <strong>Ta bort {item.headline}?</strong>
+                <span>
+                  {uploadSummary.busy
+                    ? "Vänta tills bilduppladdningen är klar så att alla filer kan rensas."
+                    : "Det går inte att ångra."}
+                </span>
+                <div>
+                  <button
+                    disabled={isDeleting}
+                    onClick={() => setDeleteConfirmation(false)}
+                    type="button"
+                  >
+                    Avbryt
+                  </button>
+                  <button
+                    disabled={isDeleting || uploadSummary.busy}
+                    formNoValidate
+                    name="intent"
+                    type="submit"
+                    value="delete"
+                  >
+                    {isDeleting ? "Tar bort…" : "Ta bort permanent"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {!uploadSummary.busy ? (
+          <div className="mcc-editor-savebar">
+            <div aria-live="polite">
+              <span className={dirty ? "is-dirty" : ""} />
+              <p>
+                <strong>{dirty ? "Ändringar ej sparade" : "Redo att redigera"}</strong>
+                <small>
+                  {uploadSummary.failedCount
+                    ? `${uploadSummary.failedCount} bild behöver din uppmärksamhet.`
+                    : "Spara när allt känns klart."}
+                </small>
+              </p>
+            </div>
+            <button disabled={saveDisabled} type="submit">
+              <span>{isSaving ? "Sparar…" : item ? "Spara ändringar" : "Skapa produkt"}</span>
+              <span aria-hidden="true"><ArrowIcon /></span>
+            </button>
           </div>
-          <button disabled={saveDisabled} type="submit">
-            <span>{isSubmitting ? "Sparar…" : item ? "Spara ändringar" : "Skapa produkt"}</span>
-            <span aria-hidden="true"><ArrowIcon /></span>
-          </button>
-        </div>
+        ) : null}
       </Form>
     </main>
   );

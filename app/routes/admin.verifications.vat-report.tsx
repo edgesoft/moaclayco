@@ -13,7 +13,6 @@ import {
 import { Controller, useForm } from "react-hook-form";
 import { Verifications } from "~/schemas/verifications"; // Din MongoDB schema
 import { formatMonthName } from "~/utils/formatMonthName";
-import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
 import { auth } from "~/services/auth.server";
 import { buildVatReportEntries } from "~/utils/vat";
@@ -49,8 +48,6 @@ type VatVerification = {
 export const loader: LoaderFunction = async ({ request }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
   const url = new URL(request.url);
-  const domain = getDomain(request);
-  if (!domain) throw new Error("Could not find domain");
 
   const month = url.searchParams.get("month"); // Få månaden som query param
   if (!month) {
@@ -67,7 +64,6 @@ export const loader: LoaderFunction = async ({ request }) => {
       $gte: bounds.start,
       $lt: bounds.end,
     },
-    domain: domain.domain,
     "metadata.key": { $nin: ["vatReport", "IB"] },
   })
     .select(vatPeriodVerificationProjection)
@@ -83,8 +79,6 @@ export const action: ActionFunction = async ({ request }) => {
   const user = await auth.isAuthenticated(request, {
     failureRedirect: "/login",
   });
-  const domain = getDomain(request);
-  if (!domain) throw new Error("Could not find domain");
 
   let formData: FormData;
   try {
@@ -137,7 +131,6 @@ export const action: ActionFunction = async ({ request }) => {
   }
 
   const existingReport = await Verifications.findOne({
-    domain: domain.domain,
     metadata: { $elemMatch: { key: "vatReport", value: month } },
   })
     .select("verificationNumber")
@@ -153,7 +146,6 @@ export const action: ActionFunction = async ({ request }) => {
       $lt: bounds.end,
     },
     "metadata.key": { $nin: ["vatReport", "IB"] },
-    domain: domain.domain,
   })
     .select("journalEntries.account journalEntries.debit journalEntries.credit")
     .lean()
@@ -188,9 +180,8 @@ export const action: ActionFunction = async ({ request }) => {
     },
   ];
 
-  await ensureIncomingBalance(domain.domain, bounds.year);
+  await ensureIncomingBalance(bounds.year);
   await createVerification({
-    domain: domain.domain,
     idempotencyKey: `vat-report:${month}`,
     recordType: "vatReport",
     description: `Momsdeklaration för ${formatMonthName(month)}`,

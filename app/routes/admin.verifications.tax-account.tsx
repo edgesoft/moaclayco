@@ -36,7 +36,6 @@ import {
   getAccountingYearBounds,
   parseAccountingDate,
 } from "~/utils/accountingDates";
-import { getDomain } from "~/utils/domain";
 import { sanitizeVerificationFileLabel } from "~/utils/verificationFiles";
 import {
   VerificationValidationError,
@@ -163,11 +162,9 @@ export const loader: LoaderFunction = async ({ request }) => {
 
 const parseStatement = async ({
   file,
-  domain,
   fiscalYear,
 }: {
   file: File;
-  domain: string;
   fiscalYear: number;
 }) => {
   validateVerificationFile(file);
@@ -187,7 +184,6 @@ const parseStatement = async ({
   const yearBounds = getAccountingYearBounds(fiscalYear);
   if (!yearBounds) throw new Error("Bokföringsåret är ogiltigt");
   const verifications = await Verifications.find({
-    domain,
     verificationDate: { $gte: yearBounds.start, $lt: yearBounds.end },
   })
     .select(
@@ -283,12 +279,10 @@ const commitPayloadSchema = z.object({
 const commitStatement = async ({
   file,
   rawPayload,
-  domain,
   fiscalYear,
 }: {
   file: File;
   rawPayload: string;
-  domain: string;
   fiscalYear: number;
 }) => {
   validateVerificationFile(file);
@@ -327,7 +321,6 @@ const commitStatement = async ({
   );
   if (matchedNumbers.length) {
     const matchedCount = await Verifications.countDocuments({
-      domain,
       verificationNumber: { $in: matchedNumbers },
     });
     if (matchedCount !== matchedNumbers.length) {
@@ -337,7 +330,6 @@ const commitStatement = async ({
 
   const safeFileLabel = sanitizeVerificationFileLabel(payload.fileLabel);
   const previousSource = await Verifications.findOne({
-    domain,
     metadata: {
       $elemMatch: { key: "taxAccountDocument", value: payload.documentHash },
     },
@@ -371,10 +363,9 @@ const commitStatement = async ({
     };
 
     if (selectedRows.length) {
-      await ensureIncomingBalance(domain, fiscalYear);
+      await ensureIncomingBalance(fiscalYear);
     }
     const verificationInputs = selectedRows.map((row) => ({
-      domain,
       description: row.description,
       verificationDate: row.verificationDate,
       journalEntries: row.journalEntries,
@@ -393,7 +384,7 @@ const commitStatement = async ({
       const result = await Verifications.bulkWrite(
         payload.matchedRows.map((row) => ({
           updateOne: {
-            filter: { domain, verificationNumber: row.verificationNumber },
+            filter: { verificationNumber: row.verificationNumber },
             update: {
               $addToSet: {
                 files: fileReference,
@@ -442,8 +433,6 @@ const safeErrorMessage = (error: unknown, fallback: string) => {
 
 export const action: ActionFunction = async ({ request }) => {
   const user = await auth.isAuthenticated(request, { failureRedirect: "/login" });
-  const domain = getDomain(request);
-  if (!domain) throw new Error("Domänen saknas");
   const formData = await request.formData();
   const intent = formData.get("intent");
   const file = formData.get("file");
@@ -459,7 +448,6 @@ export const action: ActionFunction = async ({ request }) => {
     if (intent === "parse") {
       const draft = await parseStatement({
         file,
-        domain: domain.domain,
         fiscalYear: user.fiscalYear,
       });
       return json({ success: true, intent, draft });
@@ -469,7 +457,6 @@ export const action: ActionFunction = async ({ request }) => {
     const result = await commitStatement({
       file,
       rawPayload,
-      domain: domain.domain,
       fiscalYear: user.fiscalYear,
     });
     return json({ success: true, intent, ...result });

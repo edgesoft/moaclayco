@@ -17,6 +17,7 @@ import {
   STRIPE_WEBHOOK_VERSION_PARAMETER,
   type SupportedStripeWebhookApiVersion,
 } from "../app/services/stripe-config.server";
+import { STORE_ID } from "../app/utils/store";
 
 const fixedNow = new Date("2026-08-12T12:00:00.000Z");
 const itemId = "64f10123456789abcdef0123";
@@ -32,7 +33,6 @@ const order: Order = {
     zipcode: "11122",
   },
   discount: { amount: 55, code: "SOMMAR", percentage: 10 },
-  domain: "moaclayco",
   freightCost: 49,
   items: [
     {
@@ -59,7 +59,7 @@ const paymentIntent = {
   currency: "sek",
   id: "pi_test",
   latest_charge: "ch_test",
-  metadata: { domain: order.domain, orderId: order._id },
+  metadata: { domain: STORE_ID, orderId: order._id },
   object: "payment_intent",
   status: "succeeded",
 } as unknown as Stripe.PaymentIntent;
@@ -102,7 +102,6 @@ const makeDependencies = (
   return {
     createVerification: unexpected("createVerification"),
     discounts: { updateOne: unexpected("discounts.updateOne") },
-    domainNames: [order.domain],
     items: { updateOne: unexpected("items.updateOne") },
     now: () => new Date(fixedNow),
     orders: {
@@ -184,6 +183,7 @@ test("signed payment success runs accounting, inventory, discount and email once
   let itemDecrements = 0;
   let discountDecrements = 0;
   let emails = 0;
+  let catalogInvalidations = 0;
 
   const succeededOrder = { ...order, status: "SUCCESS" as const };
   const dependencies = makeDependencies({
@@ -203,6 +203,9 @@ test("signed payment success runs accounting, inventory, discount and email once
         return { modifiedCount: 1 };
       },
     } as never,
+    invalidateCatalogCache: () => {
+      catalogInvalidations += 1;
+    },
     orders: {
       findOne: () => leanResult(order),
       findOneAndUpdate: () => leanResult(succeededOrder),
@@ -261,6 +264,7 @@ test("signed payment success runs accounting, inventory, discount and email once
     assert.equal(itemDecrements, 1);
     assert.equal(discountDecrements, 1);
     assert.equal(emails, 1);
+    assert.equal(catalogInvalidations, 1);
     assert.equal(orderUpdates.length, 1);
     assert.deepEqual(eventUpdates.at(-1), {
       $set: { lastError: null, status: "completed" },
@@ -631,6 +635,7 @@ test("insufficient stock moves a paid order to review without decrementing disco
   let transitionCalls = 0;
   let discountDecrements = 0;
   let emails = 0;
+  let catalogInvalidations = 0;
   let sessionEnded = false;
   const transitionUpdates: Array<Record<string, unknown>> = [];
   const reviewOrder = {
@@ -648,6 +653,9 @@ test("insufficient stock moves a paid order to review without decrementing disco
     items: {
       updateOne: async () => ({ modifiedCount: 0 }),
     } as never,
+    invalidateCatalogCache: () => {
+      catalogInvalidations += 1;
+    },
     orders: {
       findOneAndUpdate: (_filter: unknown, update: Record<string, unknown>) => {
         transitionCalls += 1;
@@ -673,6 +681,7 @@ test("insufficient stock moves a paid order to review without decrementing disco
   assert.equal(transitionCalls, 2);
   assert.equal(discountDecrements, 0);
   assert.equal(emails, 1);
+  assert.equal(catalogInvalidations, 0);
   assert.equal(sessionEnded, true);
   assert.equal(
     (transitionUpdates[1].$set as Record<string, unknown>).paidReviewReason,
@@ -836,7 +845,7 @@ test("a different successful PaymentIntent is attached as an alias and flagged f
   );
 });
 
-test("payout accounting resolves one domain and balances Stripe clearing", async () => {
+test("payout accounting links an order and balances Stripe clearing", async () => {
   const verifications: Array<Record<string, unknown>> = [];
   const dependencies = makeDependencies({
     createVerification: async (input) => {
@@ -868,7 +877,7 @@ test("payout accounting resolves one domain and balances Stripe clearing", async
     dependencies
   );
 
-  assert.equal(verifications[0].domain, order.domain);
+  assert.equal("domain" in verifications[0], false);
   assert.equal(verifications[0].idempotencyKey, "stripe:payout:po_test");
   assert.deepEqual(verifications[0].journalEntries, [
     { account: 1930, debit: 534.5 },
@@ -876,7 +885,7 @@ test("payout accounting resolves one domain and balances Stripe clearing", async
   ]);
 });
 
-test("manual payout accounting uses explicit domain metadata", async () => {
+test("manual payout accounting accepts legacy store metadata", async () => {
   const verifications: Array<Record<string, unknown>> = [];
   const dependencies = makeDependencies({
     createVerification: async (input) => {
@@ -898,12 +907,12 @@ test("manual payout accounting uses explicit domain metadata", async () => {
       automatic: false,
       created: 1_786_634_763,
       id: "po_manual",
-      metadata: { domain: order.domain },
+      metadata: { domain: STORE_ID },
     } as unknown as Stripe.Payout,
     dependencies
   );
 
-  assert.equal(verifications[0].domain, order.domain);
+  assert.equal("domain" in verifications[0], false);
   assert.equal(verifications[0].idempotencyKey, "stripe:payout:po_manual");
   assert.deepEqual(verifications[0].journalEntries, [
     { account: 1930, debit: 300.37 },
@@ -911,7 +920,7 @@ test("manual payout accounting uses explicit domain metadata", async () => {
   ]);
 });
 
-test("manual payout accounting falls back to the only configured domain", async () => {
+test("manual payout accounting needs no tenant metadata", async () => {
   const verifications: Array<Record<string, unknown>> = [];
   const dependencies = makeDependencies({
     createVerification: async (input) => {
@@ -931,14 +940,14 @@ test("manual payout accounting falls back to the only configured domain", async 
     dependencies
   );
 
-  assert.equal(verifications[0].domain, order.domain);
+  assert.equal("domain" in verifications[0], false);
   assert.equal(
     verifications[0].idempotencyKey,
     "stripe:payout:po_manual_without_domain"
   );
 });
 
-test("manual payout accounting requires metadata for multiple domains", async () => {
+test("manual payout accounting rejects metadata for another store", async () => {
   await assert.rejects(
     () =>
       handlePayoutPaid(
@@ -947,10 +956,10 @@ test("manual payout accounting requires metadata for multiple domains", async ()
           automatic: false,
           created: 1_786_634_763,
           id: "po_manual_without_domain",
-          metadata: {},
+          metadata: { domain: "another-store" },
         } as unknown as Stripe.Payout,
-        makeDependencies({ domainNames: [order.domain, "another-store"] })
+        makeDependencies()
       ),
-    /missing domain metadata/
+    /unknown store/
   );
 });

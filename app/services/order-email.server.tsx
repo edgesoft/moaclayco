@@ -5,7 +5,7 @@ import EmailOrderTemplate, {
   getOrderEmailText,
   Template,
 } from "~/components/mail/order";
-import { themes } from "~/components/Theme";
+import { theme } from "~/components/Theme";
 import type { Order } from "~/types";
 import { transporter } from "~/services/email-provider.server";
 
@@ -21,7 +21,6 @@ export async function sendOrderEmail(
   template: Template,
   mailer: MailSender = transporter
 ) {
-  const theme = themes[order.domain] ?? themes.moaclayco;
   const markup = renderToStaticMarkup(
     <EmailOrderTemplate
       copyrightYear={new Date().getFullYear()}

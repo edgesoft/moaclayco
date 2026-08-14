@@ -9,12 +9,12 @@ import { Discounts } from "~/schemas/discounts";
 import getFreightCost from "~/utils/getFreightCost";
 import { data as json, redirect } from "react-router";
 import ClientOnly from "~/components/ClientOnly";
-import { getDomain } from "~/utils/domain";
 import { z } from "zod";
 import mongoose from "mongoose";
 import stripeClient from "~/stripeClient";
-import { themes } from "~/components/Theme";
+import { theme } from "~/components/Theme";
 import { orderCookie } from "~/services/order-cookie.server";
+import { archiveOrderImages } from "~/services/order-image-storage.server";
 import CartView from "~/components/cart/CartView";
 import {
   buildCheckoutPaymentIntent,
@@ -128,11 +128,6 @@ const redirectToCheckout = async (orderId: string) => {
 };
 
 export let action: ActionFunction = async ({ request }) => {
-  const resolvedDomain = getDomain(request);
-  if (!resolvedDomain || !themes[resolvedDomain.domain]) {
-    throw new Response("Okänd butik", { status: 404 });
-  }
-
   const checkoutToken = await checkoutAttemptCookie.parse(
     request.headers.get("Cookie")
   );
@@ -203,7 +198,6 @@ export let action: ActionFunction = async ({ request }) => {
 
   const products = await Items.find({
     _id: { $in: parentIds },
-    domain: resolvedDomain.domain,
   })
     .select("headline price images amount collectionRef additionalItems")
     .lean();
@@ -295,7 +289,6 @@ export let action: ActionFunction = async ({ request }) => {
   const now = new Date();
   const discount: any = discountCode
     ? await Discounts.findOne({
-        domain: resolvedDomain.domain,
         code: discountCode,
         balance: { $gt: 0 },
         percentage: { $gt: 0, $lte: 100 },
@@ -338,7 +331,6 @@ export let action: ActionFunction = async ({ request }) => {
     : { amount: 0 };
 
   const orderData = {
-    domain: resolvedDomain.domain,
     items: mappedItems,
     status: "OPENED",
     customer: parsedCustomer.data,
@@ -353,7 +345,7 @@ export let action: ActionFunction = async ({ request }) => {
   await Orders.init();
   try {
     order = await Orders.findOneAndUpdate(
-      { domain: resolvedDomain.domain, checkoutToken },
+      { checkoutToken },
       {
         $setOnInsert: {
           ...orderData,
@@ -367,7 +359,6 @@ export let action: ActionFunction = async ({ request }) => {
   } catch (error) {
     if (!isDuplicateKeyError(error)) throw error;
     order = await Orders.findOne({
-      domain: resolvedDomain.domain,
       checkoutToken,
     });
   }
@@ -391,11 +382,14 @@ export let action: ActionFunction = async ({ request }) => {
     );
   }
 
+  // Order rows must point to a permanent snapshot before payment and email.
+  // If S3 is temporarily unavailable, the original URL remains as a safe fallback.
+  await archiveOrderImages(order);
+
   if (order.paymentIntent?.client_secret) {
     return redirectToCheckout(String(order._id));
   }
 
-  const theme = themes[resolvedDomain.domain];
   const paymentIntentRequest = buildCheckoutPaymentIntent({
     checkoutToken,
     order,
@@ -414,7 +408,6 @@ export let action: ActionFunction = async ({ request }) => {
       _id: order._id,
       checkoutFingerprint,
       checkoutToken,
-      domain: resolvedDomain.domain,
       status: "OPENED",
       "paymentIntent.id": { $exists: false },
     },
@@ -435,7 +428,6 @@ export let action: ActionFunction = async ({ request }) => {
     (await Orders.findOne({
       _id: order._id,
       checkoutToken,
-      domain: resolvedDomain.domain,
     }));
   if (persistedOrder?.paymentIntent?.id !== paymentIntent.id) {
     throw new Error(

@@ -14,7 +14,6 @@ export type OrderItem = {
 };
 
 export type Order = {
-  domain: string,
   _id: string;
   webhookAt?: Date | string,
   manualOrderAt?: Date | string,
@@ -139,8 +138,3 @@ export type VerificationProps = {
     value: string;
   }>;
 };
-
-export type VerificationDomain = {
-  domain: string
-  verificationYear: number
-}

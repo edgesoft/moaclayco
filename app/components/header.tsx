@@ -97,6 +97,7 @@ function createBannerContextStore(supported: boolean): BannerContextStore {
         item: contexts.filter((context) => context.kind === "item"),
       };
       let lastScrollPosition = window.scrollY;
+      let updateFrame: number | null = null;
 
       const updateBrandPosition = () => {
         const direction: 1 | -1 =
@@ -150,9 +151,24 @@ function createBannerContextStore(supported: boolean): BannerContextStore {
         lastScrollPosition = window.scrollY;
       };
 
-      updateBrandPosition();
-      window.addEventListener("scroll", updateBrandPosition, { passive: true });
-      return () => window.removeEventListener("scroll", updateBrandPosition);
+      const scheduleBrandPositionUpdate = () => {
+        if (updateFrame !== null) return;
+        updateFrame = window.requestAnimationFrame(() => {
+          updateFrame = null;
+          updateBrandPosition();
+        });
+      };
+
+      scheduleBrandPositionUpdate();
+      window.addEventListener("resize", scheduleBrandPositionUpdate);
+      window.addEventListener("scroll", scheduleBrandPositionUpdate, {
+        passive: true,
+      });
+      return () => {
+        window.removeEventListener("resize", scheduleBrandPositionUpdate);
+        window.removeEventListener("scroll", scheduleBrandPositionUpdate);
+        if (updateFrame !== null) window.cancelAnimationFrame(updateFrame);
+      };
     },
   };
 }

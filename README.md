@@ -44,7 +44,8 @@ docker compose -f compose.stage-smoke.yml exec app npm run smoke
 docker compose -f compose.stage-smoke.yml down
 ```
 
-`localhost` is mapped to the Moa Clay Co domain in `app/utils/domain.tsx`.
+The storefront has one customer and one theme. Localhost uses the same Moa Clay
+Collections configuration as every deployed hostname.
 
 
 ## Deployment
@@ -73,7 +74,9 @@ the `.env` file should contain the following keys.
  - AWS_REGION=eu-north-1
  - AWS_S3_BUCKET_NAME=moaclayco-stage
  - AWS_ITEM_PATH=items-stage
+ - AWS_ORDER_IMAGE_PATH=order-images-stage
  - AWS_COLLECTION_PATH=collections-stage
+ - ASSET_ORIGIN=https://38vabcm3.twic.pics
  - AWS_VERIFICATIONS_PATH=verifications-stage
  - OPENAI_API_KEY
  - OPENAI_ACCOUNTING_MODEL `gpt-5.6-terra` by default
@@ -156,9 +159,8 @@ is covered by the unit-level rollout tests.
 Stripe request and webhook versions are allowlisted separately instead of
 accepting arbitrary environment values. Missing request configuration defaults
 to `2023-08-16`, while the existing production webhook remains supported at
-`2020-08-27`. Local development and stage use
-`2026-07-29.dahlia`; production remains explicitly pinned to `2023-08-16`
-for requests and `2020-08-27` for webhooks until the final rollout.
+`2020-08-27` for rollback compatibility. Local development, stage and
+production use `2026-07-29.dahlia` for both requests and the active webhook.
 
 When one environment has a single webhook endpoint, `STRIPE_WEBHOOK` remains a
 supported fallback. For a parallel rollout, configure two endpoints and their

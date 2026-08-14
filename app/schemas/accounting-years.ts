@@ -4,11 +4,6 @@ const { Schema } = mongoose;
 
 const AccountingYearSchema = new Schema(
   {
-    domain: {
-      type: String,
-      required: true,
-      trim: true,
-    },
     year: {
       type: Number,
       required: true,
@@ -37,7 +32,7 @@ const AccountingYearSchema = new Schema(
   }
 );
 
-AccountingYearSchema.index({ domain: 1, year: 1 }, { unique: true });
+AccountingYearSchema.index({ year: 1 }, { unique: true });
 
 export const AccountingYears =
   mongoose.models.AccountingYears ||

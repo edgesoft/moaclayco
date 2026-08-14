@@ -1,10 +1,17 @@
 import { data as json, redirect } from "react-router";
 import type { ActionFunction } from "react-router";
+import mongoose from "mongoose";
 import { z } from "zod";
 import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
 import { auth } from "~/services/auth.server";
-import { getDomain } from "~/utils/domain";
+import { deleteItemWithAssets } from "~/services/item-deletion.server";
+import { invalidateCatalogCache } from "~/services/catalog-cache.server";
+import {
+  consumeImageDrafts,
+  InvalidImageDraftError,
+} from "~/services/image-drafts.server";
+import { MAX_ITEM_IMAGES } from "~/utils/imageUpload.shared";
 import {
   MAX_STANDARD_FORM_REQUEST_SIZE,
   parseFormDataWithinLimit,
@@ -41,17 +48,17 @@ const ProductInfoSchema = z.array(
 const AdditionalItemsSchema = z.array(
   z.object({
     name: z.string().min(1),
-    value: z.union([z.string(), z.number()]),
+    value: z.union([z.string(), z.number()]).refine(
+      (value) => Number.isFinite(Number(value)) && Number(value) >= 0,
+      "Tillvalets pris måste vara 0 eller mer"
+    ),
   })
 );
 
 export const ItemAction: ActionFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
-  const domain = getDomain(request);
-  if (!domain) return json({ errors: { form: "Okänd domän" } }, { status: 400 });
 
   const collection = await Collections.findOne({
-    domain: domain.domain,
     shortUrl: params.collection,
   });
   if (!collection) return redirect("/");
@@ -71,6 +78,31 @@ export const ItemAction: ActionFunction = async ({ request, params }) => {
     }
     throw error;
   }
+  const intent = formData.get("intent")?.toString();
+  if (intent === "delete") {
+    if (!params.id || !params.collection) {
+      return json(
+        { errors: { form: "Produkten kunde inte hittas" } },
+        { status: 404 }
+      );
+    }
+
+    const deletion = await deleteItemWithAssets({
+      collection: params.collection,
+      id: params.id,
+    });
+
+    if (deletion.status === "not_found") {
+      return json(
+        { errors: { form: "Produkten kunde inte hittas" } },
+        { status: 404 }
+      );
+    }
+
+    invalidateCatalogCache();
+    return redirect(`/collections/${params.collection}`);
+  }
+
   const result = Object.fromEntries(
     Array.from(formData.entries()).map(([key, value]) => [key, value.toString()])
   );
@@ -115,6 +147,41 @@ export const ItemAction: ActionFunction = async ({ request, params }) => {
       { status: 400 }
     );
   }
+  if (images.length > MAX_ITEM_IMAGES || new Set(images).size !== images.length) {
+    return json(
+      { errors: { images: `En produkt kan ha högst ${MAX_ITEM_IMAGES} unika bilder` } },
+      { status: 400 }
+    );
+  }
+
+  const currentItem = params.id
+    ? await Items.findOne({
+        _id: params.id,
+        collectionRef: params.collection,
+      })
+        .select("images")
+        .lean<{ images?: string[] }>()
+    : null;
+  if (params.id && !currentItem) {
+    return json({ errors: { form: "Produkten kunde inte hittas" } }, { status: 404 });
+  }
+
+  const storedImages = currentItem?.images ?? [];
+  const submittedImageSet = new Set(images);
+  if (storedImages.some((image) => !submittedImageSet.has(image))) {
+    return json(
+      {
+        errors: {
+          images:
+            "En sparad bild ändrades utanför bildkontrollen. Ladda om sidan och försök igen.",
+        },
+      },
+      { status: 409 }
+    );
+  }
+  const storedImageSet = new Set(storedImages);
+  const newImages = images.filter((image) => !storedImageSet.has(image));
+  const imageDraftId = result.imageDraftId?.trim() ?? "";
 
   const data = {
     additionalItems: additionalItems.map((addition) => ({
@@ -123,7 +190,6 @@ export const ItemAction: ActionFunction = async ({ request, params }) => {
     })),
     amount: Number(validatedItem.data.amount),
     collectionRef: params.collection,
-    domain: domain.domain,
     headline: validatedItem.data.headline,
     images,
     instagram: result.instagram?.trim() ?? "",
@@ -134,21 +200,45 @@ export const ItemAction: ActionFunction = async ({ request, params }) => {
     ),
   };
 
-  if (params.id) {
-    const updateResult = await Items.updateOne(
-      {
-        _id: params.id,
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      await consumeImageDrafts({
         collectionRef: params.collection,
-        domain: domain.domain,
-      },
-      data
-    );
-    if (!updateResult.matchedCount) {
-      return json({ errors: { form: "Produkten kunde inte hittas" } }, { status: 404 });
+        draftId: imageDraftId,
+        kind: "item",
+        session,
+        urls: newImages,
+      });
+
+      if (params.id) {
+        const updateResult = await Items.updateOne(
+          {
+            _id: params.id,
+            collectionRef: params.collection,
+          },
+          data,
+          { session }
+        );
+        if (!updateResult.matchedCount) {
+          throw new Error(`Product ${params.id} disappeared during update`);
+        }
+      } else {
+        await Items.create([data], { session });
+      }
+    });
+  } catch (error) {
+    if (error instanceof InvalidImageDraftError) {
+      return json(
+        { errors: { images: "En uppladdad bild är inte längre giltig. Ladda upp den igen." } },
+        { status: 409 }
+      );
     }
-  } else {
-    await Items.create(data);
+    throw error;
+  } finally {
+    await session.endSession();
   }
 
+  invalidateCatalogCache();
   return redirect(`/collections/${params.collection}`);
 };

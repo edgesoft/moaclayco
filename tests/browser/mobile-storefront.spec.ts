@@ -146,6 +146,32 @@ test("a touch user can open a Collection", async ({ page }) => {
   await expectNoHorizontalOverflow(page);
 });
 
+test("the featured product links directly into its Collection", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await acceptCookies(page);
+
+  const featured = page.locator("#featured");
+  const imageLink = featured.getByRole("link", {
+    name: /^Öppna .+ i Collection$/,
+  });
+  const textLink = featured.getByRole("link", {
+    name: /^Visa .+ i Collection$/,
+  });
+
+  await expect(imageLink).toBeVisible();
+  await expect(textLink).toBeVisible();
+
+  const href = await imageLink.getAttribute("href");
+  expect(href).toMatch(/^\/collections\/[^#]+#[^#]+$/);
+  await expect(textLink).toHaveAttribute("href", href!);
+
+  await imageLink.tap();
+  await expect(page).toHaveURL(new RegExp(`${href!}$`));
+  await expect(page.locator("main h1")).toBeVisible();
+});
+
 test("collection gallery controls are touch-friendly", async ({ page }) => {
   await page.goto("/collections/hairpins");
   await acceptCookies(page);

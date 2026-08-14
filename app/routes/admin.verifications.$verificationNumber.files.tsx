@@ -3,7 +3,6 @@ import { useRef, useState } from "react";
 import { data as json, Link, useFetcher, useLoaderData } from "react-router";
 import type { ActionFunction, LoaderFunction } from "react-router";
 import { Verifications } from "~/schemas/verifications";
-import { getDomain } from "~/utils/domain";
 import { auth } from "~/services/auth.server";
 import {
   deleteUploadedVerificationFile,
@@ -234,10 +233,7 @@ export const loader: LoaderFunction = async ({ params, request }) => {
     throw new Response("Ogiltigt verifikationsnummer", { status: 400 });
   }
 
-  const domain = getDomain(request);
-  if (!domain) throw new Response("Okänd domän", { status: 404 });
   const verification = (await Verifications.findOne({
-    domain: domain.domain,
     verificationNumber,
   })
     .select(
@@ -256,7 +252,6 @@ export const loader: LoaderFunction = async ({ params, request }) => {
 
   const verificationDate = new Date(verification.verificationDate);
   let removalPolicy = await getVerificationEditPolicy({
-    domain: domain.domain,
     verification: {
       recordType: verification.recordType,
       verificationDate,
@@ -297,9 +292,8 @@ export const action: ActionFunction = async ({ request, params }) => {
     }
     throw error;
   }
-  const domain = getDomain(request);
   const verificationNumber = Number(params.verificationNumber);
-  if (!domain || !Number.isInteger(verificationNumber)) {
+  if (!Number.isInteger(verificationNumber)) {
     return json({ error: "Verifikationsnumret saknas" }, { status: 400 });
   }
   const intent = formData.get("intent");
@@ -313,7 +307,6 @@ export const action: ActionFunction = async ({ request, params }) => {
     let removedFile: { name: string; path: string };
     try {
       removedFile = await removeVerificationFileReference({
-        domain: domain.domain,
         verificationNumber,
         expectedYear: user.fiscalYear,
         path,
@@ -408,7 +401,7 @@ export const action: ActionFunction = async ({ request, params }) => {
       verifiedFile
     );
     const updateResult = await Verifications.updateOne(
-      { verificationNumber, domain: domain.domain },
+      { verificationNumber },
       { $push: { files: { name: label, path: uploadedFile.path } } }
     );
 

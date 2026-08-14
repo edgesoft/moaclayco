@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createCookie } from "react-router";
 import type Stripe from "stripe";
 import { sessionSecret } from "~/services/session.server";
+import { STORE_ID } from "~/utils/store";
 
 export const checkoutAttemptCookie = createCookie("checkout_attempt", {
   httpOnly: true,
@@ -25,7 +26,6 @@ export const createCheckoutFingerprint = (value: unknown) =>
 
 type CheckoutOrder = {
   _id: unknown;
-  domain: string;
   totalSum: number;
 };
 
@@ -54,12 +54,12 @@ export const buildCheckoutPaymentIntent = ({
       currency: "sek",
       payment_method_types: paymentMethods,
       metadata: {
-        domain: order.domain,
+        domain: STORE_ID,
         orderId: String(order._id),
       },
     } satisfies Stripe.PaymentIntentCreateParams,
     options: {
-      idempotencyKey: `checkout:${order.domain}:${checkoutToken}`,
+      idempotencyKey: `checkout:${STORE_ID}:${checkoutToken}`,
     } satisfies Stripe.RequestOptions,
   };
 };
@@ -89,7 +89,7 @@ export const assertPaymentIntentMatchesOrder = ({
   }
   if (
     paymentIntent.metadata.domain &&
-    paymentIntent.metadata.domain !== order.domain
+    paymentIntent.metadata.domain !== STORE_ID
   ) {
     throw new Error(
       `PaymentIntent ${paymentIntent.id} domain does not match order ${String(

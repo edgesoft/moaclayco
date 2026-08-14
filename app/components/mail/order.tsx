@@ -1,6 +1,6 @@
 import React, { CSSProperties } from "react";
 import { Order, OrderItem } from "~/types";
-import { themes } from "../Theme";
+import { theme } from "../Theme";
 
 export enum Template {
   ORDER,
@@ -39,8 +39,6 @@ const formatSek = (amount: number) =>
 export const shortOrderNumber = (orderId: string | { toString(): string }) =>
   `#${String(orderId).slice(-8).toLocaleUpperCase("sv-SE")}`;
 
-const getTheme = (domain: string) => themes[domain] ?? themes.moaclayco;
-
 const customerName = (order: Order) =>
   [order.customer.firstname, order.customer.lastname].filter(Boolean).join(" ") ||
   "Kund";
@@ -65,7 +63,6 @@ const orderCopy = (template: Template) =>
       };
 
 export const getOrderEmailSubject = (order: Order, template: Template) => {
-  const theme = getTheme(order.domain);
   const orderNumber = shortOrderNumber(order._id);
 
   return template === Template.ORDER
@@ -94,7 +91,6 @@ const itemTextLines = (item: OrderItem) => {
 };
 
 export const getOrderEmailText = (order: Order, template: Template) => {
-  const theme = getTheme(order.domain);
   const copy = orderCopy(template);
   const discountAmount = order.discount?.amount ?? 0;
   const merchandiseTotal = Math.max(
@@ -170,7 +166,6 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({
   template,
 }) => {
   const { _id, customer, items, freightCost, discount, totalSum } = order;
-  const theme = getTheme(order.domain);
   const copy = orderCopy(template);
   const name = customerName(order);
   const discountAmount = discount?.amount ?? 0;

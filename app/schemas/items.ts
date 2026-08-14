@@ -2,7 +2,6 @@ import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
 const ItemSchema = new Schema({
-  domain: String,
   headline:  String,
   price: Number,
   productInfos: [String],
@@ -19,7 +18,6 @@ const ItemSchema = new Schema({
 },
 { collection: 'items' });
 
-ItemSchema.index({ domain: 1, collectionRef: 1, _id: -1 });
-ItemSchema.index({ domain: 1, _id: -1 });
+ItemSchema.index({ collectionRef: 1, _id: -1 });
 
 export const Items = mongoose.models.Items || mongoose.model('Items', ItemSchema);

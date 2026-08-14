@@ -1,4 +1,8 @@
-import type { LoaderFunction, MetaFunction } from "react-router";
+import type {
+  HeadersFunction,
+  LoaderFunction,
+  MetaFunction,
+} from "react-router";
 import {
   data as json,
   Link,
@@ -15,14 +19,23 @@ import {
 import { useEffect, useRef } from "react";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
-import { useTheme, themes } from "~/components/Theme";
+import { theme } from "~/components/Theme";
 import useMediaQuery from "~/hooks/useMediaQuery";
 import { Items } from "~/schemas/items";
 import type { CollectionProps, ItemProps } from "~/types";
 import type { IndexProps } from "~/root";
-import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
 import { landingItemProjection } from "~/utils/queryProjections.server";
+import {
+  catalogCacheKeys,
+  readCatalogCache,
+} from "~/services/catalog-cache.server";
+import {
+  formatServerTiming,
+  measureServerTiming,
+  type ServerTimingMetric,
+} from "~/utils/serverTiming.server";
+import { mergePrivateRouteHeaders } from "~/utils/responseHeaders";
 
 type LandingLoaderData = {
   latestItems: ItemProps[];
@@ -31,32 +44,49 @@ type LandingLoaderData = {
 const imageWithWidth = (image: string, width: number) =>
   `${image}${image.includes("?") ? "&" : "?"}width=${width}`;
 
-export const loader: LoaderFunction = async ({ request }) => {
-  const domain = getDomain(request);
-  const latestItems = toLoaderData(
-    await Items.find({ domain: domain?.domain })
-      .select(landingItemProjection)
-      .slice("images", 2)
-      .sort({ _id: -1 })
-      .limit(6)
-      .lean()
+export const loader: LoaderFunction = async () => {
+  const timings: ServerTimingMetric[] = [];
+  let catalogCacheStatus = "miss";
+  const latestItems = await measureServerTiming(
+    timings,
+    "home-catalog",
+    () =>
+      readCatalogCache(
+        catalogCacheKeys.latestItems,
+        async () =>
+          toLoaderData(
+            await Items.find({})
+              .select(landingItemProjection)
+              .slice("images", 2)
+              .sort({ _id: -1 })
+              .limit(6)
+              .lean()
+          ),
+        { onStatus: (status) => (catalogCacheStatus = status) }
+      ),
+    "latest items"
   );
+  timings.push({
+    description: catalogCacheStatus,
+    duration: 0,
+    name: "home-cache",
+  });
 
   return json(
     { latestItems },
     {
       headers: {
         "Cache-Control": "private, no-store",
+        "Server-Timing": formatServerTiming(timings),
       },
     }
   );
 };
 
-export const meta: MetaFunction = ({ matches }) => {
-  const rootData = matches[0].loaderData as IndexProps;
-  const domain = getDomain(rootData.hostname);
-  const theme = themes[domain?.domain ?? "moaclayco"];
+export const headers: HeadersFunction = ({ parentHeaders, loaderHeaders }) =>
+  mergePrivateRouteHeaders(parentHeaders, loaderHeaders);
 
+export const meta: MetaFunction = () => {
   return [
     {
       title: `${theme.longName} — färg, form och personlighet`,
@@ -105,6 +135,7 @@ function HeroCollection({
         <span className="mcc-hero-card__media">
           <img
             alt={collection.headline}
+            fetchPriority={index === 0 ? "high" : "auto"}
             loading="eager"
             sizes="(max-width: 767px) 46vw, 25vw"
             src={imageWithWidth(collection.image, 700)}
@@ -134,6 +165,7 @@ function ProductScrollStory({ item }: { item: ItemProps }) {
   const images = item.images?.filter(Boolean) ?? [];
   const firstImage = images[0];
   const secondImage = images[1];
+  const itemHref = `/collections/${item.collectionRef}#${item._id}`;
   const productScale = useTransform(
     scrollYProgress,
     [0, 0.48, 1],
@@ -159,7 +191,7 @@ function ProductScrollStory({ item }: { item: ItemProps }) {
       aria-label={`Produktberättelse för ${item.headline}`}
       className="mcc-product-journey"
       data-banner-context-eyebrow="Utvald nyhet"
-      data-banner-context-href={`/collections/${item.collectionRef}#${item._id}`}
+      data-banner-context-href={itemHref}
       data-banner-context-title={item.headline}
       id="featured"
       ref={sectionRef}
@@ -169,38 +201,53 @@ function ProductScrollStory({ item }: { item: ItemProps }) {
           <div className="mcc-product-journey__label" aria-hidden="true">
             Utvald / 01
           </div>
-          <motion.div
-            className="mcc-product-journey__frame"
-            style={
-              reduceMotion
-                ? undefined
-                : { rotate: productRotate, scale: productScale }
-            }
+          <Link
+            aria-label={`Öppna ${item.headline} i Collection`}
+            className="mcc-product-journey__visual-link"
+            prefetch="intent"
+            to={itemHref}
           >
-            <img
-              alt={item.headline}
-              sizes="(max-width: 899px) 82vw, 42vw"
-              src={imageWithWidth(firstImage, 1000)}
-              srcSet={`
-                ${imageWithWidth(firstImage, 480)} 480w,
-                ${imageWithWidth(firstImage, 700)} 700w,
-                ${imageWithWidth(firstImage, 1000)} 1000w
-              `}
-            />
-            {secondImage ? (
-              <motion.img
-                alt=""
-                aria-hidden="true"
-                className="mcc-product-journey__detail-image"
-                src={imageWithWidth(secondImage, 480)}
-                style={
-                  reduceMotion
-                    ? undefined
-                    : { rotate: detailRotate, x: detailX, y: detailY }
-                }
+            <motion.div
+              className="mcc-product-journey__frame"
+              style={
+                reduceMotion
+                  ? undefined
+                  : { rotate: productRotate, scale: productScale }
+              }
+            >
+              <img
+                alt={item.headline}
+                decoding="async"
+                loading="lazy"
+                sizes="(max-width: 899px) 82vw, 42vw"
+                src={imageWithWidth(firstImage, 1000)}
+                srcSet={`
+                  ${imageWithWidth(firstImage, 480)} 480w,
+                  ${imageWithWidth(firstImage, 700)} 700w,
+                  ${imageWithWidth(firstImage, 1000)} 1000w
+                `}
               />
-            ) : null}
-          </motion.div>
+              {secondImage ? (
+                <motion.img
+                  alt=""
+                  aria-hidden="true"
+                  className="mcc-product-journey__detail-image"
+                  decoding="async"
+                  loading="lazy"
+                  src={imageWithWidth(secondImage, 480)}
+                  style={
+                    reduceMotion
+                      ? undefined
+                      : { rotate: detailRotate, x: detailX, y: detailY }
+                  }
+                />
+              ) : null}
+              <span className="mcc-product-journey__visual-cta">
+                Öppna i Collection
+                <ArrowIcon direction="up-right" />
+              </span>
+            </motion.div>
+          </Link>
         </div>
 
         <div className="mcc-product-journey__steps">
@@ -235,6 +282,15 @@ function ProductScrollStory({ item }: { item: ItemProps }) {
                 item.longDescription ||
                 "Färg, form och personlighet i ett enda par."}
             </p>
+            <Link
+              aria-label={`Visa ${item.headline} i Collection`}
+              className="mcc-product-journey__step-link"
+              prefetch="intent"
+              to={itemHref}
+            >
+              Visa i Collection
+              <ArrowIcon direction="up-right" />
+            </Link>
           </motion.article>
 
           <motion.article
@@ -251,7 +307,7 @@ function ProductScrollStory({ item }: { item: ItemProps }) {
             <Link
               className="mcc-button mcc-button--cream"
               prefetch="intent"
-              to={`/collections/${item.collectionRef}#${item._id}`}
+              to={itemHref}
             >
               Se och köp
               <ArrowIcon direction="up-right" />
@@ -345,8 +401,9 @@ function CollectionScene({
           >
             <motion.img
               alt={collection.headline}
+              decoding="async"
               initial={reduceMotion ? false : imageEntrance}
-              loading={index < 2 ? "eager" : "lazy"}
+              loading="lazy"
               sizes="(max-width: 767px) 94vw, 68vw"
               src={imageWithWidth(collection.image, 1000)}
               srcSet={`
@@ -458,7 +515,6 @@ export default function Index() {
   const { latestItems } = useLoaderData<LandingLoaderData>();
   const revalidator = useRevalidator();
   const attemptedEmptyDataRepairRef = useRef(false);
-  const theme = useTheme();
   const reduceMotion = useReducedMotion();
   const heroCollections = collections.slice(0, 2);
   const featuredItem =

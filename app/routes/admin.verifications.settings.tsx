@@ -23,7 +23,6 @@ import {
 } from "~/services/verification.server";
 import type { User } from "~/types";
 import ArrowIcon from "~/components/ArrowIcon";
-import { getDomain } from "~/utils/domain";
 import {
   MAX_STANDARD_FORM_REQUEST_SIZE,
   parseFormDataWithinLimit,
@@ -45,13 +44,7 @@ export const loader: LoaderFunction = async ({ request }) => {
   const user = await auth.isAuthenticated(request, {
     failureRedirect: "/login",
   });
-  const domain = getDomain(request);
-  if (!domain) throw new Response("Okänd domän", { status: 404 });
-
-  const closing = await getAccountingYearClosingReadiness(
-    domain.domain,
-    user.fiscalYear
-  );
+  const closing = await getAccountingYearClosingReadiness(user.fiscalYear);
   return json({ year: user.fiscalYear, closing });
 };
 
@@ -59,9 +52,6 @@ export const action: ActionFunction = async ({ request }) => {
   const user: User = await auth.isAuthenticated(request, {
     failureRedirect: "/login",
   });
-  const domain = getDomain(request);
-  if (!domain) throw new Response("Okänd domän", { status: 404 });
-
   let formData: FormData;
   try {
     formData = await parseFormDataWithinLimit(
@@ -92,7 +82,6 @@ export const action: ActionFunction = async ({ request }) => {
 
     try {
       await closeAccountingYear({
-        domain: domain.domain,
         year: parsed.data.closingYear,
       });
     } catch (error) {
@@ -114,7 +103,7 @@ export const action: ActionFunction = async ({ request }) => {
   }
 
   const fiscalYear = parsed.data.fiscalYear;
-  await ensureIncomingBalance(domain.domain, fiscalYear);
+  await ensureIncomingBalance(fiscalYear);
   await Users.updateOne({ _id: user._id }, { fiscalYear });
   user.fiscalYear = fiscalYear;
 

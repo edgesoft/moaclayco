@@ -26,7 +26,6 @@ const order: Order = {
     code: "SOMMAR",
     percentage: 10,
   },
-  domain: "moaclayco",
   freightCost: 0,
   items: [
     {

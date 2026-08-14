@@ -1,4 +1,8 @@
-import type { LoaderFunction, MetaFunction } from "react-router";
+import type {
+  HeadersFunction,
+  LoaderFunction,
+  MetaFunction,
+} from "react-router";
 import {
   data as json,
   Link,
@@ -19,12 +23,21 @@ import type { IndexProps } from "~/root";
 import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
 import type { CollectionProps, ItemProps } from "~/types";
-import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
 import {
   collectionDetailProjection,
   collectionItemProjection,
 } from "~/utils/queryProjections.server";
+import {
+  catalogCacheKeys,
+  readCatalogCache,
+} from "~/services/catalog-cache.server";
+import {
+  formatServerTiming,
+  measureServerTiming,
+  type ServerTimingMetric,
+} from "~/utils/serverTiming.server";
+import { mergePrivateRouteHeaders } from "~/utils/responseHeaders";
 
 type ItemLoaderProps = {
   collection: CollectionProps;
@@ -34,39 +47,57 @@ type ItemLoaderProps = {
 const imageWithWidth = (image: string, width: number) =>
   `${image}${image.includes("?") ? "&" : "?"}width=${width}`;
 
-export const loader: LoaderFunction = async ({ params, request }) => {
-  const domain = getDomain(request);
-  const [collection, items] = await Promise.all([
-    Collections.findOne({
-      shortUrl: params.collection,
-      domain: domain?.domain,
-    })
-      .select(collectionDetailProjection)
-      .lean()
-      .exec(),
-    Items.find({
-      collectionRef: params.collection,
-      domain: domain?.domain,
-    })
-      .select(collectionItemProjection)
-      .sort({ _id: -1 })
-      .lean(),
-  ]);
+export const loader: LoaderFunction = async ({ params }) => {
+  const timings: ServerTimingMetric[] = [];
+  let catalogCacheStatus = "miss";
+  const catalogData = await measureServerTiming(
+    timings,
+    "collection-catalog",
+    () =>
+      readCatalogCache(
+        catalogCacheKeys.collection(params.collection ?? "missing"),
+        async () => {
+          const [collection, items] = await Promise.all([
+            Collections.findOne({
+              shortUrl: params.collection,
+            })
+              .select(collectionDetailProjection)
+              .lean()
+              .exec(),
+            Items.find({
+              collectionRef: params.collection,
+            })
+              .select(collectionItemProjection)
+              .sort({ _id: -1 })
+              .lean(),
+          ]);
+          return collection ? toLoaderData({ collection, items }) : null;
+        },
+        { onStatus: (status) => (catalogCacheStatus = status) }
+      ),
+    "collection and items"
+  );
 
-  if (!collection) return redirect("/");
+  if (!catalogData) return redirect("/");
+  timings.push({
+    description: catalogCacheStatus,
+    duration: 0,
+    name: "collection-cache",
+  });
 
   return json(
-    toLoaderData({
-      collection,
-      items,
-    }),
+    catalogData,
     {
       headers: {
-        "Cache-Control": "public, max-age=300",
+        "Cache-Control": "private, no-store",
+        "Server-Timing": formatServerTiming(timings),
       },
     }
   );
 };
+
+export const headers: HeadersFunction = ({ parentHeaders, loaderHeaders }) =>
+  mergePrivateRouteHeaders(parentHeaders, loaderHeaders);
 
 export const meta: MetaFunction = ({ loaderData }) => {
   const { collection } = loaderData as ItemLoaderProps;
@@ -152,10 +183,20 @@ function Product({
   }, [nearViewport]);
 
   useEffect(() => {
-    if (!nearViewport || images.length < 2) return;
+    if (!nearViewport || !loadedImage || images.length < 2) return;
 
-    const preloadTimer = window.setTimeout(
-      () => {
+    const connection = (
+      navigator as Navigator & {
+        connection?: { effectiveType?: string; saveData?: boolean };
+      }
+    ).connection;
+    if (connection?.saveData || connection?.effectiveType?.includes("2g")) {
+      return;
+    }
+
+    let preloadTimer: number | undefined;
+    const schedulePreload = () => {
+      preloadTimer = window.setTimeout(() => {
         const nextIndex =
           (currentIndex + preloadDirection + images.length) % images.length;
         const preload = new Image();
@@ -171,15 +212,24 @@ function Product({
         )} 1100w`;
         preload.src = imageWithWidth(images[nextIndex], 1100);
         preloadRef.current = [preload];
-      },
-      position < 2 ? 80 : 240
-    );
+      }, position < 2 ? 1_200 : 1_800);
+    };
 
-    return () => window.clearTimeout(preloadTimer);
+    if (document.readyState === "complete") {
+      schedulePreload();
+    } else {
+      window.addEventListener("load", schedulePreload, { once: true });
+    }
+
+    return () => {
+      window.removeEventListener("load", schedulePreload);
+      if (preloadTimer !== undefined) window.clearTimeout(preloadTimer);
+    };
   }, [
     currentIndex,
     featured,
     images,
+    loadedImage,
     nearViewport,
     position,
     preloadDirection,
@@ -407,11 +457,12 @@ function Product({
                   images.length
                 }`}
                 className={loadedImage === activeImage ? "is-loaded" : ""}
+                decoding="async"
                 draggable={false}
                 key={`${activeImage}-${
                   useOriginalImage ? "original" : "responsive"
                 }-${imageAttempt}`}
-                loading={position < 2 ? "eager" : "lazy"}
+                loading="lazy"
                 onError={handleImageError}
                 onLoad={handleImageLoad}
                 ref={setProductImageRef}
@@ -766,6 +817,7 @@ export default function Collection() {
             <img
               alt={collection.headline}
               className={heroLoaded ? "is-loaded" : ""}
+              fetchPriority="high"
               key={heroUseOriginal ? "original" : "responsive"}
               loading="eager"
               onError={handleHeroError}

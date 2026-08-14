@@ -289,8 +289,8 @@
 
 .mcc-editor-savebar {
   align-items: center; backdrop-filter: blur(18px); background: rgba(250,248,243,.94);
-  border-top: 1px solid var(--editor-line); bottom: 0; display: flex; gap: 2rem;
-  justify-content: space-between; padding: .85rem clamp(1.25rem,5vw,5.5rem); position: sticky; z-index: 20;
+  border-top: 1px solid var(--editor-line); display: flex; gap: 2rem;
+  justify-content: space-between; padding: .85rem clamp(1.25rem,5vw,5.5rem);
 }
 .mcc-editor-savebar > div { align-items: center; display: flex; gap: .65rem; }
 .mcc-editor-savebar > div > span { background: #8b9480; border-radius: 999px; height: .45rem; width: .45rem; }

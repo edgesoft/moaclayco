@@ -1,6 +1,6 @@
 import { useLocation } from "react-router";
 import ArrowIcon from "./ArrowIcon";
-import { useTheme } from "./Theme";
+import { theme } from "./Theme";
 
 const isPublicStorefrontPath = (pathname: string) => {
   const normalizedPath = pathname.replace(/\/+$/, "") || "/";
@@ -23,7 +23,6 @@ const isPublicStorefrontPath = (pathname: string) => {
 };
 
 const Footer = (): React.ReactElement | null => {
-  const theme = useTheme();
   const location = useLocation();
 
   if (!isPublicStorefrontPath(location.pathname)) return null;

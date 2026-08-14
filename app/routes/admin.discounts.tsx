@@ -1,21 +1,27 @@
-import type { LoaderFunction } from "react-router";
+import type { LinksFunction, LoaderFunction } from "react-router";
 import { Link, Outlet, useLoaderData, useLocation } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import { Discounts as DiscountEntity } from "../schemas/discounts";
 import { auth } from "~/services/auth.server";
 import type { DiscountType } from "~/types";
-import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
 import { discountProjection } from "~/utils/queryProjections.server";
+import itemEditorStyles from "~/styles/item-editor.css?url";
+import reactToastifyStyles from "react-toastify/dist/ReactToastify.css?url";
+import toastStyles from "~/styles/toast.css?url";
+
+export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: itemEditorStyles },
+  { rel: "stylesheet", href: reactToastifyStyles },
+  { rel: "stylesheet", href: toastStyles },
+];
 
 export const loader: LoaderFunction = async ({ request }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
-  const domain = getDomain(request);
-
   return toLoaderData(
-    await DiscountEntity.find({ domain: domain?.domain })
+    await DiscountEntity.find({})
       .select(discountProjection)
       .sort({ code: 1 })
       .lean()

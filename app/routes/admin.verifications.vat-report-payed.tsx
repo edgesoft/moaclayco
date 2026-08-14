@@ -15,7 +15,6 @@ import { Verifications } from "~/schemas/verifications"; // Din MongoDB schema
 import { formatMonthName } from "~/utils/formatMonthName";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
 import { auth } from "~/services/auth.server";
 import { createVerification, ensureIncomingBalance } from "~/services/verification.server";
@@ -39,8 +38,6 @@ type VatReportVerification = {
 export const loader: LoaderFunction = async ({ request }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
   const url = new URL(request.url);
-  const domain = getDomain(request)
-  if (!domain) throw new Response("Okänd domän", { status: 404 });
   const month = url.searchParams.get("month"); // Få månaden som query param
   if (!month) {
     throw new Response("Ingen månad specificerad", { status: 400 });
@@ -51,7 +48,6 @@ export const loader: LoaderFunction = async ({ request }) => {
   }
 
   const verification = (await Verifications.findOne({
-    domain: domain.domain,
     metadata: { $elemMatch: { key: "vatReport", value: month } },
   })
     .select(vatPaymentVerificationProjection)
@@ -69,8 +65,6 @@ const formSchema = z.object({
 export const action: ActionFunction = async ({ request }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
   const formData = await request.formData();
-  const domain = getDomain(request)
-  if (!domain) throw new Error("Could not find domain")
 
   const parsed = formSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return json({ error: parsed.error.issues[0].message }, { status: 400 });
@@ -83,7 +77,6 @@ export const action: ActionFunction = async ({ request }) => {
 
   const verification = (await Verifications.findOne({
     metadata: { $elemMatch: { key: "vatReport", value: month } },
-    domain: domain.domain,
   })
     .select(vatPaymentVerificationProjection)
     .lean()
@@ -106,9 +99,8 @@ export const action: ActionFunction = async ({ request }) => {
   const isRefund = vatBalance > 0;
   const journalEntries = buildVatTaxAccountEntries(vatBalance);
 
-  await ensureIncomingBalance(domain.domain, paymentYear);
+  await ensureIncomingBalance(paymentYear);
   await createVerification({
-    domain: domain.domain,
     idempotencyKey: `vat-payment:${month}`,
     description: isRefund
       ? `Moms ${formatMonthName(month)} krediterad på skattekontot`
@@ -121,7 +113,7 @@ export const action: ActionFunction = async ({ request }) => {
     ],
   });
   await Verifications.updateOne(
-    { _id: verification._id, domain: domain.domain },
+    { _id: verification._id },
     { $addToSet: { metadata: { key: "vatRegisteredAtAccount", value: "true" } } }
   );
 

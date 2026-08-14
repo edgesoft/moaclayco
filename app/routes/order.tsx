@@ -11,12 +11,11 @@ import { useEffect } from "react";
 import { useCart } from "react-use-cart";
 import ArrowIcon from "~/components/ArrowIcon";
 import OrderSummary from "~/components/cart/OrderSummary";
-import { useTheme } from "~/components/Theme";
+import { theme } from "~/components/Theme";
 import { Orders } from "~/schemas/orders";
 import { orderCookie } from "~/services/order-cookie.server";
 import stripeClient from "~/stripeClient";
 import { Order } from "~/types";
-import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
 import { orderConfirmationProjection } from "~/utils/queryProjections.server";
 
@@ -26,10 +25,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const cookieOrderId = String(
     (await orderCookie.parse(request.headers.get("Cookie"))) ?? ""
   );
-  const domain = getDomain(request);
-
   if (
-    !domain ||
     !mongoose.Types.ObjectId.isValid(cookieOrderId) ||
     !paymentIntentId
   ) {
@@ -38,7 +34,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const order = (await Orders.findOne({
     _id: cookieOrderId,
-    domain: domain.domain,
     "paymentIntent.id": paymentIntentId,
   })
     .select(orderConfirmationProjection)
@@ -81,7 +76,6 @@ export const meta: MetaFunction = () => [
 ];
 
 export default function OrderPage() {
-  const theme = useTheme();
   const data = useLoaderData<typeof loader>();
   const { emptyCart } = useCart();
   const succeeded = data.redirect_status === "succeeded";

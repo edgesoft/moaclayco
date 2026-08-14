@@ -31,9 +31,6 @@ const accountName = (accountNumber: number) =>
     ""
   );
 
-const displayDescription = (description: string) =>
-  /^order id:/i.test(description.trim()) ? "Orderbetalning" : description;
-
 const displayFileName = (name: string) => {
   const fileName = decodeURIComponent(name.split("/").pop() || name)
     .replace(/^\d{10,}-/, "")
@@ -49,6 +46,26 @@ const fileType = (name: string) => {
 
 const metadataValue = (verification: VerificationProps, key: string) =>
   verification.metadata?.find((entry) => entry.key === key)?.value;
+
+const orderIdForVerification = (verification: VerificationProps) => {
+  const metadataOrderId = metadataValue(verification, "orderId")?.trim();
+  if (metadataOrderId) return metadataOrderId;
+
+  return (
+    verification.description.match(/^order id:\s*([^\r\n]+)/i)?.[1]?.trim() ||
+    null
+  );
+};
+
+const displayDescription = (verification: VerificationProps) => {
+  const description = verification.description.trim();
+  if (!/^order id:/i.test(description)) return verification.description;
+
+  const orderId = orderIdForVerification(verification);
+  if (!orderId) return "Orderbetalning";
+  const orderNumber = orderId.slice(-8).toLocaleUpperCase("sv-SE");
+  return orderNumber ? `Order #${orderNumber}` : "Orderbetalning";
+};
 
 const vatPeriod = (verification: VerificationProps) =>
   metadataValue(verification, "vatReport");
@@ -310,6 +327,8 @@ export function ListItemVerification({
   const { debit, balanced } = getSums(verification);
   const fileCount = verification.files?.length || 0;
   const isZeroVatReport = Boolean(vatPeriod(verification)) && debit === 0;
+  const orderId = orderIdForVerification(verification);
+  const description = displayDescription(verification);
 
   return (
     <Fragment>
@@ -323,14 +342,28 @@ export function ListItemVerification({
           {primaryDateLabel(verification)}
         </td>
         <td className="px-3 py-4">
-          <button
-            type="button"
-            aria-expanded={expanded}
-            onClick={() => setExpanded((value) => !value)}
-            className="flex h-10 w-full items-center truncate text-left text-sm font-semibold text-slate-900 transition hover:text-[#985744]"
-          >
-            {displayDescription(verification.description)}
-          </button>
+          {orderId ? (
+            <Link
+              to={`/admin/orders/${encodeURIComponent(orderId)}`}
+              state={{ returnTo: "/admin/verifications" }}
+              aria-label={`Öppna ${description}`}
+              className="group inline-flex h-10 max-w-full items-center gap-2 text-sm font-semibold text-slate-900 transition hover:text-[#985744] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c98d7b] focus-visible:ring-offset-2"
+            >
+              <span className="truncate">{description}</span>
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#dcc9c1] text-[#985744] transition group-hover:border-[#b86e59] group-hover:bg-[#fbf1ed]">
+                <ArrowIcon direction="up-right" className="h-3.5 w-3.5" />
+              </span>
+            </Link>
+          ) : (
+            <button
+              type="button"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((value) => !value)}
+              className="flex h-10 w-full items-center truncate text-left text-sm font-semibold text-slate-900 transition hover:text-[#985744]"
+            >
+              {description}
+            </button>
+          )}
         </td>
         <td className="px-3 py-4 text-sm text-slate-500">
           {fileCount ? `${fileCount} ${fileCount === 1 ? "bilaga" : "bilagor"}` : "—"}
@@ -382,60 +415,107 @@ export function MobileVerificationCard({
     (entry) => Number(entry.debit || 0) !== 0 || Number(entry.credit || 0) !== 0
   ).length;
   const isZeroVatReport = Boolean(vatPeriod(verification)) && debit === 0;
+  const orderId = orderIdForVerification(verification);
+  const description = displayDescription(verification);
+  const mobileDescription = orderId
+    ? description.replace(/^Order\s+/i, "")
+    : description;
+
+  const amountAndToggle = (
+    <>
+      <p
+        className={`tabular-nums ${
+          isZeroVatReport
+            ? "text-[11px] font-medium tracking-[0.02em] text-stone-500"
+            : "text-sm font-semibold text-stone-950"
+        }`}
+      >
+        {isZeroVatReport ? "Nollrapport" : money.format(debit)}
+      </p>
+      <span
+        className={`accounting-month-toggle ${expanded ? "accounting-month-toggle--open" : ""}`}
+        aria-hidden="true"
+      >
+        <PlusMinusIcon operation={expanded ? "minus" : "plus"} />
+      </span>
+    </>
+  );
+
+  const summaryContent = (
+    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+      <span className="accounting-entry-number">
+        A{verification.verificationNumber}
+      </span>
+
+      <div className="min-w-0">
+        {orderId ? (
+          <Link
+            to={`/admin/orders/${encodeURIComponent(orderId)}`}
+            state={{ returnTo: "/admin/verifications" }}
+            aria-label={`Öppna ${description}`}
+            className="group inline-flex max-w-full items-center gap-1.5 font-semibold text-stone-950 transition hover:text-[#985744] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c98d7b] focus-visible:ring-offset-2"
+          >
+            <span className="truncate">{mobileDescription}</span>
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#dcc9c1] text-[#985744] transition group-hover:border-[#b86e59] group-hover:bg-[#fbf1ed]">
+              <ArrowIcon direction="up-right" className="h-3 w-3" />
+            </span>
+          </Link>
+        ) : (
+          <p className="truncate text-sm font-semibold text-stone-950">
+            {description}
+          </p>
+        )}
+        <p className="mt-1 truncate text-[11px] font-medium text-stone-400">
+          {primaryDateLabel(verification)}
+          <span aria-hidden="true"> · </span>
+          {entryCount === 0
+            ? "ingen kontering"
+            : `${entryCount} ${entryCount === 1 ? "rad" : "rader"}`}
+          <span aria-hidden="true"> · </span>
+          {fileCount ? `${fileCount} ${fileCount === 1 ? "bilaga" : "bilagor"}` : "ingen bilaga"}
+          {!balanced ? (
+            <>
+              <span aria-hidden="true"> · </span>
+              <span className="text-red-700">obalanserad</span>
+            </>
+          ) : null}
+        </p>
+      </div>
+
+      {orderId ? (
+        <button
+          type="button"
+          aria-label={`${expanded ? "Dölj" : "Visa"} verifikation A${verification.verificationNumber}`}
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+          className="flex shrink-0 items-center gap-3 text-right"
+        >
+          {amountAndToggle}
+        </button>
+      ) : (
+        <div className="flex shrink-0 items-center gap-3 text-right">
+          {amountAndToggle}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className={expanded ? "bg-stone-50" : "bg-white"}>
-      <button
-        type="button"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
-        className="accounting-mobile-entry-trigger w-full px-4 py-3.5 text-left"
-      >
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
-          <span className="accounting-entry-number">
-            A{verification.verificationNumber}
-          </span>
-
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-stone-950">
-              {displayDescription(verification.description)}
-            </p>
-            <p className="mt-1 truncate text-[11px] font-medium text-stone-400">
-              {primaryDateLabel(verification)}
-              <span aria-hidden="true"> · </span>
-              {entryCount === 0
-                ? "ingen kontering"
-                : `${entryCount} ${entryCount === 1 ? "rad" : "rader"}`}
-              <span aria-hidden="true"> · </span>
-              {fileCount ? `${fileCount} ${fileCount === 1 ? "bilaga" : "bilagor"}` : "ingen bilaga"}
-              {!balanced ? (
-                <>
-                  <span aria-hidden="true"> · </span>
-                  <span className="text-red-700">obalanserad</span>
-                </>
-              ) : null}
-            </p>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-3 text-right">
-            <p
-              className={`tabular-nums ${
-                isZeroVatReport
-                  ? "text-[11px] font-medium tracking-[0.02em] text-stone-500"
-                  : "text-sm font-semibold text-stone-950"
-              }`}
-            >
-              {isZeroVatReport ? "Nollrapport" : money.format(debit)}
-            </p>
-            <span
-              className={`accounting-month-toggle ${expanded ? "accounting-month-toggle--open" : ""}`}
-              aria-hidden="true"
-            >
-              <PlusMinusIcon operation={expanded ? "minus" : "plus"} />
-            </span>
-          </div>
+      {orderId ? (
+        <div className="accounting-mobile-entry-trigger w-full px-4 py-3.5 text-left">
+          {summaryContent}
         </div>
-      </button>
+      ) : (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+          className="accounting-mobile-entry-trigger w-full px-4 py-3.5 text-left"
+        >
+          {summaryContent}
+        </button>
+      )}
 
       {expanded ? (
         <div className="border-t border-slate-200 px-4 pb-5 pt-4">

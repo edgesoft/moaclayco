@@ -20,15 +20,16 @@ import {
   getRequestedStripeWebhookApiVersion,
   getStripeWebhookSecret,
 } from "~/services/stripe-config.server";
-import { domains as configuredDomains } from "~/utils/domain";
+import { STORE_ID } from "~/utils/store";
+import { invalidateCatalogCache } from "~/services/catalog-cache.server";
 
 const MAX_STRIPE_WEBHOOK_SIZE = 1024 * 1024;
 
 export type StripeWebhookDependencies = {
   createVerification: typeof createVerification;
   discounts: typeof Discounts;
-  domainNames: readonly string[];
   items: typeof Items;
+  invalidateCatalogCache?: () => void;
   now: () => Date;
   orders: typeof Orders;
   sendOrderEmail: typeof sendOrderEmail;
@@ -40,8 +41,8 @@ export type StripeWebhookDependencies = {
 const defaultDependencies: StripeWebhookDependencies = {
   createVerification,
   discounts: Discounts,
-  domainNames: configuredDomains.map(({ domain }) => domain),
   items: Items,
+  invalidateCatalogCache,
   now: () => new Date(),
   orders: Orders,
   sendOrderEmail,
@@ -86,7 +87,6 @@ export const makeAccountTransaction = async(
   const amountExVat = cents(totalAmount - vatAmount);
 
   await dependencies.createVerification({
-    domain: order.domain,
     idempotencyKey: `stripe:payment:${paymentIntent.id}`,
     verificationDate: new Date(charge.created * 1000),
     description: `Order id: ${order._id}\r\nPayment intent id: ${paymentIntent.id}`,
@@ -102,9 +102,7 @@ export const makeAccountTransaction = async(
     ],
   });
 
-  console.log(
-    `Transaktion skapad för order ${order._id} på domain ${order.domain}`
-  );
+  console.log(`Transaktion skapad för order ${order._id}`);
   console.log(`Stripe Fee: ${stripeFee} SEK`);
   console.log(`Netto-belopp att betalas ut: ${netAmount} SEK`);
 };
@@ -129,11 +127,7 @@ export const resolveSucceededOrder = async (
   }
 
   const metadataOrderId = paymentIntent.metadata.orderId;
-  const metadataDomain = paymentIntent.metadata.domain;
-  if (
-    !mongoose.Types.ObjectId.isValid(metadataOrderId) ||
-    !metadataDomain
-  ) {
+  if (!mongoose.Types.ObjectId.isValid(metadataOrderId)) {
     throw new Error(
       `PaymentIntent ${paymentIntent.id} cannot be linked to an order`
     );
@@ -141,7 +135,6 @@ export const resolveSucceededOrder = async (
 
   order = (await dependencies.orders.findOne({
     _id: metadataOrderId,
-    domain: metadataDomain,
   }).lean()) as Order | null;
   if (!order) {
     throw new Error(
@@ -152,7 +145,7 @@ export const resolveSucceededOrder = async (
 
   if (order.paymentIntent?.id && order.paymentIntent.id !== paymentIntent.id) {
     const reviewOrder = (await dependencies.orders.findOneAndUpdate(
-      { _id: order._id, domain: order.domain },
+      { _id: order._id },
       {
         $addToSet: { paymentIntentAliases: paymentIntent.id },
         $set: {
@@ -181,7 +174,6 @@ export const resolveSucceededOrder = async (
   const attachedOrder = (await dependencies.orders.findOneAndUpdate(
     {
       _id: order._id,
-      domain: order.domain,
       $or: [
         { "paymentIntent.id": { $exists: false } },
         { "paymentIntent.id": paymentIntent.id },
@@ -208,28 +200,15 @@ export const handlePayoutPaid = async (
 
   console.log(`Payout ID: ${payoutId}`);
   console.log(`Payout amount: ${amountInSek} SEK`);
-  const domains = new Set<string>();
   const metadata: Array<{ key: string; value: string }> = [];
+  let matchedOrderCount = 0;
 
   if (payout.automatic === false) {
     const manualPayoutDomain = payout.metadata?.domain?.trim();
-    const configuredDomainNames = new Set(
-      dependencies.domainNames.map((domain) => domain.trim()).filter(Boolean)
-    );
-
-    if (manualPayoutDomain) {
-      if (!configuredDomainNames.has(manualPayoutDomain)) {
-        throw new Error(
-          `Manual Stripe payout references unknown domain: ${manualPayoutDomain}`
-        );
-      }
-      domains.add(manualPayoutDomain);
-    } else if (configuredDomainNames.size === 1) {
-      for (const configuredDomain of configuredDomainNames) {
-        domains.add(configuredDomain);
-      }
-    } else {
-      throw new Error("Manual Stripe payout is missing domain metadata");
+    if (manualPayoutDomain && manualPayoutDomain !== STORE_ID) {
+      throw new Error(
+        `Manual Stripe payout references unknown store: ${manualPayoutDomain}`
+      );
     }
   } else {
     // Stripe only supports filtering balance transactions by automatic payouts.
@@ -257,7 +236,7 @@ export const handlePayoutPaid = async (
           continue;
         }
 
-        domains.add(order.domain);
+        matchedOrderCount += 1;
         metadata.push({ key: `orderId.${index}`, value: `${order._id}` });
         metadata.push({
           key: `paymentIntentId.${index}`,
@@ -273,19 +252,13 @@ export const handlePayoutPaid = async (
     }
   }
 
-  if (domains.size !== 1) {
-    throw new Error(
-      domains.size === 0
-        ? "Could not determine payout domain"
-        : "A Stripe payout contains orders from multiple domains"
-    );
+  if (payout.automatic !== false && matchedOrderCount === 0) {
+    throw new Error("Could not link the Stripe payout to an order");
   }
-  const [domain] = domains;
 
   // Sätt ihop beskrivningen från alla delar
   // Skapa bokföringspost
   await dependencies.createVerification({
-    domain,
     idempotencyKey: `stripe:payout:${payoutId}`,
     verificationDate: new Date((payout.arrival_date || payout.created) * 1000),
     description,
@@ -324,6 +297,7 @@ export const fromPaymentIntent = async (
 
   const session = await dependencies.startSession();
   let transitionedOrder: Order | null = null;
+  let stockChanged = false;
   try {
     await session.withTransaction(async () => {
       transitionedOrder = await dependencies.orders.findOneAndUpdate(
@@ -341,7 +315,6 @@ export const fromPaymentIntent = async (
         const result = await dependencies.items.updateOne(
           {
             _id: new mongoose.Types.ObjectId(item.itemRef),
-            domain: transitionedOrder.domain,
             amount: { $gte: item.quantity },
           },
           { $inc: { amount: -item.quantity } },
@@ -358,7 +331,6 @@ export const fromPaymentIntent = async (
       ) {
         const result = await dependencies.discounts.updateOne(
           {
-            domain: transitionedOrder.domain,
             code: transitionedOrder.discount.code,
             balance: { $gt: 0 },
           },
@@ -371,6 +343,8 @@ export const fromPaymentIntent = async (
           );
         }
       }
+
+      stockChanged = true;
     });
   } catch (error) {
     if (!(error instanceof PaidOrderNeedsReviewError)) throw error;
@@ -391,6 +365,8 @@ export const fromPaymentIntent = async (
   } finally {
     await session.endSession();
   }
+
+  if (stockChanged) dependencies.invalidateCatalogCache?.();
 
   const orderForEmail =
     transitionedOrder ??

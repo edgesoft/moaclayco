@@ -1,20 +1,27 @@
-import { Upload } from "@aws-sdk/lib-storage";
 import { data as json } from "react-router";
 import type { ActionFunction, LoaderFunction } from "react-router";
-import { Readable } from "stream";
-import { v4 as uuidv4 } from "uuid";
 import { auth } from "~/services/auth.server";
-import { s3Client } from "~/services/s3.server";
-import { optimizeImageBuffer } from "~/utils/imageProcessing.server";
+import { processAndStoreDraftImage } from "~/services/image-upload.server";
 import {
-  parseFormDataWithinLimit,
-  RequestBodyTooLargeError,
-} from "~/utils/requestBody.server";
+  ImageProcessingBusyError,
+  UnsupportedImageFormatError,
+} from "~/utils/imageProcessing.server";
+import {
+  ImageUploadTooLargeError,
+  ImageUploadBusyError,
+  InvalidImageUploadError,
+  parseTemporaryImageUpload,
+} from "~/utils/imageUpload.server";
+import {
+  acceptedImageFileNamePattern,
+  MAX_IMAGE_SIZE,
+} from "~/utils/imageUpload.shared";
+import {
+  InvalidImageDraftError,
+  isValidImageDraftId,
+} from "~/services/image-drafts.server";
 
 const awsCollectionPath = process.env.AWS_COLLECTION_PATH;
-const MAX_IMAGE_SIZE = 18 * 1024 * 1024;
-const MAX_IMAGE_REQUEST_SIZE = MAX_IMAGE_SIZE + 512 * 1024;
-const acceptedImagePattern = /\.(jpe?g|png|webp|heic|heif)$/i;
 
 if (!awsCollectionPath) {
   throw new Error(
@@ -22,78 +29,76 @@ if (!awsCollectionPath) {
   );
 }
 
-function bufferToStream(buffer: Buffer) {
-  return new Readable({
-    read() {
-      this.push(buffer);
-      this.push(null);
-    },
-  });
-}
-
-async function uploadToS3(file: File) {
-  const inputBuffer = Buffer.from(await file.arrayBuffer());
-  const { data: optimizedBuffer, info } = await optimizeImageBuffer(
-    inputBuffer,
-    1800
-  );
-  const uniqueFileName = `${uuidv4()}.webp`;
-  const key = `${awsCollectionPath}/${uniqueFileName}`;
-
-  const uploader = new Upload({
-    client: s3Client,
-    params: {
-      Body: bufferToStream(optimizedBuffer),
-      Bucket: process.env.AWS_S3_BUCKET_NAME,
-      ContentType: "image/webp",
-      Key: key,
-    },
-  });
-  await uploader.done();
-
-  return {
-    height: info.height,
-    key,
-    sizeBytes: info.size,
-    uniqueFileName,
-    width: info.width,
-  };
-}
-
 export const action: ActionFunction = async ({ request }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
-  let formData: FormData;
+  let upload;
   try {
-    formData = await parseFormDataWithinLimit(request, MAX_IMAGE_REQUEST_SIZE);
+    upload = await parseTemporaryImageUpload(request);
   } catch (error) {
-    if (error instanceof RequestBodyTooLargeError) {
+    if (error instanceof ImageUploadBusyError) {
+      return json(
+        { error: "För många bilder bearbetas just nu. Vänta en stund och försök igen." },
+        { status: 503 }
+      );
+    }
+    if (error instanceof ImageUploadTooLargeError) {
       return json({ error: "Bilden är större än 18 MB." }, { status: 413 });
+    }
+    if (error instanceof InvalidImageUploadError) {
+      return json({ error: "Bilduppladdningen är ogiltig." }, { status: 400 });
     }
     throw error;
   }
-  const file = formData.get("file");
-
-  if (!(file instanceof File) || file.size === 0) {
-    return json({ error: "Ingen bild valdes." }, { status: 400 });
-  }
-  if (!acceptedImagePattern.test(file.name)) {
-    return json(
-      { error: "Välj en bild i JPG-, PNG-, WebP- eller HEIC-format." },
-      { status: 415 }
-    );
-  }
-  if (file.size > MAX_IMAGE_SIZE) {
-    return json({ error: "Bilden är större än 18 MB." }, { status: 413 });
-  }
+  const draftId = upload.fields.get("draftId")?.toString().trim() ?? "";
 
   try {
-    return json(await uploadToS3(file));
-  } catch (error) {
-    console.error("Collection image upload failed", error);
-    return json(
-      { error: "Bilden kunde inte bearbetas eller laddas upp." },
-      { status: 500 }
-    );
+    if (!isValidImageDraftId(draftId)) {
+      return json({ error: "Bilduppladdningen saknar ett giltigt utkast." }, { status: 400 });
+    }
+    if (!acceptedImageFileNamePattern.test(upload.file.name)) {
+      return json(
+        { error: "Välj en bild i JPG-, PNG-, WebP- eller HEIC-format." },
+        { status: 415 }
+      );
+    }
+    if (upload.file.size > MAX_IMAGE_SIZE) {
+      return json({ error: "Bilden är större än 18 MB." }, { status: 413 });
+    }
+
+    try {
+      return json(
+        await processAndStoreDraftImage({
+          draftId,
+          inputPath: upload.file.path,
+          kind: "collection",
+          maxWidth: 1800,
+          storagePath: awsCollectionPath,
+        })
+      );
+    } catch (error) {
+      if (error instanceof ImageProcessingBusyError) {
+        return json(
+          { error: "Bildkön är full. Vänta en stund och försök igen." },
+          { status: 503 }
+        );
+      }
+      if (
+        error instanceof UnsupportedImageFormatError ||
+        error instanceof InvalidImageDraftError
+      ) {
+        return json(
+          { error: "Filen är inte en giltig JPG-, PNG-, WebP- eller HEIC-bild." },
+          { status: 415 }
+        );
+      }
+      console.error("Collection image upload failed", error);
+      return json(
+        { error: "Bilden kunde inte bearbetas eller laddas upp." },
+        { status: 500 }
+      );
+    }
+  } finally {
+    await upload.cleanup();
   }
 };
 

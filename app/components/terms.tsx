@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { FREE_FREIGHT, FREIGHT_COST } from "~/utils/constants";
-import { useTheme } from "./Theme";
+import { theme } from "./Theme";
 import ViewportPortal from "./ViewportPortal";
 
 type Show = {
@@ -8,7 +8,6 @@ type Show = {
 };
 
 export default function Terms({ show }: Show) {
-  const theme = useTheme();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 

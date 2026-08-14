@@ -4,7 +4,7 @@ import {
 } from "react-router";
 import { Collections } from "~/schemas/collections";
 import { Items } from "~/schemas/items";
-import { getDomain } from "~/utils/domain";
+import { Orders } from "~/schemas/orders";
 import { auth } from "~/services/auth.server";
 import { toLoaderData } from "~/utils/loaderData";
 import {
@@ -14,11 +14,9 @@ import {
 
  const loader: LoaderFunction = async ({ params, request }) => {
     await auth.isAuthenticated(request, { failureRedirect: "/login" });
-    const domain = getDomain(request)
     const [collection, item] = await Promise.all([
       Collections.findOne({
         shortUrl: params.collection,
-        domain: domain?.domain,
       })
         .select(collectionEditorProjection)
         .lean()
@@ -26,7 +24,6 @@ import {
       params.id
         ? Items.findOne({
             _id: params.id,
-            domain: domain?.domain,
             collectionRef: params.collection,
           })
             .select(itemEditorProjection)
@@ -43,7 +40,23 @@ import {
       return redirect(`/collections/${params.collection}`);
     }
   
-    return toLoaderData({ collection, item });
+    const [activeOrderCount, orderCount] = item
+      ? await Promise.all([
+          Orders.countDocuments({
+            "items.itemRef": String(item._id),
+            status: { $in: ["OPENED", "PENDING"] },
+          }),
+          Orders.countDocuments({
+            "items.itemRef": String(item._id),
+          }),
+        ])
+      : [0, 0];
+
+    return toLoaderData({
+      collection,
+      item,
+      orderImpact: { activeOrderCount, orderCount },
+    });
   };
 
 export const ItemLoader = loader

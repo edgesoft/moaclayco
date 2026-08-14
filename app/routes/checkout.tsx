@@ -23,11 +23,10 @@ import { useEffect, useRef, useState } from "react";
 import ArrowIcon from "~/components/ArrowIcon";
 import OrderSummary from "~/components/cart/OrderSummary";
 import Terms from "~/components/terms";
-import { themes } from "~/components/Theme";
+import { theme } from "~/components/Theme";
 import { Orders } from "~/schemas/orders";
 import { orderCookie } from "~/services/order-cookie.server";
 import { Order } from "~/types";
-import { getDomain } from "~/utils/domain";
 import { toLoaderData } from "~/utils/loaderData";
 import { checkoutOrderProjection } from "~/utils/queryProjections.server";
 
@@ -45,11 +44,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const cookieOrderId = String(
     (await orderCookie.parse(request.headers.get("Cookie"))) ?? ""
   );
-  const domain = getDomain(request);
-
-  if (!domain || !themes[domain.domain]) {
-    throw new Response("Okänd butik", { status: 404 });
-  }
   if (
     requestedOrderId !== cookieOrderId ||
     !mongoose.Types.ObjectId.isValid(requestedOrderId)
@@ -59,7 +53,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const order = (await Orders.findOne({
     _id: requestedOrderId,
-    domain: domain.domain,
     status: { $in: ["OPENED", "PENDING"] },
   })
     .select(checkoutOrderProjection)
@@ -72,7 +65,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return toLoaderData({
     clientSecret: order.paymentIntent.client_secret,
-    domain,
     order: {
       discount: order.discount,
       freightCost: order.freightCost,
@@ -93,8 +85,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
 };
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
-  const theme = themes[loaderData?.domain.domain ?? "moaclayco"];
+export const meta: MetaFunction<typeof loader> = () => {
   return [
     { title: `Betalning — ${theme.longName}` },
     { name: "description", content: `Slutför din beställning hos ${theme.longName}` },

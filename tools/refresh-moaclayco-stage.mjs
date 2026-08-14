@@ -12,7 +12,6 @@ import {
 import { EJSON } from "bson";
 import { MongoClient } from "mongodb";
 
-const DOMAIN = "moaclayco";
 const SOURCE_DATABASE = "storm";
 const TARGET_DATABASE = "storm-stage";
 const SOURCE_BUCKET = "moaclayco-prod";
@@ -160,8 +159,10 @@ const mapAssetUrl = (rawValue, field) => {
 
 const transformDocuments = (collectionName, documents) =>
   documents.map((document) => {
-    if (document.domain !== DOMAIN) {
-      throw new Error(`${collectionName} innehåller dokument utanför ${DOMAIN}`);
+    if ("domain" in document && document.domain !== "moaclayco") {
+      throw new Error(
+        `${collectionName} innehåller en oväntad äldre domain: ${document.domain}`
+      );
     }
     const transformed = { ...document };
     if (collectionName === "collections") {
@@ -271,26 +272,17 @@ try {
   const targetDb = targetClient.db(targetDatabase);
   const sourceDocuments = new Map();
   const transformedDocuments = new Map();
-  const targetSgwoodsBefore = new Map();
 
   for (const collectionName of SCOPED_COLLECTIONS) {
     const documents = await sourceDb
       .collection(collectionName)
-      .find({ domain: DOMAIN })
+      .find({})
       .toArray();
     sourceDocuments.set(collectionName, documents);
     transformedDocuments.set(
       collectionName,
       transformDocuments(collectionName, documents)
     );
-    const sgwoods = await targetDb
-      .collection(collectionName)
-      .find({ domain: "sgwoods" })
-      .toArray();
-    targetSgwoodsBefore.set(collectionName, {
-      count: sgwoods.length,
-      hash: documentsHash(sgwoods),
-    });
   }
 
   const assetResults = await mapWithConcurrency(
@@ -317,7 +309,7 @@ try {
         mode: apply ? "apply" : verifyOnly ? "verify" : "dry-run",
         sourceDatabase,
         targetDatabase,
-        domain: DOMAIN,
+        store: "single-store",
         plannedDocuments: planned,
         referencedAssets: assetCopies.size,
         assetSummary,
@@ -335,7 +327,7 @@ try {
         async () => {
           for (const collectionName of SCOPED_COLLECTIONS) {
             const collection = targetDb.collection(collectionName);
-            await collection.deleteMany({ domain: DOMAIN }, { session });
+            await collection.deleteMany({}, { session });
             const documents = transformedDocuments.get(collectionName);
             if (documents.length) await collection.insertMany(documents, { session });
           }
@@ -356,7 +348,7 @@ try {
     for (const collectionName of SCOPED_COLLECTIONS) {
       const actual = await targetDb
         .collection(collectionName)
-        .find({ domain: DOMAIN })
+        .find({})
         .toArray();
       const expected = transformedDocuments.get(collectionName);
       const expectedHash = documentsHash(expected);
@@ -365,17 +357,6 @@ try {
         throw new Error(`Verifieringen misslyckades för ${collectionName}`);
       }
 
-      const sgwoods = await targetDb
-        .collection(collectionName)
-        .find({ domain: "sgwoods" })
-        .toArray();
-      const sgwoodsBefore = targetSgwoodsBefore.get(collectionName);
-      if (
-        sgwoods.length !== sgwoodsBefore.count ||
-        documentsHash(sgwoods) !== sgwoodsBefore.hash
-      ) {
-        throw new Error(`SGWoods ändrades oväntat i ${collectionName}`);
-      }
       verification[collectionName] = actual.length;
     }
 
@@ -383,8 +364,7 @@ try {
       JSON.stringify(
         {
           copiedDocuments: verification,
-          verifiedDomain: DOMAIN,
-          sgwoods: "unchanged",
+          verifiedStore: "single-store",
           stageAssets: "verified",
         },
         null,
