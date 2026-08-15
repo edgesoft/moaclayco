@@ -28,6 +28,7 @@ import {
   parseFormDataWithinLimit,
   RequestBodyTooLargeError,
 } from "~/utils/requestBody.server";
+import { activeCatalogItemFilter } from "~/utils/catalogItems.server";
 
 export let meta: MetaFunction = () => {
   return [
@@ -197,6 +198,7 @@ export let action: ActionFunction = async ({ request }) => {
   }
 
   const products = await Items.find({
+    ...activeCatalogItemFilter,
     _id: { $in: parentIds },
   })
     .select("headline price images amount collectionRef additionalItems")

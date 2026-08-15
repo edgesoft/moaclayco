@@ -1,6 +1,7 @@
 import { data as json } from "react-router";
 import type { ActionFunction, LoaderFunction } from "react-router";
 import { Collections } from "~/schemas/collections";
+import { activeCatalogCollectionFilter } from "~/utils/catalogCollections.server";
 import { auth } from "~/services/auth.server";
 import { processAndStoreDraftImage } from "~/services/image-upload.server";
 import {
@@ -62,6 +63,7 @@ export const action: ActionFunction = async ({ request }) => {
     }
 
     const collection = await Collections.exists({
+      ...activeCatalogCollectionFilter,
       shortUrl: collectionRef,
     });
     if (!collection) {

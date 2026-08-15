@@ -54,6 +54,10 @@ export type CollectionProps = {
   twitter?: string;
   shortUrl: string;
   index?: number;
+  catalogStatus?: "active" | "deleted";
+  deletedAt?: Date | string;
+  deletionOperationId?: string;
+  deletionUndoExpiresAt?: Date | string;
 };
 
 export type AdditionalItem = {
@@ -73,6 +77,10 @@ export type ItemProps = {
   additionalItems?: AdditionalItem[];
   instagram?: string;
   longDescription?: string;
+  catalogStatus?: "active" | "retired";
+  retiredAt?: Date | string;
+  retiredFromCollection?: string;
+  lastCatalogOperationId?: string;
 };
 
 export type User = {

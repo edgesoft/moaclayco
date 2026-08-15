@@ -5,6 +5,8 @@ import { Items } from "~/schemas/items";
 import { auth } from "~/services/auth.server";
 import { toLoaderData } from "~/utils/loaderData";
 import { collectionEditorProjection } from "~/utils/queryProjections.server";
+import { activeCatalogItemFilter } from "~/utils/catalogItems.server";
+import { activeCatalogCollectionFilter } from "~/utils/catalogCollections.server";
 
 export const CollectionLoader: LoaderFunction = async ({ params, request }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
@@ -15,12 +17,14 @@ export const CollectionLoader: LoaderFunction = async ({ params, request }) => {
 
   const [collection, itemCount] = await Promise.all([
     Collections.findOne({
+      ...activeCatalogCollectionFilter,
       shortUrl: params.collection,
     })
       .select(collectionEditorProjection)
       .lean()
       .exec(),
     Items.countDocuments({
+      ...activeCatalogItemFilter,
       collectionRef: params.collection,
     }),
   ]);

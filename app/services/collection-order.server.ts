@@ -1,6 +1,7 @@
 import mongoose, { type ClientSession } from "mongoose";
 import { Collections } from "~/schemas/collections";
 import { invalidateCatalogCache } from "~/services/catalog-cache.server";
+import { activeCatalogCollectionFilter } from "~/utils/catalogCollections.server";
 
 const MAX_COLLECTIONS = 200;
 const OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
@@ -55,7 +56,7 @@ export type CollectionOrderDependencies = {
 const defaultDependencies: CollectionOrderDependencies = {
   invalidate: invalidateCatalogCache,
   listCollectionIds: async (session) => {
-    const collections = await Collections.find({})
+    const collections = await Collections.find(activeCatalogCollectionFilter)
       .select({ _id: 1 })
       .session(session as ClientSession)
       .lean();
@@ -69,7 +70,7 @@ const defaultDependencies: CollectionOrderDependencies = {
     const result = await Collections.bulkWrite(
       orderedIds.map((collectionId, sortOrder) => ({
         updateOne: {
-          filter: { _id: collectionId },
+          filter: { ...activeCatalogCollectionFilter, _id: collectionId },
           update: { $set: { sortOrder } },
         },
       })),

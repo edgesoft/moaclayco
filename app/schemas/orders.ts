@@ -63,5 +63,6 @@ OrderSchema.index(
 );
 OrderSchema.index({ status: 1, createdAt: -1 });
 OrderSchema.index({ createdAt: -1, _id: -1 });
+OrderSchema.index({ "items.itemRef": 1 });
 
 export const Orders = mongoose.models.Orders || mongoose.model('Orders', OrderSchema);

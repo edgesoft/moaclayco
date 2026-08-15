@@ -12,6 +12,7 @@ import { s3Client } from "~/services/s3.server";
 import {
   itemStorageKeyFromUrl,
 } from "~/utils/itemImageStorage.server";
+import { activeCatalogItemFilter } from "~/utils/catalogItems.server";
 
 type ItemForDeletion = {
   _id: unknown;
@@ -112,14 +113,32 @@ const defaultDependencies: ItemDeletionDependencies = {
   archiveOrderImage: copyOrderImage,
   deleteImageKeys,
   deleteItem: async ({ collection, id }, session) => {
-    const result = await Items.deleteOne(
-      { _id: id, collectionRef: collection },
+    const result = await Items.updateOne(
+      {
+        ...activeCatalogItemFilter,
+        _id: id,
+        collectionRef: collection,
+      },
+      {
+        $set: {
+          catalogStatus: "retired",
+          images: [],
+          retiredAt: new Date(),
+          retiredFromCollection: collection,
+          retirementReason: "product_deleted",
+        },
+        $unset: { lastCatalogOperationId: "" },
+      },
       { session: session as ClientSession }
     );
-    return result.deletedCount === 1;
+    return result.modifiedCount === 1;
   },
   findItem: ({ collection, id }, session) =>
-    Items.findOne({ _id: id, collectionRef: collection })
+    Items.findOne({
+      ...activeCatalogItemFilter,
+      _id: id,
+      collectionRef: collection,
+    })
       .select("headline images")
       .session(session as ClientSession)
       .lean<ItemForDeletion>()

@@ -292,6 +292,7 @@
   border-top: 1px solid var(--editor-line); display: flex; gap: 2rem;
   justify-content: space-between; padding: .85rem clamp(1.25rem,5vw,5.5rem);
 }
+.mcc-collection-editor-page .mcc-editor-savebar { justify-content: flex-end; }
 .mcc-editor-savebar > div { align-items: center; display: flex; gap: .65rem; }
 .mcc-editor-savebar > div > span { background: #8b9480; border-radius: 999px; height: .45rem; width: .45rem; }
 .mcc-editor-savebar > div > span.is-dirty { background: var(--editor-accent); }
@@ -322,7 +323,7 @@
 .mcc-collection-editor-image {
   aspect-ratio: 4 / 5; background-color: #ded6cb;
   background-image: linear-gradient(135deg, rgba(255,255,255,.3) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.3) 50%, rgba(255,255,255,.3) 75%, transparent 75%, transparent);
-  background-size: 18px 18px; max-height: 44rem; overflow: hidden; position: relative;
+  background-size: 18px 18px; overflow: hidden; position: relative; width: 100%;
 }
 .mcc-collection-editor-image > img { display: block; height: 100%; object-fit: cover; width: 100%; }
 .mcc-collection-editor-image > span:not(.mcc-editor-image__ready) {
@@ -344,13 +345,22 @@
   font: 400 .95rem "Iowan Old Style", Georgia, serif; margin-top: .12rem;
 }
 .mcc-collection-editor-figure figcaption small { color: var(--editor-muted); font-size: .53rem; margin-top: .12rem; }
-.mcc-collection-editor-figure figcaption > button {
-  background: transparent; border: 0; border-bottom: 1px solid currentColor;
-  color: #756b64; cursor: pointer; font-size: .56rem; font-weight: 760;
-  letter-spacing: .08em; padding: .25rem 0; text-transform: uppercase;
+.mcc-collection-editor-figure figcaption > .mcc-collection-editor-remove-image {
+  align-items: center; background: transparent; border: 1px solid rgba(130,67,52,.38);
+  border-radius: 999px; color: #824334; cursor: pointer; display: inline-flex;
+  flex: 0 0 auto; font-size: .56rem; font-weight: 760; gap: .75rem;
+  letter-spacing: .08em; min-height: 2.8rem; padding: .45rem .48rem .45rem .9rem;
+  text-transform: uppercase; transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
 }
-.mcc-collection-editor-figure figcaption > button:hover:not(:disabled) { color: var(--editor-accent-dark); }
-.mcc-collection-editor-figure figcaption > button:disabled { cursor: default; opacity: .35; }
+.mcc-collection-editor-remove-image > span:last-child {
+  align-items: center; border: 1px solid rgba(130,67,52,.26); border-radius: 999px;
+  display: flex; height: 1.8rem; justify-content: center; width: 1.8rem;
+}
+.mcc-collection-editor-remove-image svg { height: .9rem; width: .9rem; }
+.mcc-collection-editor-figure figcaption > .mcc-collection-editor-remove-image:hover:not(:disabled) {
+  background: rgba(184,110,89,.1); border-color: rgba(130,67,52,.58); transform: translateY(-1px);
+}
+.mcc-collection-editor-figure figcaption > .mcc-collection-editor-remove-image:disabled { cursor: default; opacity: .35; }
 .mcc-collection-editor-placeholder {
   align-items: end; border-bottom: 1px solid var(--editor-line); display: grid; gap: 1rem;
   grid-template-columns: auto minmax(0,1fr); min-height: 11rem; padding: 1.5rem 0;
@@ -457,6 +467,7 @@
   .mcc-editor-savebar { gap: .7rem; }
   .mcc-editor-savebar small { display: none; }
   .mcc-editor-savebar > button { flex: 0 0 auto; gap: 1rem; min-height: 2.85rem; padding-inline: .9rem; }
+  .mcc-collection-editor-figure figcaption { align-items: flex-start; flex-direction: column; }
   .mcc-collection-editor-slug { grid-template-columns: minmax(0,1fr); }
   .mcc-collection-editor-slug > span { border-bottom: 1px solid var(--editor-line); border-right: 0; padding: .55rem .8rem; }
   .mcc-collection-danger__confirmation > div { align-items: stretch; flex-direction: column; }
@@ -467,6 +478,263 @@
   .mcc-editor-page *,
   .mcc-editor-page *::before,
   .mcc-editor-page *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
+
+/* Collection chooser shared by product moves and Collection removal. */
+.mcc-collection-picker-trigger {
+  align-items: center; background: rgba(255,255,255,.56); border: 1px solid rgba(75,66,60,.22);
+  border-radius: .5rem; color: var(--editor-ink); cursor: pointer; display: grid; gap: .75rem;
+  grid-template-columns: 3.3rem minmax(0,1fr) 2rem; min-height: 4.35rem; padding: .48rem .58rem;
+  text-align: left; transition: background 180ms ease, border-color 180ms ease, transform 180ms ease; width: 100%;
+}
+.mcc-collection-picker-trigger:hover,
+.mcc-collection-picker-trigger[aria-expanded="true"] { background: #fffefa; border-color: rgba(184,110,89,.56); }
+.mcc-collection-picker-trigger:focus-visible { outline: 2px solid var(--editor-accent-dark); outline-offset: 3px; }
+.mcc-collection-picker-trigger__media {
+  aspect-ratio: 1; background: #dfd6cc; border-radius: .38rem; display: block; overflow: hidden;
+}
+.mcc-collection-picker-trigger__media img { display: block; height: 100%; object-fit: cover; width: 100%; }
+.mcc-collection-picker-trigger > span:nth-child(2) { min-width: 0; }
+.mcc-collection-picker-trigger small,
+.mcc-collection-picker-trigger strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mcc-collection-picker-trigger small {
+  color: var(--editor-accent-dark); font-size: .5rem; font-weight: 760; letter-spacing: .1em; text-transform: uppercase;
+}
+.mcc-collection-picker-trigger strong { font: 400 1.05rem "Iowan Old Style", Georgia, serif; margin-top: .16rem; }
+.mcc-collection-picker-trigger__arrow {
+  align-items: center; border: 1px solid rgba(184,110,89,.32); border-radius: 999px; color: var(--editor-accent-dark);
+  display: flex; height: 2rem; justify-content: center; transition: transform 220ms ease; width: 2rem;
+}
+.mcc-collection-picker-trigger__arrow.is-open { transform: rotate(90deg); }
+.mcc-collection-picker-trigger__arrow .mcc-arrow-icon { font-size: .8rem; }
+.mcc-collection-picker-panel { overflow: hidden; }
+.mcc-collection-picker-panel__inner {
+  border: 1px solid var(--editor-line); border-top: 0; padding: .9rem; background: rgba(255,253,248,.48);
+}
+.mcc-collection-picker-panel__inner > p {
+  color: var(--editor-muted); font-size: .61rem; margin: 0 0 .7rem;
+}
+.mcc-collection-choice-grid { display: grid; gap: .5rem; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.mcc-collection-choice {
+  align-items: center; background: rgba(255,253,249,.55); border: 1px solid rgba(75,66,60,.18);
+  border-radius: .48rem; color: inherit; cursor: pointer; display: grid; gap: .58rem;
+  grid-template-columns: 3.15rem minmax(0,1fr) 1.75rem; min-height: 4.2rem; padding: .42rem; text-align: left;
+  transition: background 170ms ease, border-color 170ms ease, transform 170ms ease; width: 100%;
+  touch-action: manipulation;
+}
+.mcc-collection-choice:hover { background: #fffdf8; border-color: rgba(184,110,89,.52); transform: translateY(-1px); }
+.mcc-collection-choice:focus-visible { outline: 2px solid var(--editor-accent-dark); outline-offset: 2px; }
+.mcc-collection-choice.is-selected { background: rgba(184,110,89,.09); border-color: rgba(161,81,62,.58); }
+.mcc-collection-choice__media { aspect-ratio: 1; background: #dfd6cc; border-radius: .34rem; display: block; overflow: hidden; }
+.mcc-collection-choice__media img { display: block; height: 100%; object-fit: cover; transition: transform 300ms ease; width: 100%; }
+.mcc-collection-choice:hover .mcc-collection-choice__media img { transform: scale(1.045); }
+.mcc-collection-choice__copy { min-width: 0; }
+.mcc-collection-choice__copy strong,
+.mcc-collection-choice__copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mcc-collection-choice__copy strong { font: 400 .95rem "Iowan Old Style", Georgia, serif; }
+.mcc-collection-choice__copy small {
+  color: var(--editor-muted); font-size: .46rem; font-weight: 700; letter-spacing: .08em; margin-top: .25rem; text-transform: uppercase;
+}
+.mcc-collection-choice__mark {
+  align-items: center; border: 1px solid rgba(184,110,89,.3); border-radius: 999px; color: var(--editor-accent-dark);
+  display: flex; height: 1.72rem; justify-content: center; width: 1.72rem;
+}
+.mcc-collection-choice__mark svg { height: .85rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.65; width: .85rem; }
+.mcc-collection-choice-empty {
+  border-block: 1px solid var(--editor-line); color: var(--editor-muted); font: italic .78rem/1.5 "Iowan Old Style", Georgia, serif;
+  margin: 0; padding: .8rem 0;
+}
+
+/* Guided Collection removal workspace. */
+.mcc-removal-root {
+  --removal-accent: #b86e59; --removal-accent-dark: #92513f; --removal-ink: #29241f;
+  --removal-line: rgba(72,63,56,.18); --removal-muted: #777068; --removal-paper: #f4efe7;
+  color: var(--removal-ink); font-family: ui-sans-serif,system-ui,sans-serif;
+}
+.mcc-removal-root, .mcc-removal-root * { box-sizing: border-box; }
+.mcc-removal-root button { touch-action: manipulation; }
+.mcc-removal-backdrop {
+  backdrop-filter: blur(5px); background: rgba(39,34,30,.32); border: 0; cursor: default; inset: 0;
+  padding: 0; position: fixed; width: 100%; z-index: 88;
+}
+.mcc-removal-panel {
+  background-color: var(--removal-paper); background-image: radial-gradient(rgba(82,67,57,.055) .6px,transparent .6px);
+  background-size: 6px 6px; border: 1px solid rgba(91,76,66,.2); border-radius: 1.2rem 0 0 0;
+  bottom: 0; box-shadow: 0 2rem 5rem rgba(34,28,24,.28); height: min(52rem,calc(100dvh - 1.25rem));
+  max-width: calc(100vw - 1.25rem); overflow: hidden; position: fixed; right: 0; transform-origin: bottom right;
+  width: 52rem; z-index: 91;
+}
+.mcc-removal-panel:focus { outline: 0; }
+.mcc-removal-scroll {
+  height: 100%; overflow-anchor: none; overflow-y: auto; overscroll-behavior: contain; padding-bottom: max(1rem,env(safe-area-inset-bottom));
+  scrollbar-color: rgba(184,110,89,.62) transparent; scrollbar-width: thin; -webkit-overflow-scrolling: touch;
+}
+.mcc-removal-scroll::-webkit-scrollbar { width: 4px; }
+.mcc-removal-scroll::-webkit-scrollbar-thumb { background: rgba(184,110,89,.62); border-radius: 999px; }
+.mcc-removal-heading { border-bottom: 1px solid var(--removal-line); padding: 1.55rem 1.65rem 1.45rem; }
+.mcc-removal-heading__topline { align-items: center; display: flex; justify-content: space-between; }
+.mcc-removal-heading__topline > span,
+.mcc-removal-heading > p {
+  color: var(--removal-accent-dark); font-size: .55rem; font-weight: 760; letter-spacing: .14em; margin: 0; text-transform: uppercase;
+}
+.mcc-removal-heading__topline > button {
+  align-items: center; background: rgba(255,253,249,.62); border: 1px solid rgba(74,68,61,.25);
+  border-radius: 999px; color: #6f665f; cursor: pointer; display: inline-flex; height: 2.75rem;
+  justify-content: center; padding: 0; transition: background 170ms ease,border-color 170ms ease,color 170ms ease,transform 170ms ease; width: 2.75rem;
+}
+.mcc-removal-heading__topline > button:hover { background: rgba(184,110,89,.11); border-color: rgba(150,85,66,.52); color: var(--removal-accent-dark); transform: translateY(-1px); }
+.mcc-removal-heading__topline > button svg { height: 1.05rem; stroke: currentColor; stroke-linecap: round; stroke-width: 1.55; width: 1.05rem; }
+.mcc-removal-heading > p { color: #887d74; margin-top: 1.35rem; }
+.mcc-removal-heading h2 {
+  font: 400 clamp(2.5rem,5vw,4.25rem)/.94 "Iowan Old Style",Georgia,serif; letter-spacing: -.055em; margin: .5rem 0 0;
+}
+.mcc-removal-heading > span:last-child { color: var(--removal-muted); display: block; font-size: .72rem; line-height: 1.55; margin-top: .8rem; }
+.mcc-removal-loading { align-items: center; display: flex; gap: .8rem; min-height: 12rem; padding: 1.5rem 1.65rem; }
+.mcc-removal-loading > span {
+  animation: mcc-removal-pulse 850ms ease-in-out infinite alternate; border: 1px solid rgba(184,110,89,.5); border-radius: 999px; height: 1.2rem; width: 1.2rem;
+}
+.mcc-removal-loading strong { font: 400 1rem "Iowan Old Style",Georgia,serif; }
+.mcc-removal-loading button { background: transparent; border: 0; border-bottom: 1px solid currentColor; color: var(--removal-accent-dark); cursor: pointer; }
+@keyframes mcc-removal-pulse { to { background: var(--removal-accent); transform: scale(.78); } }
+.mcc-removal-progress { align-items: center; border-bottom: 1px solid var(--removal-line); display: flex; gap: 1rem; padding: 1rem 1.65rem; }
+.mcc-removal-progress > div { background: rgba(72,63,56,.14); height: 2px; overflow: hidden; width: 100%; }
+.mcc-removal-progress > div span { background: var(--removal-accent); display: block; height: 100%; transition: width 220ms ease; }
+.mcc-removal-progress p { color: var(--removal-muted); flex: 0 0 auto; font-size: .57rem; margin: 0; }
+.mcc-removal-bulk { border-bottom: 1px solid var(--removal-line); }
+.mcc-removal-bulk > button {
+  align-items: center; background: rgba(255,253,249,.46); border: 0; color: inherit; cursor: pointer; display: grid;
+  gap: .72rem; grid-template-columns: 2.55rem minmax(0,1fr); padding: .8rem 1.65rem; text-align: left; width: 100%;
+}
+.mcc-removal-bulk > button:hover { background: rgba(255,253,249,.8); }
+.mcc-removal-bulk__mark {
+  align-items: center; background: rgba(184,110,89,.12); border-radius: 999px; color: var(--removal-accent-dark);
+  display: flex; height: 2.45rem; justify-content: center; width: 2.45rem;
+}
+.mcc-removal-bulk__mark svg { height: 1rem; stroke: currentColor; stroke-width: 1.5; width: 1rem; }
+.mcc-removal-bulk small,.mcc-removal-bulk strong { display: block; }
+.mcc-removal-bulk small { color: var(--removal-accent-dark); font-size: .48rem; font-weight: 760; letter-spacing: .1em; text-transform: uppercase; }
+.mcc-removal-bulk strong { font: 400 1rem "Iowan Old Style",Georgia,serif; margin-top: .16rem; }
+.mcc-removal-bulk__choices { padding: .15rem 1.65rem 1rem; }
+.mcc-removal-root .mcc-collection-choice-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.mcc-removal-product-list { list-style: none; margin: 0; padding: 0; }
+.mcc-removal-product-list > li { border-bottom: 1px solid var(--removal-line); }
+.mcc-removal-product-list > li.is-expanded { background: rgba(255,253,249,.55); }
+.mcc-removal-product {
+  align-items: center; background: transparent; border: 0; color: inherit; cursor: pointer; display: grid; gap: .75rem;
+  grid-template-columns: 2rem 4.25rem minmax(0,1fr) minmax(7.5rem,auto); min-height: 5.75rem; padding: .65rem 1.65rem; text-align: left; width: 100%;
+}
+.mcc-removal-product:hover { background: rgba(255,253,249,.58); }
+.mcc-removal-product:focus-visible,.mcc-removal-bulk > button:focus-visible,.mcc-removal-heading button:focus-visible { outline: 2px solid var(--removal-accent-dark); outline-offset: -3px; }
+.mcc-removal-product__status {
+  align-items: center; border: 1px solid #9e9288; border-radius: 999px; color: #fffaf4; display: flex; height: 1.65rem; justify-content: center;
+  transition: background 170ms ease,border-color 170ms ease,transform 170ms ease; width: 1.65rem;
+}
+.mcc-removal-product-list > li.is-resolved .mcc-removal-product__status { background: var(--removal-accent); border-color: var(--removal-accent); transform: scale(1.04); }
+.mcc-removal-product__status svg { height: .9rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; width: .9rem; }
+.mcc-removal-product__media { aspect-ratio: 1; background: #dfd6cc; border-radius: .36rem; display: block; overflow: hidden; }
+.mcc-removal-product__media img { display: block; height: 100%; object-fit: cover; width: 100%; }
+.mcc-removal-product__copy,.mcc-removal-product__decision { min-width: 0; }
+.mcc-removal-product__copy strong,.mcc-removal-product__copy small,.mcc-removal-product__decision strong,.mcc-removal-product__decision small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mcc-removal-product__copy strong { font: 400 1.06rem "Iowan Old Style",Georgia,serif; }
+.mcc-removal-product__copy small,.mcc-removal-product__decision small { color: var(--removal-muted); font-size: .5rem; margin-top: .25rem; }
+.mcc-removal-product__decision { text-align: right; }
+.mcc-removal-product__decision strong { color: var(--removal-accent-dark); font-size: .58rem; font-weight: 760; letter-spacing: .05em; }
+.mcc-removal-product-choices { overflow: hidden; }
+.mcc-removal-product-choices__inner { padding: .85rem 1.65rem 1.25rem; }
+.mcc-removal-product-choices__inner > p { color: var(--removal-muted); font-size: .58rem; margin: 0 0 .65rem; }
+.mcc-removal-retire-choice { margin-top: .6rem; }
+.mcc-removal-retire-choice button {
+  align-items: center; background: rgba(155,87,69,.055); border: 1px solid rgba(130,67,52,.24); border-radius: .55rem;
+  color: inherit; cursor: pointer; display: grid; gap: .9rem; grid-template-columns: minmax(0,1fr) 2.2rem;
+  min-height: 4.65rem; padding: .72rem .72rem .72rem 1rem; text-align: left; transition: background 170ms ease,border-color 170ms ease,transform 170ms ease; width: 100%;
+}
+.mcc-removal-retire-choice button:hover { background: rgba(155,87,69,.1); border-color: rgba(130,67,52,.46); transform: translateY(-1px); }
+.mcc-removal-retire-choice button.is-selected { background: rgba(155,87,69,.13); border-color: rgba(130,67,52,.56); }
+.mcc-removal-retire-choice__copy { min-width: 0; }
+.mcc-removal-retire-choice__copy small,.mcc-removal-retire-choice__copy strong,.mcc-removal-retire-choice__copy > span { display: block; }
+.mcc-removal-retire-choice__copy small { color: var(--removal-accent-dark); font-size: .47rem; font-weight: 760; letter-spacing: .11em; text-transform: uppercase; }
+.mcc-removal-retire-choice__copy strong { color: #713f33; font: 400 1rem "Iowan Old Style",Georgia,serif; margin-top: .18rem; }
+.mcc-removal-retire-choice__copy > span { color: var(--removal-muted); font-size: .53rem; line-height: 1.4; margin-top: .22rem; }
+.mcc-removal-retire-choice__mark {
+  align-items: center; border: 1px solid rgba(130,67,52,.34); border-radius: 999px; color: #824334;
+  display: flex; height: 2.2rem; justify-content: center; width: 2.2rem;
+}
+.mcc-removal-retire-choice__mark svg { height: .95rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.6; width: .95rem; }
+.mcc-removal-actions { align-items: center; background: #eee7de; display: flex; gap: 1rem; justify-content: space-between; padding: 1.2rem 1.65rem; }
+.mcc-removal-actions > p { color: var(--removal-muted); font-size: .58rem; margin: 0; }
+.mcc-removal-actions > div,.mcc-removal-final__actions { display: flex; gap: .55rem; }
+.mcc-removal-actions button,.mcc-removal-final button {
+  background: transparent; border: 1px solid rgba(130,67,52,.42); border-radius: 999px; color: #824334; cursor: pointer;
+  font-size: .56rem; font-weight: 760; letter-spacing: .08em; min-height: 2.75rem; padding: .65rem .9rem; text-transform: uppercase;
+}
+.mcc-removal-actions button:last-child,.mcc-removal-final button:last-child { background: #9b5745; border-color: #9b5745; color: #fffaf4; }
+.mcc-removal-actions button:disabled,.mcc-removal-final button:disabled { background: #c9beb3; border-color: #c9beb3; color: #756c65; cursor: not-allowed; }
+.mcc-removal-review { padding: 1.35rem 1.65rem 1.65rem; }
+.mcc-removal-review__groups { border-top: 1px solid var(--removal-line); }
+.mcc-removal-review__groups > section {
+  align-items: center; border-bottom: 1px solid var(--removal-line); display: grid; gap: .8rem; grid-template-columns: 2rem minmax(0,1fr) auto; min-height: 5.1rem; padding: .75rem .35rem;
+}
+.mcc-removal-review__groups > section > span { color: var(--removal-accent-dark); font: italic .72rem "Iowan Old Style",Georgia,serif; }
+.mcc-removal-review__groups h3 { font: 400 1.12rem "Iowan Old Style",Georgia,serif; margin: 0; }
+.mcc-removal-review__groups p { color: var(--removal-muted); font-size: .58rem; line-height: 1.45; margin: .32rem 0 0; }
+.mcc-removal-review__groups > section > strong { color: var(--removal-accent-dark); font: 400 1.2rem "Iowan Old Style",Georgia,serif; }
+.mcc-removal-review__empty { border-block: 1px solid var(--removal-line); color: var(--removal-muted); font: italic .85rem/1.55 "Iowan Old Style",Georgia,serif; margin: 0; padding: 1.2rem 0; }
+.mcc-removal-final { background: rgba(238,231,222,.76); border: 1px solid rgba(130,67,52,.2); margin-top: 1.25rem; padding: 1.35rem; }
+.mcc-removal-final h3 { font: 400 clamp(1.8rem,4vw,2.5rem) "Iowan Old Style",Georgia,serif; letter-spacing: -.04em; margin: .45rem 0 0; }
+.mcc-removal-final > p:not(.mcc-editor-eyebrow) { color: var(--removal-muted); font-size: .65rem; line-height: 1.55; margin: .65rem 0 1.1rem; max-width: 36rem; }
+.mcc-removal-final__actions { justify-content: flex-end; }
+.mcc-removal-final > .mcc-removal-submit-error {
+  align-items: center; background: rgba(155,87,69,.08); border-block: 1px solid rgba(130,67,52,.24);
+  display: flex; gap: 1rem; justify-content: space-between; margin: 0 0 1rem; padding: .8rem 0;
+}
+.mcc-removal-submit-error > span { color: #824334; font-size: .62rem; line-height: 1.45; }
+.mcc-removal-submit-error > span strong { display: block; font-size: .55rem; letter-spacing: .08em; margin-bottom: .65rem; text-transform: uppercase; }
+
+@media (max-width: 899px) {
+  .mcc-removal-panel { border: 0; border-radius: 0; height: 100vh; height: 100dvh; left: 0; max-width: none; right: 0; width: 100vw; }
+  .mcc-removal-heading { padding: calc(1rem + env(safe-area-inset-top)) 1rem 1.1rem; }
+  .mcc-removal-heading h2 { font-size: clamp(2.45rem,8vw,3.7rem); }
+  .mcc-removal-progress { padding-inline: 1rem; }
+  .mcc-removal-bulk > button { padding-inline: 1rem; }
+  .mcc-removal-bulk__choices { padding-left: 1rem; padding-right: 1rem; }
+  .mcc-removal-root .mcc-collection-choice-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .mcc-removal-product { padding-inline: 1rem; }
+  .mcc-removal-product-choices__inner { padding-left: 1rem; padding-right: 1rem; }
+  .mcc-removal-actions { padding-inline: 1rem; }
+  .mcc-removal-review { padding-inline: 1rem; }
+}
+
+@media (max-width: 600px) {
+  .mcc-collection-choice-grid,
+  .mcc-removal-root .mcc-collection-choice-grid { grid-template-columns: minmax(0,1fr); }
+  .mcc-collection-choice { min-height: 4rem; }
+  .mcc-removal-heading h2 { font-size: clamp(2.35rem,11vw,3.15rem); }
+  .mcc-removal-heading > span:last-child { font-size: .68rem; }
+  .mcc-removal-product {
+    gap: .5rem .65rem; grid-template-columns: 1.75rem 3.6rem minmax(0,1fr); min-height: 5.25rem;
+  }
+  .mcc-removal-product__decision { grid-column: 3; text-align: left; }
+  .mcc-removal-product__decision strong,.mcc-removal-product__decision small { display: inline; }
+  .mcc-removal-product__decision small { margin-left: .4rem; }
+  .mcc-removal-actions { align-items: stretch; flex-direction: column; }
+  .mcc-removal-actions > div { width: 100%; }
+  .mcc-removal-actions button { flex: 1 1 auto; }
+  .mcc-removal-final__actions { align-items: stretch; flex-direction: column; }
+  .mcc-removal-final button { width: 100%; }
+}
+
+@media (max-width: 380px) {
+  .mcc-removal-product { padding-inline: .75rem; }
+  .mcc-removal-product-choices__inner { padding-left: .75rem; padding-right: .75rem; }
+  .mcc-removal-product__media { border-radius: .28rem; }
+  .mcc-removal-actions { padding-inline: .75rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mcc-removal-root *, .mcc-removal-root *::before, .mcc-removal-root *::after,
+  .mcc-collection-picker-panel *, .mcc-collection-picker-panel *::before, .mcc-collection-picker-panel *::after {
+    animation-duration: .01ms !important; scroll-behavior: auto !important; transition-duration: .01ms !important;
+  }
 }
 
 /* Discounts — the same editorial studio language as item and Collection. */

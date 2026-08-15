@@ -11,11 +11,14 @@ import {
   collectionEditorProjection,
   itemEditorProjection,
 } from "~/utils/queryProjections.server";
+import { activeCatalogItemFilter } from "~/utils/catalogItems.server";
+import { activeCatalogCollectionFilter } from "~/utils/catalogCollections.server";
 
  const loader: LoaderFunction = async ({ params, request }) => {
     await auth.isAuthenticated(request, { failureRedirect: "/login" });
-    const [collection, item] = await Promise.all([
+    const [collection, item, availableCollections] = await Promise.all([
       Collections.findOne({
+        ...activeCatalogCollectionFilter,
         shortUrl: params.collection,
       })
         .select(collectionEditorProjection)
@@ -23,6 +26,7 @@ import {
         .exec(),
       params.id
         ? Items.findOne({
+            ...activeCatalogItemFilter,
             _id: params.id,
             collectionRef: params.collection,
           })
@@ -30,6 +34,11 @@ import {
             .lean()
             .exec()
         : null,
+      Collections.find(activeCatalogCollectionFilter)
+        .select(collectionEditorProjection)
+        .sort({ sortOrder: 1, _id: 1 })
+        .lean()
+        .exec(),
     ]);
   
     if (!collection) {
@@ -55,6 +64,7 @@ import {
     return toLoaderData({
       collection,
       item,
+      availableCollections,
       orderImpact: { activeOrderCount, orderCount },
     });
   };

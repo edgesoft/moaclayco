@@ -16,6 +16,7 @@ import {
 import type { CollectionProps, ItemProps } from "~/types";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
+import { CollectionPickerField } from "~/components/admin/CollectionChoiceGrid";
 import { cleanupImageDraftUrl, createImageDraftId } from "~/utils/imageDraft.shared";
 import {
   acceptedImageFileNamePattern,
@@ -25,6 +26,7 @@ import {
 } from "~/utils/imageUpload.shared";
 
 type LoaderDataItemProps = {
+  availableCollections: CollectionProps[];
   collection: CollectionProps;
   item: ItemProps | null;
   orderImpact: {
@@ -881,7 +883,8 @@ function FileUpload({
 
 export default function ItemComponent() {
   const actionData = useActionData<ActionData>();
-  const { collection, item, orderImpact } = useLoaderData<LoaderDataItemProps>();
+  const { availableCollections, collection, item, orderImpact } =
+    useLoaderData<LoaderDataItemProps>();
   const navigation = useNavigation();
   const [deleteConfirmation, setDeleteConfirmation] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -964,6 +967,13 @@ export default function ItemComponent() {
                   />
                   {actionData?.errors?.headline ? <small>{actionData.errors.headline}</small> : null}
                 </label>
+
+                <CollectionPickerField
+                  collections={availableCollections}
+                  currentRef={collection.shortUrl}
+                  error={actionData?.errors?.collectionRef}
+                  onChange={handleEditorDirty}
+                />
 
                 <label className="mcc-editor-field">
                   <span>Pris <b>*</b></span>

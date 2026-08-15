@@ -2,6 +2,7 @@ import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { data as json } from "react-router";
 import type { ActionFunction } from "react-router";
 import { Collections } from "~/schemas/collections";
+import { activeCatalogCollectionFilter } from "~/utils/catalogCollections.server";
 import { Items } from "~/schemas/items";
 import { auth } from "~/services/auth.server";
 import { canDeleteItemImageSource } from "~/services/order-image-storage.server";
@@ -14,6 +15,7 @@ import {
   parseFormDataWithinLimit,
   RequestBodyTooLargeError,
 } from "~/utils/requestBody.server";
+import { activeCatalogItemFilter } from "~/utils/catalogItems.server";
 
 const AWS_ITEM_PATH = process.env.AWS_ITEM_PATH;
 
@@ -27,6 +29,7 @@ async function deleteFileFromS3(
   if (!fileName || fileName !== requestedFileName.split("?")[0]) return false;
 
   const item = await Items.findOne({
+    ...activeCatalogItemFilter,
     _id: id,
     collectionRef: collection,
   }).lean<ItemProps>();
@@ -94,6 +97,7 @@ export const action: ActionFunction = async ({ request }) => {
   }
 
   const collectionExists = await Collections.exists({
+    ...activeCatalogCollectionFilter,
     shortUrl: collection,
   });
   if (!collectionExists) {

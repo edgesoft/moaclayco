@@ -6,6 +6,7 @@ import {
   readCatalogCache,
 } from "~/services/catalog-cache.server";
 import { toLoaderData } from "~/utils/loaderData";
+import { activeCatalogItemFilter } from "~/utils/catalogItems.server";
 
 export type CollectionPreviewItem = {
   _id: string;
@@ -28,7 +29,10 @@ export const loader: LoaderFunction = async ({ params }) => {
   const items = await readCatalogCache(
     catalogCacheKeys.collectionPreview(collectionRef),
     async () => {
-      const collectionItems = await Items.find({ collectionRef })
+      const collectionItems = await Items.find({
+        ...activeCatalogItemFilter,
+        collectionRef,
+      })
         .select("headline images amount")
         .sort({ _id: -1 })
         .lean()

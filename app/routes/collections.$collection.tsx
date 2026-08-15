@@ -38,6 +38,8 @@ import {
   type ServerTimingMetric,
 } from "~/utils/serverTiming.server";
 import { mergePrivateRouteHeaders } from "~/utils/responseHeaders";
+import { activeCatalogItemFilter } from "~/utils/catalogItems.server";
+import { activeCatalogCollectionFilter } from "~/utils/catalogCollections.server";
 
 type ItemLoaderProps = {
   collection: CollectionProps;
@@ -59,12 +61,14 @@ export const loader: LoaderFunction = async ({ params }) => {
         async () => {
           const [collection, items] = await Promise.all([
             Collections.findOne({
+              ...activeCatalogCollectionFilter,
               shortUrl: params.collection,
             })
               .select(collectionDetailProjection)
               .lean()
               .exec(),
             Items.find({
+              ...activeCatalogItemFilter,
               collectionRef: params.collection,
             })
               .select(collectionItemProjection)

@@ -12,13 +12,20 @@ import {
   consumeImageDrafts,
   InvalidImageDraftError,
 } from "~/services/image-drafts.server";
-import { retainOrderImageSourcesBeforeCollectionDeletion } from "~/services/order-image-storage.server";
+import {
+  CollectionRemovalConflictError,
+  CollectionRemovalValidationError,
+  parseCollectionRemovalPlan,
+  removeCollectionWithPlan,
+} from "~/services/collection-removal.server";
 import type { CollectionProps } from "~/types";
 import {
   MAX_STANDARD_FORM_REQUEST_SIZE,
   parseFormDataWithinLimit,
   RequestBodyTooLargeError,
 } from "~/utils/requestBody.server";
+import { activeCatalogItemFilter } from "~/utils/catalogItems.server";
+import { activeCatalogCollectionFilter } from "~/utils/catalogCollections.server";
 
 const CollectionSchema = z.object({
   headline: z.string().trim().min(1, "Fyll i ett namn"),
@@ -101,12 +108,19 @@ export const CollectionAction: ActionFunction = async ({ params, request }) => {
   const intent = formData.get("intent")?.toString();
   const currentCollection = (params.collection
     ? await Collections.findOne({
+        ...activeCatalogCollectionFilter,
         shortUrl: params.collection,
       }).lean()
     : null) as (CollectionProps & { _id: any }) | null;
 
   if (params.collection && !currentCollection) {
-    return json({ errors: { form: "Collection kunde inte hittas" } }, { status: 404 });
+    return json(
+      {
+        errors: { form: "Collectionen finns inte längre i katalogen." },
+        intent: intent === "delete" ? "delete" : undefined,
+      },
+      { status: 404 }
+    );
   }
 
   if (intent === "delete") {
@@ -114,52 +128,35 @@ export const CollectionAction: ActionFunction = async ({ params, request }) => {
       return json({ errors: { form: "Collection kunde inte hittas" } }, { status: 404 });
     }
 
-    const items = await Items.find({
-      collectionRef: params.collection,
-    })
-      .select({ images: 1 })
-      .lean();
-    const assetKeys = [
-      keyFromAssetUrl(currentCollection.image, process.env.AWS_COLLECTION_PATH),
-      ...items.flatMap((item) =>
-        (item.images ?? []).map((image: string) =>
-          keyFromAssetUrl(image, process.env.AWS_ITEM_PATH)
-        )
-      ),
-    ];
-
-    const itemIds = items.map((item) => String(item._id));
-    const retainedOrderKeys = itemIds.length
-      ? await retainOrderImageSourcesBeforeCollectionDeletion(itemIds)
-      : new Set<string>();
-
-    const deleteSession = await mongoose.startSession();
     try {
-      await deleteSession.withTransaction(async () => {
-        await Items.deleteMany(
-          { collectionRef: params.collection },
-          { session: deleteSession }
-        );
-        const collectionDeletion = await Collections.deleteOne(
-          { _id: currentCollection._id },
-          { session: deleteSession }
-        );
-        if (collectionDeletion.deletedCount !== 1) {
-          throw new Error(`Collection ${params.collection} could not be deleted`);
-        }
+      const decisions = parseCollectionRemovalPlan(
+        formData.get("removalPlan")?.toString() ?? "[]"
+      );
+      const removal = await removeCollectionWithPlan({
+        collectionRef: params.collection,
+        decisions,
       });
-    } finally {
-      await deleteSession.endSession();
-    }
-    invalidateCatalogCache();
-
-    try {
-      await deleteAssetKeys(assetKeys, retainedOrderKeys);
+      const search = new URLSearchParams({
+        collectionUndo: removal.operationId,
+        undoLabel: currentCollection.headline,
+        undoUntil: String(removal.undoExpiresAt.getTime()),
+      });
+      return redirect(`/?${search.toString()}#collections`);
     } catch (error) {
-      console.error("Collection assets could not be fully removed", error);
+      if (error instanceof CollectionRemovalValidationError) {
+        return json(
+          { errors: { form: error.message }, intent: "delete" },
+          { status: 400 }
+        );
+      }
+      if (error instanceof CollectionRemovalConflictError) {
+        return json(
+          { errors: { form: error.message }, intent: "delete" },
+          { status: 409 }
+        );
+      }
+      throw error;
     }
-
-    return redirect("/#collections");
   }
 
   const result = Object.fromEntries(
@@ -237,14 +234,17 @@ export const CollectionAction: ActionFunction = async ({ params, request }) => {
         }
         if (params.collection !== validated.data.shortUrl) {
           await Items.updateMany(
-            { collectionRef: params.collection },
+            {
+              ...activeCatalogItemFilter,
+              collectionRef: params.collection,
+            },
             { collectionRef: validated.data.shortUrl },
             { session: saveSession }
           );
         }
       } else {
         await Collections.updateMany(
-          {},
+          activeCatalogCollectionFilter,
           { $inc: { sortOrder: 1 } },
           { session: saveSession }
         );

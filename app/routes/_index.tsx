@@ -19,6 +19,7 @@ import {
 import { useEffect, useRef } from "react";
 import ArrowIcon from "~/components/ArrowIcon";
 import CollectionAtelier from "~/components/admin/CollectionAtelier";
+import CollectionUndoSnackbar from "~/components/admin/CollectionUndoSnackbar";
 import { theme } from "~/components/Theme";
 import useMediaQuery from "~/hooks/useMediaQuery";
 import { Items } from "~/schemas/items";
@@ -36,6 +37,7 @@ import {
   type ServerTimingMetric,
 } from "~/utils/serverTiming.server";
 import { mergePrivateRouteHeaders } from "~/utils/responseHeaders";
+import { activeCatalogItemFilter } from "~/utils/catalogItems.server";
 
 type LandingLoaderData = {
   latestItems: ItemProps[];
@@ -55,7 +57,7 @@ export const loader: LoaderFunction = async () => {
         catalogCacheKeys.latestItems,
         async () =>
           toLoaderData(
-            await Items.find({})
+            await Items.find(activeCatalogItemFilter)
               .select(landingItemProjection)
               .slice("images", 2)
               .sort({ _id: -1 })
@@ -684,6 +686,7 @@ export default function Index() {
       </section>
 
       {user ? <CollectionAtelier collections={collections} /> : null}
+      {user ? <CollectionUndoSnackbar /> : null}
     </main>
   );
 }

@@ -10,6 +10,7 @@ import type { CSSProperties } from "react";
 import type { CollectionProps } from "~/types";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
+import CollectionRemovalFlow from "~/components/admin/CollectionRemovalFlow";
 import { cleanupImageDraftUrl, createImageDraftId } from "~/utils/imageDraft.shared";
 import {
   acceptedImageFileNamePattern,
@@ -23,6 +24,7 @@ type LoaderData = {
 
 type ActionData = {
   errors?: Record<string, string | undefined>;
+  intent?: string;
 };
 
 type ImageStatus = "complete" | "uploading" | "processing" | "error";
@@ -72,11 +74,9 @@ function UploadIcon() {
 
 function CollectionImageUpload({
   collection,
-  onDirty,
   onStateChange,
 }: {
   collection: LoaderData["collection"];
-  onDirty: () => void;
   onStateChange: (summary: UploadSummary) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -224,7 +224,6 @@ function CollectionImageUpload({
   const chooseFile = useCallback(
     (file?: File) => {
       if (!file) return;
-      onDirty();
       const extensionAccepted = acceptedImageFileNamePattern.test(file.name);
       const sizeAccepted = file.size <= MAX_IMAGE_SIZE;
       const previewUrl = extensionAccepted ? URL.createObjectURL(file) : undefined;
@@ -247,13 +246,12 @@ function CollectionImageUpload({
       releaseObjectUrl(image?.previewUrl);
       uploadFile(file, previewUrl);
     },
-    [image, onDirty, releaseDraftUrl, releaseObjectUrl, uploadFile]
+    [image, releaseDraftUrl, releaseObjectUrl, uploadFile]
   );
 
   const removeImage = () => {
     requestRef.current?.abort();
     requestRef.current = undefined;
-    onDirty();
     releaseDraftUrl(image?.url);
     releaseObjectUrl(image?.previewUrl);
     setImage(null);
@@ -268,7 +266,7 @@ function CollectionImageUpload({
           <p className="mcc-editor-eyebrow">Collection-omslag</p>
           <h2>Bild</h2>
         </div>
-        <span>{image?.status === "complete" ? "Klar" : "01"}</span>
+        <span>01</span>
       </div>
 
       <div
@@ -327,10 +325,18 @@ function CollectionImageUpload({
           <figcaption>
             <div>
               <span>Collection-bild</span>
-              <strong>{image.status === "complete" ? "Klar att använda" : image.name}</strong>
-              {image.optimizedSize ? <small>Optimerad · {formatFileSize(image.optimizedSize)}</small> : null}
+              {image.status === "complete" ? null : <strong>{image.name}</strong>}
             </div>
-            <button disabled={busy} onClick={removeImage} type="button">Ta bort</button>
+            <button
+              aria-label="Ta bort Collection-bilden"
+              className="mcc-collection-editor-remove-image"
+              disabled={busy}
+              onClick={removeImage}
+              type="button"
+            >
+              <span>Ta bort bild</span>
+              <span aria-hidden="true"><PlusMinusIcon operation="minus" /></span>
+            </button>
           </figcaption>
           {image.error ? (
             <div className="mcc-editor-image__error" role="alert">
@@ -348,13 +354,6 @@ function CollectionImageUpload({
         </div>
       )}
 
-      <p className="mcc-editor-upload-status" aria-live="polite">
-        {busy
-          ? "Bilden optimeras. Du kan fortsätta skriva under tiden."
-          : image?.status === "complete"
-          ? "Bilden är redo att sparas."
-          : "Lägg till en bild för att kunna spara Collection."}
-      </p>
       <input name="image" readOnly type="hidden" value={image?.status === "complete" ? image.url ?? "" : ""} />
       <input defaultValue="" name="imageDraftId" ref={draftIdInputRef} type="hidden" />
     </section>
@@ -365,16 +364,13 @@ export default function CollectionEditor() {
   const { collection, itemCount } = useLoaderData<LoaderData>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
-  const [dirty, setDirty] = useState(false);
   const [slug, setSlug] = useState(collection?.shortUrl ?? "");
   const [slugTouched, setSlugTouched] = useState(Boolean(collection));
-  const [deleteConfirmation, setDeleteConfirmation] = useState(false);
   const [uploadSummary, setUploadSummary] = useState<UploadSummary>({
     busy: false,
     error: false,
     ready: Boolean(collection?.image),
   });
-  const handleDirty = useCallback(() => setDirty(true), []);
   const handleUploadStateChange = useCallback(
     (summary: UploadSummary) => setUploadSummary(summary),
     []
@@ -387,7 +383,11 @@ export default function CollectionEditor() {
 
   return (
     <main className="mcc-editor-page mcc-collection-editor-page">
-      <Form className="mcc-editor-form" method="post" onChange={handleDirty}>
+      <Form
+        className="mcc-editor-form"
+        id="mcc-collection-editor-form"
+        method="post"
+      >
         <header className="mcc-editor-header">
           <div className="mcc-editor-header__topline">
             <Link to={collection ? `/collections/${collection.shortUrl}` : "/#collections"}>
@@ -419,7 +419,6 @@ export default function CollectionEditor() {
         <div className="mcc-editor-workspace mcc-collection-editor-workspace">
           <CollectionImageUpload
             collection={collection}
-            onDirty={handleDirty}
             onStateChange={handleUploadStateChange}
           />
 
@@ -544,37 +543,26 @@ export default function CollectionEditor() {
               <h2>Ta bort Collection</h2>
               <p>
                 {itemCount
-                  ? `Detta tar även bort ${itemCount} ${itemCount === 1 ? "produkt" : "produkter"} som tillhör ${collection.headline}.`
+                  ? `${itemCount} ${itemCount === 1 ? "produkt behöver" : "produkter behöver"} flyttas eller tas bort från katalogen innan ${collection.headline} kan tas bort.`
                   : `${collection.headline} innehåller inga produkter.`}
               </p>
             </div>
-            {!deleteConfirmation ? (
-              <button onClick={() => setDeleteConfirmation(true)} type="button">Ta bort Collection</button>
-            ) : (
-              <div className="mcc-collection-danger__confirmation" role="alert">
-                <strong>Är du helt säker?</strong>
-                <span>
-                  {uploadSummary.busy
-                    ? "Vänta tills bilduppladdningen är klar så att utkastbilden kan hanteras säkert."
-                    : "Det går inte att ångra."}
-                </span>
-                <div>
-                  <button onClick={() => setDeleteConfirmation(false)} type="button">Avbryt</button>
-                  <button disabled={isDeleting || uploadSummary.busy} name="intent" type="submit" value="delete">{isDeleting ? "Tar bort…" : "Ta bort permanent"}</button>
-                </div>
-              </div>
-            )}
+            <CollectionRemovalFlow
+              collectionHeadline={collection.headline}
+              collectionRef={collection.shortUrl}
+              disabled={isDeleting || uploadSummary.busy}
+              error={
+                actionData?.intent === "delete"
+                  ? actionData.errors?.form
+                  : undefined
+              }
+              isDeleting={isDeleting}
+              itemCount={itemCount}
+            />
           </section>
         ) : null}
 
         <div className="mcc-editor-savebar">
-          <div aria-live="polite">
-            <span className={dirty ? "is-dirty" : ""} />
-            <p>
-              <strong>{uploadSummary.busy ? "Bilden laddas upp" : dirty ? "Ändringar ej sparade" : "Redo att redigera"}</strong>
-              <small>{uploadSummary.error ? "Bilden behöver din uppmärksamhet." : uploadSummary.busy ? "Du kan fortsätta skriva under tiden." : "Spara när allt känns klart."}</small>
-            </p>
-          </div>
           <button disabled={isSaving || isDeleting || uploadSummary.busy || !uploadSummary.ready} type="submit">
             <span>{isSaving ? "Sparar…" : collection ? "Spara ändringar" : "Skapa Collection"}</span>
             <span aria-hidden="true"><ArrowIcon /></span>

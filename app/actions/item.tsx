@@ -17,6 +17,8 @@ import {
   parseFormDataWithinLimit,
   RequestBodyTooLargeError,
 } from "~/utils/requestBody.server";
+import { activeCatalogItemFilter } from "~/utils/catalogItems.server";
+import { activeCatalogCollectionFilter } from "~/utils/catalogCollections.server";
 
 const ItemSchema = z.object({
   amount: z
@@ -59,6 +61,7 @@ export const ItemAction: ActionFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
 
   const collection = await Collections.findOne({
+    ...activeCatalogCollectionFilter,
     shortUrl: params.collection,
   });
   if (!collection) return redirect("/");
@@ -106,6 +109,23 @@ export const ItemAction: ActionFunction = async ({ request, params }) => {
   const result = Object.fromEntries(
     Array.from(formData.entries()).map(([key, value]) => [key, value.toString()])
   );
+  const targetCollectionRef =
+    result.collectionRef?.trim() || String(params.collection);
+  const targetCollection =
+    targetCollectionRef === params.collection
+      ? collection
+      : await Collections.findOne({
+          ...activeCatalogCollectionFilter,
+          shortUrl: targetCollectionRef,
+        })
+          .select("shortUrl")
+          .lean();
+  if (!targetCollection) {
+    return json(
+      { errors: { collectionRef: "Den valda Collectionen finns inte längre" } },
+      { status: 409 }
+    );
+  }
   const validatedItem = ItemSchema.safeParse(result);
 
   if (!validatedItem.success) {
@@ -156,6 +176,7 @@ export const ItemAction: ActionFunction = async ({ request, params }) => {
 
   const currentItem = params.id
     ? await Items.findOne({
+        ...activeCatalogItemFilter,
         _id: params.id,
         collectionRef: params.collection,
       })
@@ -189,7 +210,7 @@ export const ItemAction: ActionFunction = async ({ request, params }) => {
       price: Number(addition.value),
     })),
     amount: Number(validatedItem.data.amount),
-    collectionRef: params.collection,
+    collectionRef: targetCollectionRef,
     headline: validatedItem.data.headline,
     images,
     instagram: result.instagram?.trim() ?? "",
@@ -214,10 +235,14 @@ export const ItemAction: ActionFunction = async ({ request, params }) => {
       if (params.id) {
         const updateResult = await Items.updateOne(
           {
+            ...activeCatalogItemFilter,
             _id: params.id,
             collectionRef: params.collection,
           },
-          data,
+          {
+            $set: data,
+            $unset: { lastCatalogOperationId: "" },
+          },
           { session }
         );
         if (!updateResult.matchedCount) {
@@ -240,5 +265,5 @@ export const ItemAction: ActionFunction = async ({ request, params }) => {
   }
 
   invalidateCatalogCache();
-  return redirect(`/collections/${params.collection}`);
+  return redirect(`/collections/${targetCollectionRef}`);
 };

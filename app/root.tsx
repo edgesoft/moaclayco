@@ -27,6 +27,7 @@ import Cookies from "./components/cookies";
 import tailwindStyles from "./styles/tailwind.css?url";
 import appStyles from "./styles/app.css?url";
 import { Collections } from "./schemas/collections";
+import { activeCatalogCollectionFilter } from "~/utils/catalogCollections.server";
 import { auth } from "./services/auth.server";
 import { CollectionProps, User } from "./types";
 import { theme } from "./components/Theme";
@@ -104,7 +105,7 @@ export const loader: LoaderFunction = async ({ request }) => {
           catalogCacheKeys.collections,
           async () =>
             toLoaderData(
-              await Collections.find({})
+              await Collections.find(activeCatalogCollectionFilter)
                 .select(collectionCardProjection)
                 .sort({ sortOrder: 1 })
                 .lean()
