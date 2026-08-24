@@ -40,7 +40,7 @@ export const getOrderImagePath = () => {
   const configuredPath = normalizeStoragePath(process.env.AWS_ORDER_IMAGE_PATH);
   if (configuredPath) return configuredPath;
   const itemPath = normalizeStoragePath(process.env.AWS_ITEM_PATH);
-  return itemPath ? `${itemPath}-order-history` : undefined;
+  return itemPath ? `${itemPath}/order-history` : undefined;
 };
 
 export const orderImageUrl = (sourceUrl: string, destinationKey: string) => {
@@ -102,7 +102,7 @@ export async function archiveOrderImages(
   dependencies: OrderImageStorageDependencies = defaultDependencies
 ): Promise<OrderImageArchivalResult> {
   const itemPath = dependencies.getItemPath();
-  const orderImagePath = dependencies.getOrderImagePath();
+  const orderImagePath = normalizeStoragePath(dependencies.getOrderImagePath());
   const orderId = String(order._id);
   let archivedCount = 0;
   const failedItemRefs = new Set<string>();
@@ -119,6 +119,7 @@ export async function archiveOrderImages(
     const sourceUrl = String(reference.image);
     const sourceKey = itemStorageKeyFromUrl(sourceUrl, itemPath);
     if (!sourceKey) continue;
+    if (orderImagePath && sourceKey.startsWith(`${orderImagePath}/`)) continue;
 
     const fileName = sourceKey.split("/").pop();
     if (!orderImagePath || !fileName) {
