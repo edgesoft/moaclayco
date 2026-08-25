@@ -5,6 +5,15 @@
 - Om den aktiva branchen har något av de förbjudna prefixen ska den byta namn
   innan nästa commit eller push. Se `BRANCH_NAMING.md`.
 
+# GitHub issue rules
+
+- All GitHub issue titles, descriptions, checklists, comments, status updates,
+  labels, and label descriptions must be written in English.
+- Keep the issue body as the canonical description of completed and remaining
+  work. Do not mark an acceptance criterion complete without evidence from the
+  code, tests, or a verified environment.
+- Follow `GITHUB_ISSUES.md` whenever an issue or label is created or updated.
+
 # UI-regler
 
 - Använd aldrig webbläsarens vanliga/native `<select>`-dropdown i den användarvända huvudappen, inklusive admin- och bokföringsvyer.
