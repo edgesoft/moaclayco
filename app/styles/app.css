@@ -2918,9 +2918,9 @@ input[type="search"]::-ms-reveal {
   height: 3.15rem;
   overflow: hidden;
   padding: 0;
-  transition: height 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    width 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 220ms ease;
+  transition: height 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 160ms ease;
   width: 3.15rem;
 }
 

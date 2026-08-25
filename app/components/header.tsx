@@ -8,6 +8,7 @@ import {
 } from "react-router";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import React, {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -303,12 +304,14 @@ function NavigationCollection({
   expanded,
   index,
   onToggle,
+  preloadPreview,
 }: {
   closeAfterNavigation: () => void;
   collection: CollectionProps;
   expanded: boolean;
   index: number;
   onToggle: () => void;
+  preloadPreview: boolean;
 }) {
   const preview = useFetcher<CollectionPreviewData>();
   const reduceMotion = useReducedMotion();
@@ -319,10 +322,18 @@ function NavigationCollection({
       ? preview.data.items
       : undefined;
 
-  useEffect(() => {
-    if (!expanded || items || preview.state !== "idle") return;
+  const loadPreview = useCallback(() => {
+    if (items || preview.state !== "idle") return;
     preview.load(`/collections/${collection.shortUrl}/preview`);
-  }, [collection.shortUrl, expanded, items, preview]);
+  }, [collection.shortUrl, items, preview]);
+
+  useEffect(() => {
+    if (expanded) loadPreview();
+  }, [expanded, loadPreview]);
+
+  useEffect(() => {
+    if (preloadPreview) loadPreview();
+  }, [loadPreview, preloadPreview]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -368,8 +379,8 @@ function NavigationCollection({
       initial={{ opacity: 0, y: 14 }}
       ref={itemRef}
       transition={{
-        delay: expanded ? 0 : 0.14 + Math.min(index, 10) * 0.035,
-        duration: reduceMotion ? 0 : 0.4,
+        delay: expanded ? 0 : 0.02 + Math.min(index, 10) * 0.012,
+        duration: reduceMotion ? 0 : 0.22,
       }}
     >
       <div className="mcc-navigation-collection">
@@ -380,7 +391,13 @@ function NavigationCollection({
             collection.headline
           }`}
           className="mcc-navigation-collection-media"
-          onClick={onToggle}
+          onClick={() => {
+            loadPreview();
+            onToggle();
+          }}
+          onFocus={loadPreview}
+          onPointerDown={loadPreview}
+          onPointerEnter={loadPreview}
           type="button"
         >
           <img
@@ -427,8 +444,8 @@ function NavigationCollection({
           id={previewId}
           initial={{ opacity: 0, y: 10 }}
           transition={{
-            delay: reduceMotion ? 0 : 0.12,
-            duration: reduceMotion ? 0 : 0.34,
+            delay: 0,
+            duration: reduceMotion ? 0 : 0.18,
             ease: [0.22, 1, 0.36, 1],
           }}
         >
@@ -444,8 +461,8 @@ function NavigationCollection({
                     initial={{ opacity: 0, y: 12 }}
                     key={item._id}
                     transition={{
-                      delay: reduceMotion ? 0 : Math.min(itemIndex, 8) * 0.045,
-                      duration: reduceMotion ? 0 : 0.36,
+                      delay: reduceMotion ? 0 : Math.min(itemIndex, 8) * 0.018,
+                      duration: reduceMotion ? 0 : 0.2,
                     }}
                   >
                     <Link
@@ -459,7 +476,8 @@ function NavigationCollection({
                         <img
                           alt=""
                           decoding="async"
-                          loading={itemIndex < 3 ? "eager" : "lazy"}
+                          fetchPriority={itemIndex < 4 ? "high" : "auto"}
+                          loading={itemIndex < 6 ? "eager" : "lazy"}
                             sizes="(max-width: 899px) 32vw, 10vw"
                           src={navigationImageWithWidth(item.image, 420)}
                           srcSet={`${navigationImageWithWidth(
@@ -610,7 +628,7 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
               className="mcc-navigation-layer"
               exit={{ opacity: 0 }}
               initial={{ opacity: 0 }}
-              transition={{ duration: 0.22 }}
+              transition={{ duration: 0.14 }}
             >
             <button
               aria-label="Stäng meny"
@@ -640,7 +658,7 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
                 exit={{ x: "100%" }}
                 initial={{ x: "100%" }}
                 transition={{
-                  duration: 0.42,
+                  duration: 0.24,
                   ease: [0.22, 1, 0.36, 1],
                 }}
               >
@@ -743,7 +761,7 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
                 exit={{ x: "100%" }}
                 initial={{ x: "100%" }}
                 transition={{
-                  duration: 0.5,
+                  duration: 0.28,
                   ease: [0.22, 1, 0.36, 1],
                 }}
               >
@@ -886,8 +904,8 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
                 exit={{ opacity: 0, y: 36 }}
                 initial={{ opacity: 0, y: 36 }}
                 transition={{
-                  delay: 0.08,
-                  duration: 0.55,
+                  delay: 0,
+                  duration: 0.28,
                   ease: [0.22, 1, 0.36, 1],
                 }}
               >
@@ -918,6 +936,7 @@ function Hamburger({ onLogin }: { onLogin: () => void }) {
                             : collection.shortUrl
                         )
                       }
+                      preloadPreview={index < 4}
                     />
                   ))}
                 </div>
