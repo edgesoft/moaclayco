@@ -6,12 +6,13 @@ import { itemStorageKeyFromUrl } from "~/utils/itemImageStorage.server";
 type OrderImageItem = {
   image?: string;
   itemRef?: string;
+  templateItemRef?: string;
 };
 
 type OrderWithImages = {
   _id: unknown;
-  orderConfirmationEmailAt?: Date;
-  shippingEmailAt?: Date;
+  orderConfirmationEmailAt?: Date | string;
+  shippingEmailAt?: Date | string;
   items?: OrderImageItem[];
 };
 
@@ -29,6 +30,7 @@ export type OrderImageStorageDependencies = {
     archivedUrl: string;
     itemId: string;
     orderId: string;
+    referenceField: "itemRef" | "templateItemRef";
     sourceUrl: string;
   }): Promise<boolean>;
 };
@@ -82,15 +84,28 @@ const defaultDependencies: OrderImageStorageDependencies = {
   getOrderImagePath,
   logArchiveError: (error, context) =>
     console.error("Order image could not be archived", { ...context, error }),
-  replaceOrderImage: async ({ archivedUrl, itemId, orderId, sourceUrl }) => {
+  replaceOrderImage: async ({
+    archivedUrl,
+    itemId,
+    orderId,
+    referenceField,
+    sourceUrl,
+  }) => {
     const result = await Orders.updateOne(
       {
         _id: orderId,
-        items: { $elemMatch: { image: sourceUrl, itemRef: itemId } },
+        items: {
+          $elemMatch: { image: sourceUrl, [referenceField]: itemId },
+        },
       },
       { $set: { "items.$[item].image": archivedUrl } },
       {
-        arrayFilters: [{ "item.image": sourceUrl, "item.itemRef": itemId }],
+        arrayFilters: [
+          {
+            "item.image": sourceUrl,
+            [`item.${referenceField}`]: itemId,
+          },
+        ],
       }
     );
     return result.modifiedCount === 1;
@@ -109,13 +124,17 @@ export async function archiveOrderImages(
   const references = [
     ...new Map(
       (order.items ?? [])
-        .filter((item) => Boolean(item.image && item.itemRef))
-        .map((item) => [`${item.itemRef}:${item.image}`, item])
+        .filter((item) => Boolean(item.image && (item.itemRef || item.templateItemRef)))
+        .map((item) => [
+          `${item.itemRef ?? item.templateItemRef}:${item.image}`,
+          item,
+        ])
     ).values(),
   ];
 
   for (const reference of references) {
-    const itemId = String(reference.itemRef);
+    const referenceField = reference.itemRef ? "itemRef" : "templateItemRef";
+    const itemId = String(reference.itemRef ?? reference.templateItemRef);
     const sourceUrl = String(reference.image);
     const sourceKey = itemStorageKeyFromUrl(sourceUrl, itemPath);
     if (!sourceKey) continue;
@@ -134,6 +153,7 @@ export async function archiveOrderImages(
         archivedUrl: orderImageUrl(sourceUrl, destinationKey),
         itemId,
         orderId,
+        referenceField,
         sourceUrl,
       });
       if (!replaced) {
