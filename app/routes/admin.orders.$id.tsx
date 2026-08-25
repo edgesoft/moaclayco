@@ -321,6 +321,7 @@ export let action: ActionFunction = async ({ request, params }) => {
       await createDeliberateResend({
         kind,
         orderId: String(order._id),
+        previousAttempt: delivery.attempt,
         recipient: order.customer.email,
       });
     }
@@ -344,7 +345,17 @@ export let action: ActionFunction = async ({ request, params }) => {
     if (error instanceof FinalSpecialOrderImageRequiredError) {
       return json({ error: error.message }, { status: 409 });
     }
-    throw error;
+    console.error("Shipment status update failed", {
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      orderId: String(params.id),
+    });
+    return json(
+      {
+        error:
+          "Leveransen kunde inte uppdateras klart. Kontrollera order- och mejlstatus innan du försöker igen.",
+      },
+      { status: 500 }
+    );
   }
 
   return {};

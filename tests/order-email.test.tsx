@@ -8,7 +8,10 @@ import EmailOrderTemplate, {
   Template,
   shortOrderNumber,
 } from "../app/components/mail/order";
-import { sendOrderEmail } from "../app/services/order-email.server";
+import {
+  orderEmailRecipients,
+  sendOrderEmail,
+} from "../app/services/order-email.server";
 import { legacyShippingDeliveryView } from "../app/services/email-delivery.server";
 import { canManageOrderShipment } from "../app/utils/orderShipping.shared";
 import type { Order } from "../app/types";
@@ -251,6 +254,19 @@ test("order email failures propagate so delivery can be retried", async () => {
     }),
     /SMTP unavailable/
   );
+});
+
+test("stage can redirect every order email without production BCC", () => {
+  assert.deepEqual(
+    orderEmailRecipients(order, {
+      EMAIL_REDIRECT_TO: " stage-inbox@example.test ",
+    }),
+    { to: "stage-inbox@example.test" }
+  );
+  assert.deepEqual(orderEmailRecipients(order, {}), {
+    bcc: "support@moaclayco.com,wicket.programmer@gmail.com",
+    to: order.customer.email,
+  });
 });
 
 test("order emails use a stable message id across retries", async () => {

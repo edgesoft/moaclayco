@@ -25,6 +25,18 @@ type OrderEmailOptions = {
   deliveryAttempt?: number;
 };
 
+export const orderEmailRecipients = (
+  order: Pick<Order, "customer">,
+  environment: NodeJS.ProcessEnv = process.env
+): Pick<SendMailOptions, "bcc" | "to"> => {
+  const redirectedRecipient = environment.EMAIL_REDIRECT_TO?.trim();
+  if (redirectedRecipient) return { to: redirectedRecipient };
+  return {
+    bcc: `${theme.email},wicket.programmer@gmail.com`,
+    to: order.customer.email,
+  };
+};
+
 export async function sendOrderEmail(
   order: Order,
   template: Template,
@@ -42,8 +54,7 @@ export async function sendOrderEmail(
 
   return mailer.sendMail({
     from: theme.email,
-    to: order.customer.email,
-    bcc: `${theme.email},wicket.programmer@gmail.com`,
+    ...orderEmailRecipients(order),
     messageId: `<${emailKind(template)}-${String(order._id)}${
       options.deliveryAttempt && options.deliveryAttempt > 1
         ? `-${options.deliveryAttempt}`

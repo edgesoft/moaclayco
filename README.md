@@ -56,6 +56,7 @@ the `.env` file should contain the following keys.
  - MONGODB_URL `url to mongodb atlas`
  - EMAIL_PASSWORD `email password`
  - EMAIL_USERNAME `email username`
+ - EMAIL_REDIRECT_TO optional stage-only recipient that safely captures every order email and disables BCC
  - NODE_ENV `production` or `development`
  - STRIPE_PUBLIC_KEY `public key` to Stripe
  - STRIPE_SRV `server key` to Stripe

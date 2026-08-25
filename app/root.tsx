@@ -47,7 +47,7 @@ import {
 } from "./utils/serverTiming.server";
 import { privateRootHeaders } from "./utils/responseHeaders";
 import { scheduleExpiredImageDraftCleanup } from "./services/image-drafts.server";
-import { scheduleStaleEmailDeliveryRecovery } from "./services/email-delivery.server";
+import { scheduleEmailDeliveryRecovery } from "./services/email-delivery.server";
 
 export type IndexProps = {
   user?: User;
@@ -77,7 +77,7 @@ export const middleware: MiddlewareFunction[] = [
 
 export const loader: LoaderFunction = async ({ request }) => {
   scheduleExpiredImageDraftCleanup();
-  scheduleStaleEmailDeliveryRecovery();
+  scheduleEmailDeliveryRecovery();
   const timings: ServerTimingMetric[] = [];
   const url = new URL(request.url);
   const hostname = url.hostname;
