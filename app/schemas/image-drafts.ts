@@ -9,7 +9,7 @@ const ImageDraftSchema = new Schema(
     expiresAt: { required: true, type: Date },
     key: { required: true, type: String },
     kind: {
-      enum: ["collection", "item"],
+      enum: ["collection", "item", "special-order"],
       required: true,
       type: String,
     },

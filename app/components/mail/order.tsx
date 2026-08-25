@@ -1,16 +1,19 @@
 import React, { CSSProperties } from "react";
 import { Order, OrderItem } from "~/types";
+import { distinctAddressLine2 } from "~/utils/customerAddress";
 import { theme } from "../Theme";
 
 export enum Template {
   ORDER,
   SHIPPING,
+  SPECIAL_INVITATION,
 }
 
 export type TemplateType = {
   copyrightYear: number;
   order: Order;
   template: Template;
+  actionUrl?: string;
 };
 
 const colors = {
@@ -36,6 +39,23 @@ const formatSek = (amount: number) =>
     maximumFractionDigits: 2,
   }).format(amount);
 
+const formatSpecialOrderExpiry = (order: Order) => {
+  const expiresAt = order.specialOrder?.expiresAt;
+  if (!expiresAt) return "";
+  const date = new Date(expiresAt);
+  if (Number.isNaN(date.getTime())) return "";
+  const expiryIncludesTime = order.specialOrder?.expiryIncludesTime !== false;
+  return new Intl.DateTimeFormat("sv-SE", {
+    day: "numeric",
+    month: "long",
+    timeZone: "Europe/Stockholm",
+    year: "numeric",
+    ...(expiryIncludesTime
+      ? { hour: "2-digit", hourCycle: "h23" as const, minute: "2-digit" }
+      : {}),
+  }).format(date);
+};
+
 export const shortOrderNumber = (orderId: string | { toString(): string }) =>
   `#${String(orderId).slice(-8).toLocaleUpperCase("sv-SE")}`;
 
@@ -43,31 +63,47 @@ const customerName = (order: Order) =>
   [order.customer.firstname, order.customer.lastname].filter(Boolean).join(" ") ||
   "Kund";
 
-const orderCopy = (template: Template) =>
-  template === Template.ORDER
-    ? {
-        eyebrow: "ORDERBEKRÄFTELSE",
-        title: "Tack för din beställning.",
-        intro:
-          "Vi har tagit emot din order och börjar göra den redo så snart vi kan. Du får ett nytt mejl när paketet lämnar ateljén.",
-        preheader:
-          "Tack för din beställning. Här hittar du orderinnehåll, leveransadress och totalsumma.",
-      }
-    : {
-        eyebrow: "PÅ VÄG TILL DIG",
-        title: "Din beställning är på väg.",
-        intro:
-          "Nu är din order packad och har lämnat ateljén. Vi hoppas att den snart landar fint hos dig.",
-        preheader:
-          "Din beställning har lämnat ateljén och är nu på väg till dig.",
-      };
+const orderCopy = (template: Template) => {
+  if (template === Template.ORDER) {
+    return {
+      eyebrow: "ORDERBEKRÄFTELSE",
+      title: "Tack för din beställning.",
+      intro:
+        "Vi har tagit emot din order och börjar göra den redo så snart vi kan. Du får ett nytt mejl när paketet lämnar ateljén.",
+      preheader:
+        "Tack för din beställning. Här hittar du orderinnehåll, leveransadress och totalsumma.",
+    };
+  }
+  if (template === Template.SPECIAL_INVITATION) {
+    return {
+      eyebrow: "DIN SPECIALBESTÄLLNING",
+      title: "Skapad särskilt för dig.",
+      intro:
+        "Moa har förberett en specialbeställning. Kontrollera innehållet och leveransuppgifterna innan du går vidare till betalningen.",
+      preheader:
+        "Din specialbeställning är redo att granskas och betalas.",
+    };
+  }
+  return {
+    eyebrow: "PÅ VÄG TILL DIG",
+    title: "Din beställning är på väg.",
+    intro:
+      "Nu är din order packad och har lämnat ateljén. Vi hoppas att den snart landar fint hos dig.",
+    preheader:
+      "Din beställning har lämnat ateljén och är nu på väg till dig.",
+  };
+};
 
 export const getOrderEmailSubject = (order: Order, template: Template) => {
   const orderNumber = shortOrderNumber(order._id);
 
-  return template === Template.ORDER
-    ? `Orderbekräftelse ${orderNumber} · ${theme.title}`
-    : `Din order ${orderNumber} är på väg · ${theme.title}`;
+  if (template === Template.ORDER) {
+    return `Orderbekräftelse ${orderNumber} · ${theme.title}`;
+  }
+  if (template === Template.SPECIAL_INVITATION) {
+    return `Din specialbeställning ${orderNumber} · ${theme.title}`;
+  }
+  return `Din order ${orderNumber} är på väg · ${theme.title}`;
 };
 
 const itemTextLines = (item: OrderItem) => {
@@ -76,6 +112,11 @@ const itemTextLines = (item: OrderItem) => {
       item.price * item.quantity
     )}`,
   ];
+
+  if (item.description) lines.push(`  ${item.description}`);
+  if (!item.image && !item.finalImage) {
+    lines.push("  Bild läggs till när specialdesignen är färdig.");
+  }
 
   for (const addition of item.additionalItems ?? []) {
     const additionPrice = addition.price * item.quantity;
@@ -90,15 +131,25 @@ const itemTextLines = (item: OrderItem) => {
   return lines;
 };
 
-export const getOrderEmailText = (order: Order, template: Template) => {
+export const getOrderEmailText = (
+  order: Order,
+  template: Template,
+  actionUrl?: string
+) => {
   const copy = orderCopy(template);
+  const specialOrderExpiry = formatSpecialOrderExpiry(order);
   const discountAmount = order.discount?.amount ?? 0;
   const merchandiseTotal = Math.max(
     0,
     order.totalSum - order.freightCost + discountAmount
   );
+  const addressLine2 = distinctAddressLine2(
+    order.customer.postaddress,
+    order.customer.addressLine2
+  );
   const address = [
     order.customer.postaddress,
+    addressLine2,
     `${order.customer.zipcode ?? ""} ${order.customer.city ?? ""}`.trim(),
   ].filter(Boolean);
 
@@ -124,10 +175,20 @@ export const getOrderEmailText = (order: Order, template: Template) => {
         ]
       : []),
     `Totalt: ${formatSek(order.totalSum)}`,
+    ...(template === Template.SPECIAL_INVITATION && actionUrl
+      ? [
+          "",
+          "GRANSKA OCH BETALA",
+          ...(specialOrderExpiry
+            ? [`Länken är giltig till ${specialOrderExpiry}.`]
+            : []),
+          actionUrl,
+        ]
+      : []),
     "",
     "LEVERANS TILL",
     customerName(order),
-    ...address,
+    ...(address.length ? address : ["Kompletteras innan betalning"]),
     "",
     `Har du frågor? Svara på det här mejlet eller kontakta ${theme.email}.`,
     "",
@@ -161,13 +222,19 @@ const sectionLabelStyle: CSSProperties = {
 };
 
 const EmailOrderTemplate: React.FC<TemplateType> = ({
+  actionUrl,
   copyrightYear,
   order,
   template,
 }) => {
   const { _id, customer, items, freightCost, discount, totalSum } = order;
+  const addressLine2 = distinctAddressLine2(
+    customer.postaddress,
+    customer.addressLine2
+  );
   const copy = orderCopy(template);
   const name = customerName(order);
+  const specialOrderExpiry = formatSpecialOrderExpiry(order);
   const discountAmount = discount?.amount ?? 0;
   const merchandiseTotal = Math.max(
     0,
@@ -448,8 +515,10 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({
                           width="100%"
                         >
                           <tbody>
-                            {items.map((item, itemIndex) => (
-                              <tr key={item._id || item.itemRef}>
+                            {items.map((item) => {
+                              const displayImage = item.finalImage || item.image;
+                              return (
+                                <tr key={item._id || item.itemRef || item.name}>
                                 <td
                                   className="email-item-image-cell"
                                   style={{
@@ -459,12 +528,12 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({
                                     width: "72px",
                                   }}
                                 >
-                                  {item.image ? (
+                                  {displayImage ? (
                                     <img
                                       alt={item.name}
                                       className="email-item-image"
                                       height="64"
-                                      src={item.image}
+                                      src={displayImage}
                                       style={{
                                         backgroundColor: colors.paper,
                                         borderRadius: "4px",
@@ -495,10 +564,16 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({
                                             style={{
                                               color: colors.accent,
                                               fontFamily: serif,
-                                              fontSize: "18px",
+                                              fontSize: "9px",
+                                              fontWeight: 700,
+                                              letterSpacing: "0.7px",
+                                              lineHeight: "130%",
+                                              textTransform: "uppercase",
                                             }}
                                           >
-                                            {String(itemIndex + 1).padStart(2, "0")}
+                                            Special
+                                            <br />
+                                            design
                                           </td>
                                         </tr>
                                       </tbody>
@@ -535,6 +610,32 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({
                                   >
                                     {item.quantity} st · {formatSek(item.price)}/st
                                   </p>
+                                  {item.description ? (
+                                    <p
+                                      style={{
+                                        color: colors.muted,
+                                        fontFamily: sans,
+                                        fontSize: "11px",
+                                        lineHeight: "150%",
+                                        margin: "7px 0 0",
+                                      }}
+                                    >
+                                      {item.description}
+                                    </p>
+                                  ) : null}
+                                  {!displayImage && order.kind === "SPECIAL" ? (
+                                    <p
+                                      style={{
+                                        color: colors.accentDark,
+                                        fontFamily: sans,
+                                        fontSize: "10px",
+                                        lineHeight: "145%",
+                                        margin: "7px 0 0",
+                                      }}
+                                    >
+                                      Bild läggs till när produkten är färdig.
+                                    </p>
+                                  ) : null}
                                   {(item.additionalItems ?? []).map(
                                     (addition) => (
                                       <p
@@ -579,12 +680,52 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({
                                 >
                                   {formatSek(item.price * item.quantity)}
                                 </td>
-                              </tr>
-                            ))}
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </td>
                     </tr>
+
+                    {template === Template.SPECIAL_INVITATION && actionUrl ? (
+                      <tr>
+                        <td
+                          align="center"
+                          className="email-pad"
+                          style={{ padding: "2px 32px 32px" }}
+                        >
+                          <a
+                            href={actionUrl}
+                            style={{
+                              backgroundColor: colors.accentDark,
+                              borderRadius: "999px",
+                              color: "#FFFFFF",
+                              display: "inline-block",
+                              fontFamily: sans,
+                              fontSize: "12px",
+                              fontWeight: 700,
+                              letterSpacing: "0.7px",
+                              padding: "14px 24px",
+                              textDecoration: "none",
+                            }}
+                          >
+                            Granska och gå till betalning
+                          </a>
+                          {specialOrderExpiry ? (
+                            <p
+                              style={{
+                                ...paragraphStyle,
+                                fontSize: "11px",
+                                marginTop: "10px",
+                              }}
+                            >
+                              Länken är giltig till {specialOrderExpiry}.
+                            </p>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ) : null}
 
                     <tr>
                       <td
@@ -629,9 +770,20 @@ const EmailOrderTemplate: React.FC<TemplateType> = ({
                                   {name}
                                 </p>
                                 <p style={{ ...paragraphStyle, fontSize: "13px" }}>
-                                  {customer.postaddress}
-                                  <br />
-                                  {customer.zipcode} {customer.city}
+                                  {customer.postaddress ||
+                                    "Kompletteras före betalning"}
+                                  {addressLine2 ? (
+                                    <>
+                                      <br />
+                                      {addressLine2}
+                                    </>
+                                  ) : null}
+                                  {customer.postaddress ? (
+                                    <>
+                                      <br />
+                                      {customer.zipcode} {customer.city}
+                                    </>
+                                  ) : null}
                                 </p>
                               </th>
                               <th

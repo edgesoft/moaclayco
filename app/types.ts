@@ -1,8 +1,13 @@
 export type OrderItem = {
   _id: string;
-  itemRef: string;
+  itemRef?: string;
+  templateItemRef?: string;
+  inventoryMode?: "TRACKED" | "UNTRACKED";
   name: string;
+  description?: string;
+  longDescription?: string;
   image: string;
+  finalImage?: string;
   quantity: number;
   price: number;
   additionalItems: Array<{
@@ -15,11 +20,14 @@ export type OrderItem = {
 
 export type Order = {
   _id: string;
+  checkoutToken?: string;
+  createdAt?: Date | string;
+  kind?: "STOREFRONT" | "SPECIAL";
   webhookAt?: Date | string,
   manualOrderAt?: Date | string,
   orderConfirmationEmailAt?: Date | string,
   shippingEmailAt?: Date | string,
-  status?: "OPENED" | "PENDING" | "FAILED" | "CANCELED" | "SUCCESS" | "PAID_REVIEW" | "MANUAL_PROCESSING" | "SHIPPED";
+  status?: "DRAFT" | "AWAITING_CUSTOMER" | "OPENED" | "PENDING" | "FAILED" | "CANCELED" | "SUCCESS" | "PAID_REVIEW" | "MANUAL_PROCESSING" | "SHIPPED";
   totalSum: number;
   paymentIntent?: {
     id: string;
@@ -32,8 +40,11 @@ export type Order = {
     lastname: string;
     email: string;
     postaddress: string;
+    addressLine2?: string;
     zipcode: string;
     city: string;
+    country?: string;
+    phone?: string;
   };
   discount: {
     amount: number;
@@ -42,6 +53,19 @@ export type Order = {
   };
   freightCost: number;
   items: OrderItem[];
+  specialOrder?: {
+    accessVersion?: number;
+    addressConfirmedAt?: Date | string;
+    expiresAt?: Date | string;
+    expiryIncludesTime?: boolean;
+    freightMode?: "AUTO" | "CUSTOM";
+    lockedAt?: Date | string;
+    publicOrigin?: string;
+    publicTokenHash?: string;
+    sentAt?: Date | string;
+    termsAcceptedAt?: Date | string;
+  };
+  updatedAt?: Date | string;
 };
 
 export type CollectionProps = {

@@ -20,13 +20,24 @@ const sekFormatter = new Intl.NumberFormat("sv-SE", {
 
 const formatSek = (amount: number) => `${sekFormatter.format(amount)} SEK`;
 
-function OrderItemMedia({ image }: { image?: string }) {
+function OrderItemMedia({
+  image,
+  special,
+}: {
+  image?: string;
+  special?: boolean;
+}) {
   const [failed, setFailed] = useState(false);
 
   return image && !failed ? (
     <img alt="" onError={() => setFailed(true)} src={image} />
   ) : (
-    <span aria-hidden="true">M</span>
+    <span
+      aria-hidden="true"
+      className={special ? "mcc-special-piece-placeholder" : undefined}
+    >
+      {special ? <><i /> <small>Unik</small></> : "M"}
+    </span>
   );
 }
 
@@ -69,8 +80,9 @@ export default function OrderSummary({
             <article className="mcc-purchase-item" key={item._id ?? item.itemRef}>
               <div className="mcc-purchase-item__media">
                 <OrderItemMedia
-                  image={item.image}
-                  key={item.image || "missing-image"}
+                  image={item.finalImage || item.image}
+                  key={item.finalImage || item.image || "missing-image"}
+                  special={item.inventoryMode === "UNTRACKED"}
                 />
               </div>
               <div className="mcc-purchase-item__copy">

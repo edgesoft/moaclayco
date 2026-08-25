@@ -29,6 +29,7 @@ import { orderCookie } from "~/services/order-cookie.server";
 import { Order } from "~/types";
 import { toLoaderData } from "~/utils/loaderData";
 import { checkoutOrderProjection } from "~/utils/queryProjections.server";
+import { specialOrderPublicUrl } from "~/services/special-order.server";
 
 let stripePromise: Stripe | PromiseLike<Stripe | null> | null = null;
 if (typeof document !== "undefined") {
@@ -53,7 +54,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const order = (await Orders.findOne({
     _id: requestedOrderId,
-    status: { $in: ["OPENED", "PENDING"] },
+    status: { $in: ["OPENED", "PENDING", "FAILED"] },
   })
     .select(checkoutOrderProjection)
     .lean()
@@ -65,14 +66,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return toLoaderData({
     clientSecret: order.paymentIntent.client_secret,
+    isSpecialOrder: order.kind === "SPECIAL",
+    returnPath:
+      order.kind === "SPECIAL" ? specialOrderPublicUrl(order) : "/cart",
     order: {
       discount: order.discount,
       freightCost: order.freightCost,
       items: order.items.map((item) => ({
-        _id: String(item._id ?? item.itemRef),
+        _id: String(item._id ?? item.itemRef ?? item.name),
         additionalItems: item.additionalItems ?? [],
         image: item.image,
-        itemRef: String(item.itemRef),
+        inventoryMode: item.inventoryMode,
+        itemRef: String(item.itemRef ?? item._id ?? item.name),
         name: item.name,
         price: item.price,
         quantity: item.quantity,
@@ -94,9 +99,11 @@ export const meta: MetaFunction<typeof loader> = () => {
 
 type CheckoutFormProps = {
   onReady: () => void;
+  returnPath: string;
+  termsAccepted: boolean;
 };
 
-function CheckoutForm({ onReady }: CheckoutFormProps) {
+function CheckoutForm({ onReady, returnPath, termsAccepted }: CheckoutFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const paymentElementRef = useRef<StripePaymentElement | null>(null);
@@ -116,7 +123,7 @@ function CheckoutForm({ onReady }: CheckoutFormProps) {
     event.preventDefault();
 
     if (!stripe || !elements || isSubmitting) return;
-    if (!termsRef.current?.checked) {
+    if (!termsAccepted && !termsRef.current?.checked) {
       setError("Du måste godkänna villkoren innan du går vidare.");
       termsRef.current?.focus();
       return;
@@ -186,16 +193,23 @@ function CheckoutForm({ onReady }: CheckoutFormProps) {
         }}
       />
 
-      <div className="mcc-checkout-terms">
-        <label>
-          <input ref={termsRef} type="checkbox" />
-          <span aria-hidden="true" className="mcc-checkout-checkbox" />
-          <span>Jag godkänner</span>
-        </label>
-        <button onClick={() => setShowTerms(true)} type="button">
-          villkoren
-        </button>
-      </div>
+      {termsAccepted ? (
+        <p className="mcc-checkout-terms-confirmed">
+          <span aria-hidden="true">✓</span>
+          Beställningen och villkoren är redan godkända
+        </p>
+      ) : (
+        <div className="mcc-checkout-terms">
+          <label>
+            <input ref={termsRef} type="checkbox" />
+            <span aria-hidden="true" className="mcc-checkout-checkbox" />
+            <span>Jag godkänner</span>
+          </label>
+          <button onClick={() => setShowTerms(true)} type="button">
+            villkoren
+          </button>
+        </div>
+      )}
 
       {error ? (
         <p aria-live="polite" className="mcc-checkout-error" role="alert">
@@ -222,9 +236,9 @@ function CheckoutForm({ onReady }: CheckoutFormProps) {
         )}
       </button>
 
-      <Link className="mcc-checkout-cart-return" to="/cart">
+      <Link className="mcc-checkout-cart-return" to={returnPath}>
         <ArrowIcon direction="left" />
-        Tillbaka till varukorgen
+        Tillbaka till beställningen
       </Link>
     </form>
   );
@@ -320,9 +334,9 @@ export default function CheckoutPage() {
     <main className="mcc-purchase-page mcc-checkout-page">
       <div className="mcc-purchase-shell">
         <header className="mcc-purchase-hero">
-          <Link className="mcc-purchase-back" to="/cart">
+          <Link className="mcc-purchase-back" to={data.returnPath}>
             <ArrowIcon direction="left" />
-            Tillbaka till varukorgen
+            {data.isSpecialOrder ? "Tillbaka till beställningen" : "Tillbaka till varukorgen"}
           </Link>
 
           <div className="mcc-purchase-hero__copy">
@@ -333,7 +347,7 @@ export default function CheckoutPage() {
 
           <ol aria-label="Steg i köpet" className="mcc-purchase-steps">
             <li>
-              <span>01</span> Varukorg
+              <span>01</span> {data.isSpecialOrder ? "Beställning" : "Varukorg"}
             </li>
             <li aria-current="step">
               <span>02</span> Betalning
@@ -380,7 +394,11 @@ export default function CheckoutPage() {
               ) : null}
               <div className="mcc-checkout-element__content">
                 <Elements options={options} stripe={stripePromise}>
-                  <CheckoutForm onReady={() => setPaymentReady(true)} />
+                  <CheckoutForm
+                    onReady={() => setPaymentReady(true)}
+                    returnPath={data.returnPath}
+                    termsAccepted={data.isSpecialOrder}
+                  />
                 </Elements>
               </div>
             </div>

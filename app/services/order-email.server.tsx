@@ -14,15 +14,26 @@ type MailSender = {
 };
 
 const emailKind = (template: Template) =>
-  template === Template.ORDER ? "order" : "shipping";
+  template === Template.ORDER
+    ? "order"
+    : template === Template.SPECIAL_INVITATION
+      ? "special-order"
+      : "shipping";
+
+type OrderEmailOptions = {
+  actionUrl?: string;
+  deliveryAttempt?: number;
+};
 
 export async function sendOrderEmail(
   order: Order,
   template: Template,
-  mailer: MailSender = transporter
+  mailer: MailSender = transporter,
+  options: OrderEmailOptions = {}
 ) {
   const markup = renderToStaticMarkup(
     <EmailOrderTemplate
+      actionUrl={options.actionUrl}
       copyrightYear={new Date().getFullYear()}
       order={order}
       template={template}
@@ -33,9 +44,13 @@ export async function sendOrderEmail(
     from: theme.email,
     to: order.customer.email,
     bcc: `${theme.email},wicket.programmer@gmail.com`,
-    messageId: `<${emailKind(template)}-${String(order._id)}@moaclayco.com>`,
+    messageId: `<${emailKind(template)}-${String(order._id)}${
+      options.deliveryAttempt && options.deliveryAttempt > 1
+        ? `-${options.deliveryAttempt}`
+        : ""
+    }@moaclayco.com>`,
     subject: getOrderEmailSubject(order, template),
-    text: getOrderEmailText(order, template),
+    text: getOrderEmailText(order, template, options.actionUrl),
     html: `<!doctype html>${markup}`,
   });
 }

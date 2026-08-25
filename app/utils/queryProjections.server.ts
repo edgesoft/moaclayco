@@ -18,13 +18,13 @@ export const landingItemProjection =
 export const discountProjection = "code expireAt percentage balance";
 
 export const checkoutOrderProjection =
-  "discount freightCost items paymentIntent.client_secret totalSum";
+  "discount freightCost items kind paymentIntent.client_secret specialOrder totalSum";
 
 export const orderConfirmationProjection =
   "customer discount freightCost items paymentIntent.id status totalSum";
 
 export const orderDetailProjection =
-  "customer discount freightCost items manualOrderAt paymentIntent shippingEmailAt status totalSum";
+  "createdAt customer discount freightCost items kind manualOrderAt paymentIntent shippingEmailAt specialOrder status totalSum webhookAt";
 
 export const verificationListProjection =
   "-_id recordType description verificationNumber verificationDate metadata.key metadata.value files.name files.path journalEntries.account journalEntries.debit journalEntries.credit";

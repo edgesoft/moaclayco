@@ -4,6 +4,7 @@ import { Verifications } from "../app/schemas/verifications";
 import { AccountingYears } from "../app/schemas/accounting-years";
 import { Collections } from "../app/schemas/collections";
 import { Discounts } from "../app/schemas/discounts";
+import { EmailDeliveries } from "../app/schemas/email-deliveries";
 import { Items } from "../app/schemas/items";
 import { ImageDrafts } from "../app/schemas/image-drafts";
 import { Orders } from "../app/schemas/orders";
@@ -157,11 +158,25 @@ test("accounting years only accept controlled open and closed states", async () 
   await assert.rejects(() => invalidYear.validate(), /not a valid enum value/);
 });
 
+test("image drafts accept special-order uploads", async () => {
+  const draft = new ImageDrafts({
+    draftId: "special-12345678",
+    expiresAt: new Date("2026-08-26T12:00:00.000Z"),
+    key: "stage/special-orders/test.webp",
+    kind: "special-order",
+    status: "draft",
+    url: "https://example.com/stage/special-orders/test.webp",
+  });
+
+  await draft.validate();
+});
+
 test("single-store Mongo schemas and indexes contain no domain key", () => {
   const models = [
     AccountingYears,
     Collections,
     Discounts,
+    EmailDeliveries,
     ImageDrafts,
     Items,
     Orders,
@@ -189,4 +204,13 @@ test("single-store Mongo schemas and indexes contain no domain key", () => {
   );
   assert.ok(counterIndex);
   assert.equal(counterIndex[1].unique, true);
+
+  const latestDeliveryIndex = EmailDeliveries.schema.indexes().find(
+    ([keys]) =>
+      keys.orderRef === 1 &&
+      keys.kind === 1 &&
+      keys.attempt === -1 &&
+      keys.createdAt === -1
+  );
+  assert.ok(latestDeliveryIndex);
 });

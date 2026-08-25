@@ -6114,6 +6114,30 @@ input[type="search"]::-ms-reveal {
   text-underline-offset: 0.18rem;
 }
 
+.mcc-checkout-terms-confirmed {
+  align-items: center;
+  border-top: 1px solid var(--mcc-purchase-line);
+  color: var(--mcc-purchase-muted);
+  display: flex;
+  font-size: 0.72rem;
+  gap: 0.55rem;
+  margin: 1.6rem 0 0;
+  padding-top: 1.15rem;
+}
+
+.mcc-checkout-terms-confirmed > span {
+  align-items: center;
+  border: 1px solid var(--mcc-purchase-accent);
+  border-radius: 50%;
+  color: var(--mcc-purchase-accent-dark);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.58rem;
+  height: 1.1rem;
+  justify-content: center;
+  width: 1.1rem;
+}
+
 .mcc-checkout-error {
   align-items: flex-start;
   color: #8f4039;
@@ -6265,6 +6289,32 @@ input[type="search"]::-ms-reveal {
   font-family: "Iowan Old Style", Georgia, serif;
   font-size: 1.2rem;
   font-style: italic;
+}
+
+.mcc-purchase-item__media > .mcc-special-piece-placeholder {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-style: normal;
+  gap: 0.28rem;
+}
+
+.mcc-special-piece-placeholder i {
+  border: 1px solid #ad765f;
+  border-radius: 52% 44% 49% 47%;
+  display: block;
+  height: 1.35rem;
+  transform: rotate(-8deg);
+  width: 1.15rem;
+}
+
+.mcc-special-piece-placeholder small {
+  color: #8e503e;
+  font-size: 0.4rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .mcc-purchase-item__copy {

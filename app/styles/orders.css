@@ -97,23 +97,38 @@ html.orders-scroll-context {
   max-width: 38rem;
 }
 
-.orders-header-note {
-  color: var(--orders-muted);
-  font-size: 0.72rem;
-  line-height: 1.55;
-  max-width: 15rem;
-  padding-bottom: 0.2rem;
-  text-align: right;
+.orders-header-actions {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
-.orders-header-note span {
-  color: var(--orders-ink);
-  display: block;
-  font-size: 0.62rem;
+.orders-special-create {
+  align-items: center;
+  background: var(--orders-accent-dark);
+  border: 1px solid var(--orders-accent-dark);
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.66rem;
   font-weight: 750;
-  letter-spacing: 0.12em;
-  margin-bottom: 0.15rem;
+  gap: 1.2rem;
+  letter-spacing: 0.08em;
+  min-height: 3.15rem;
+  padding: 0.75rem 1rem 0.75rem 1.25rem;
   text-transform: uppercase;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.orders-special-create:hover {
+  background: var(--orders-accent);
+  transform: translateY(-1px);
+}
+
+.orders-special-create svg {
+  font-size: 1.2rem;
 }
 
 .orders-summary {
@@ -464,6 +479,7 @@ html.orders-scroll-context {
   min-height: 5.2rem;
   padding: 0.8rem 1rem;
   text-align: left;
+  text-decoration: none;
   transition: background-color 160ms ease, box-shadow 160ms ease;
   width: 100%;
 }
@@ -515,6 +531,16 @@ html.orders-scroll-context {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.orders-special-label {
+  color: var(--orders-accent-dark);
+  font-size: 0.54rem;
+  font-style: normal;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  margin-top: 0.2rem;
+  text-transform: uppercase;
 }
 
 .orders-status,
@@ -678,20 +704,180 @@ html.orders-scroll-context {
   min-width: 0;
 }
 
-.order-detail-header,
-.order-detail-actions,
-.order-detail-grid,
-.order-detail-footnote {
-  animation: orders-detail-content-enter 380ms cubic-bezier(0.22, 1, 0.36, 1)
-    both;
+.order-detail-deliveries {
+  border-bottom: 1px solid var(--orders-line);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0 1.4rem;
 }
 
-.order-detail-header {
-  animation-delay: 45ms;
+.order-detail-deliveries > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  min-width: 0;
+  padding: 1rem 0;
 }
 
-.order-detail-actions {
-  animation-delay: 80ms;
+.order-detail-deliveries > div + div {
+  border-left: 1px solid var(--orders-line);
+  padding-left: 1rem;
+}
+
+.order-detail-deliveries span {
+  color: var(--orders-faint);
+  font-size: 0.56rem;
+  font-weight: 750;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.order-detail-deliveries strong {
+  color: var(--orders-muted);
+  font-size: 0.68rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.order-detail-deliveries button {
+  align-self: flex-start;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  color: var(--orders-accent-dark);
+  cursor: pointer;
+  font-size: 0.63rem;
+  margin-top: 0.35rem;
+  padding: 0 0 0.15rem;
+}
+
+.order-detail-final-image {
+  align-items: center;
+  background: #f6eee8;
+  border-bottom: 1px solid #dfd0c5;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  padding: 1.15rem 1.4rem;
+}
+
+.order-detail-final-image > img,
+.order-detail-final-image > div:first-child {
+  background: #e8ddd3;
+  height: 5.5rem;
+  object-fit: cover;
+  width: 5.5rem;
+}
+
+.order-detail-final-image > div:first-child {
+  align-items: center;
+  color: var(--orders-accent-dark);
+  display: flex;
+  font-size: 0.55rem;
+  font-weight: 750;
+  justify-content: center;
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.order-detail-final-image > div:last-child > span {
+  color: var(--orders-accent-dark);
+  display: block;
+  font-size: 0.55rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.order-detail-final-image strong {
+  display: block;
+  font-family: "Iowan Old Style", Georgia, serif;
+  font-size: 1.08rem;
+  font-weight: 400;
+  margin-top: 0.2rem;
+}
+
+.order-detail-final-image p {
+  color: var(--orders-muted);
+  font-size: 0.65rem;
+  line-height: 1.45;
+  margin: 0.3rem 0 0;
+}
+
+.order-detail-final-image .special-image-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.order-detail-final-image .special-image-upload > button {
+  align-self: flex-start;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  color: var(--orders-accent-dark);
+  cursor: pointer;
+  font-size: 0.64rem;
+  padding: 0 0 0.12rem;
+}
+
+.order-detail-final-image .special-image-upload__progress {
+  background: rgba(66, 57, 48, 0.12);
+  border-radius: 999px;
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.order-detail-final-image .special-image-upload__progress i {
+  background: var(--orders-accent);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width 140ms ease-out;
+}
+
+.order-detail-final-image .special-image-upload__status {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 13rem;
+  width: 100%;
+}
+
+.order-detail-final-image .special-image-upload__progress-meta {
+  align-items: baseline;
+  color: var(--orders-muted);
+  display: flex;
+  font-size: 0.58rem;
+  justify-content: space-between;
+  letter-spacing: 0.04em;
+}
+
+.order-detail-final-image .special-image-upload__progress-meta strong {
+  color: var(--orders-accent-dark);
+  font-family: inherit;
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  margin: 0;
+}
+
+.order-detail-final-image .special-image-upload > small {
+  color: #a24942;
+  font-size: 0.62rem;
+}
+
+.order-detail-action--special {
+  color: var(--orders-accent-dark) !important;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.order-detail-action--special svg {
+  font-size: 1.1rem;
 }
 
 .order-detail-grid {
@@ -945,6 +1131,13 @@ html.orders-scroll-context {
   margin-top: 0.22rem;
 }
 
+.order-detail-item__description {
+  color: var(--orders-muted);
+  font-size: 0.62rem;
+  line-height: 1.5;
+  margin: 0.45rem 0 0;
+}
+
 .order-detail-item__price {
   font-family: "Iowan Old Style", Georgia, serif;
   font-size: 0.86rem;
@@ -1082,18 +1275,6 @@ html.orders-scroll-context {
   }
 }
 
-@keyframes orders-detail-content-enter {
-  from {
-    opacity: 0;
-    transform: translateY(0.38rem);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @keyframes orders-placeholder-enter {
   from {
     opacity: 0;
@@ -1214,10 +1395,6 @@ html.orders-scroll-context {
     padding-bottom: 3.5rem;
   }
 
-  .orders-header-note {
-    display: none;
-  }
-
   .orders-tools {
     grid-template-columns: minmax(0, 1fr);
     padding-top: 0;
@@ -1299,7 +1476,14 @@ html.orders-scroll-context {
   }
 
   .orders-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1.1rem;
     padding-bottom: 1.5rem;
+  }
+
+  .orders-header-actions {
+    align-items: flex-start;
   }
 
   .orders-header h1 {

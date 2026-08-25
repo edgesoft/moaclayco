@@ -312,6 +312,7 @@ export const fromPaymentIntent = async (
       if (!transitionedOrder) return;
 
       for (const item of transitionedOrder.items) {
+        if (item.inventoryMode === "UNTRACKED") continue;
         const result = await dependencies.items.updateOne(
           {
             _id: new mongoose.Types.ObjectId(item.itemRef),

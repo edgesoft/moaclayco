@@ -7,35 +7,51 @@ import {
   useLoaderData,
   useLocation,
   useNavigate,
+  useRevalidator,
 } from "react-router";
 import { Orders } from "../schemas/orders";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { auth } from "~/services/auth.server";
 import stripeClient from "../stripeClient";
-import { sendOrderEmail } from "~/services/order-email.server";
-import { Template } from "~/components/mail/order";
 import { Order } from "~/types";
 import { Verifications } from "~/schemas/verifications";
 import { createVerification } from "~/services/verification.server";
 import { toLoaderData } from "~/utils/loaderData";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
-import type Stripe from "stripe";
 import {
   MAX_STANDARD_FORM_REQUEST_SIZE,
   readTextWithinLimit,
   RequestBodyTooLargeError,
 } from "~/utils/requestBody.server";
 import { orderDetailProjection } from "~/utils/queryProjections.server";
+import SpecialOrderImageUpload from "~/components/admin/SpecialOrderImageUpload";
+import {
+  createDeliberateResend,
+  deliverQueuedOrderEmail,
+  getLatestOrderEmailDelivery,
+  legacyShippingDeliveryView,
+  retryFailedOrderEmail,
+  type OrderEmailDelivery,
+} from "~/services/email-delivery.server";
+import {
+  FinalSpecialOrderImageRequiredError,
+  markOrderNotShipped,
+  markOrderShippedAndEmail,
+} from "~/services/order-shipping.server";
+import { canManageOrderShipment } from "~/utils/orderShipping.shared";
 
 type OrderDetailLoaderData = {
   order: Order;
-  intent: Stripe.PaymentIntent | null;
+  invitationDelivery: OrderEmailDelivery | null;
+  shippingDelivery: OrderEmailDelivery | null;
   verification: { verificationNumber: number } | null;
 };
 
 const orderStatusMeta = {
+  DRAFT: { label: "Utkast", tone: "manual" },
+  AWAITING_CUSTOMER: { label: "Inväntar kund", tone: "review" },
   SUCCESS: { label: "Betald", tone: "paid" },
   FAILED: { label: "Betalning misslyckades", tone: "failed" },
   SHIPPED: { label: "Skickad", tone: "shipped" },
@@ -99,46 +115,34 @@ function OrderItemMedia({ image, index }: { image?: string; index: number }) {
 export let loader: LoaderFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
 
-  const order = (await Orders.findOne({
-    _id: params.id,
-  })
-    .select(orderDetailProjection)
-    .lean()
-    .exec()) as unknown as Order | null;
+  const orderId = String(params.id ?? "");
+  const [order, storedInvitationDelivery, storedShippingDelivery, verification] =
+    await Promise.all([
+      Orders.findOne({ _id: orderId })
+        .select(orderDetailProjection)
+        .lean()
+        .exec() as unknown as Promise<Order | null>,
+      getLatestOrderEmailDelivery(orderId, "SPECIAL_ORDER_INVITATION"),
+      getLatestOrderEmailDelivery(orderId, "SHIPPING"),
+      Verifications.findOne({
+        "metadata.key": "orderId",
+        "metadata.value": orderId,
+      })
+        .select("verificationNumber")
+        .lean() as unknown as Promise<{ verificationNumber: number } | null>,
+    ]);
 
   if (!order) throw new Response("Order not found", { status: 404 });
 
-  const verification = (await Verifications.findOne({
-    "metadata.key": "orderId",
-    "metadata.value": params.id,
-  })
-    .select("verificationNumber")
-    .lean()) as unknown as { verificationNumber: number } | null;
+  const invitationDelivery =
+    order.kind === "SPECIAL" ? storedInvitationDelivery : null;
+  const shippingDelivery =
+    storedShippingDelivery ?? legacyShippingDeliveryView(order);
 
-  let intent = null;
-
-  if (order.status === "FAILED") {
-    try {
-      if (order.paymentIntent && order.paymentIntent.id) {
-        intent = await stripeClient.paymentIntents.retrieve(
-          order.paymentIntent.id
-        );
-      }
-      return json({
-        order: toLoaderData(order),
-        intent,
-        verification: toLoaderData(verification),
-      });
-    } catch (error) {
-      console.error("Stripe PaymentIntent could not be retrieved", {
-        orderId: order._id,
-        error,
-      });
-    }
-  }
   return json({
     order: toLoaderData(order),
-    intent: null,
+    invitationDelivery: toLoaderData(invitationDelivery),
+    shippingDelivery: toLoaderData(shippingDelivery),
     verification: toLoaderData(verification),
   });
 };
@@ -286,44 +290,61 @@ export let action: ActionFunction = async ({ request, params }) => {
     return {};
   }
 
+  if (
+    type === "process-email" ||
+    type === "retry-email" ||
+    type === "resend-email"
+  ) {
+    const kind = body.get("kind") === "invitation"
+      ? "SPECIAL_ORDER_INVITATION"
+      : "SHIPPING";
+    const order = await Orders.findById(params.id).lean<Order>();
+    if (!order) return json({ error: "Ordern hittades inte" }, { status: 404 });
+    const delivery = await getLatestOrderEmailDelivery(String(order._id), kind);
+    if (!delivery) {
+      return json({ error: "Mejlleveransen hittades inte" }, { status: 404 });
+    }
+    if (type === "process-email") {
+      if (delivery.status !== "PENDING") {
+        return json({ error: "Utskicket väntar inte längre i kön" }, { status: 409 });
+      }
+      await deliverQueuedOrderEmail(String(delivery._id));
+    } else if (type === "retry-email") {
+      if (delivery.status !== "FAILED") {
+        return json({ error: "Endast misslyckade utskick kan provas igen direkt" }, { status: 409 });
+      }
+      await retryFailedOrderEmail(String(delivery._id));
+    } else {
+      if (delivery.status !== "UNKNOWN") {
+        return json({ error: "Ett nytt utskick kräver okänd leveransstatus" }, { status: 409 });
+      }
+      await createDeliberateResend({
+        kind,
+        orderId: String(order._id),
+        recipient: order.customer.email,
+      });
+    }
+    return json({ ok: true });
+  }
+
   const shippingValue = body.get("on");
   if (shippingValue === null) {
     return json({ error: "Leveransstatus saknas" }, { status: 400 });
   }
 
-  const data = shippingValue === "true";
-  const order = await Orders.findOne({
-    _id: params.id,
-  }).lean<Order>();
-
-  if (order) {
-    if (data) {
-      const shippingEmailAt = order.shippingEmailAt
-        ? new Date(order.shippingEmailAt)
-        : new Date();
-      if (!order.shippingEmailAt) {
-        await sendOrderEmail(order, Template.SHIPPING);
-      }
-
-      await Orders.updateOne(
-        {
-          _id: params.id,
-        },
-        { $set: { status: "SHIPPED", shippingEmailAt } }
-      );
+  try {
+    if (shippingValue === "true") {
+      const result = await markOrderShippedAndEmail(String(params.id));
+      if (!result) return json({ error: "Ordern hittades inte" }, { status: 404 });
     } else {
-      await Orders.updateOne(
-        {
-          _id: params.id,
-        },
-        {
-          $set: {
-            status: order.manualOrderAt ? "MANUAL_PROCESSING" : "SUCCESS",
-          },
-          $unset: { shippingEmailAt: "" },
-        }
-      );
+      const result = await markOrderNotShipped(String(params.id));
+      if (!result) return json({ error: "Ordern hittades inte" }, { status: 404 });
     }
+  } catch (error) {
+    if (error instanceof FinalSpecialOrderImageRequiredError) {
+      return json({ error: error.message }, { status: 409 });
+    }
+    throw error;
   }
 
   return {};
@@ -342,37 +363,59 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
       totalSum,
       items,
       webhookAt,
+      createdAt,
       freightCost,
       status,
       discount,
       manualOrderAt,
+      kind,
     },
-    intent,
+    invitationDelivery,
+    shippingDelivery,
     verification,
   } = data;
-  const [on, setOn] = useState(status === "SHIPPED");
   const orderFetcher = useFetcher<{ error?: string }>();
+  const paymentErrorFetcher = useFetcher<{ message?: string }>();
   const location = useLocation();
   const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const swipeStartRef = useRef<{
     pointerId: number;
     x: number;
     y: number;
   } | null>(null);
-  const orderDate = webhookAt ?? manualOrderAt;
+  const orderDate = webhookAt ?? manualOrderAt ?? createdAt;
   const discountAmount = discount?.amount ?? 0;
   const productSubtotal = Math.max(0, totalSum - freightCost + discountAmount);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const statusInfo = getStatusInfo(status);
-  const canManage =
-    status === "SUCCESS" ||
-    status === "SHIPPED" ||
-    status === "MANUAL_PROCESSING";
+  const storedFinalImage = items[0]?.finalImage ?? "";
+  const [uploadedFinalImage, setUploadedFinalImage] = useState("");
+  const finalImage = uploadedFinalImage || storedFinalImage;
+  const canManageShipment = canManageOrderShipment({ kind, status });
   const pendingAction = orderFetcher.formData?.get("_action");
   const updatingShipment =
     orderFetcher.state !== "idle" && pendingAction === "shipping";
   const creatingVerification =
     orderFetcher.state !== "idle" && pendingAction === "verification";
+  const loadPaymentError = paymentErrorFetcher.load;
+
+  useEffect(() => {
+    if (
+      status !== "FAILED" ||
+      paymentErrorFetcher.data !== undefined ||
+      paymentErrorFetcher.state !== "idle"
+    ) {
+      return;
+    }
+    void loadPaymentError(`/admin/orders/${_id}/payment-error`);
+  }, [
+    _id,
+    loadPaymentError,
+    paymentErrorFetcher.data,
+    paymentErrorFetcher.state,
+    status,
+  ]);
 
   const requestedReturnTo = (location.state as { returnTo?: unknown } | null)
     ?.returnTo;
@@ -449,12 +492,19 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
   };
 
   const updateShipment = () => {
-    const nextValue = !on;
-    setOn(nextValue);
     orderFetcher.submit(
-      { _action: "shipping", on: String(nextValue) },
+      { _action: "shipping", on: String(status !== "SHIPPED") },
       { method: "post" }
     );
+  };
+
+  const deliveryCopy = (delivery: OrderEmailDelivery | null) => {
+    if (!delivery) return "Inte skickat";
+    if (delivery.status === "PENDING") return "Väntar på utskick";
+    if (delivery.status === "SENDING") return "Skickas nu";
+    if (delivery.status === "SENT") return "Mejl levererat till mejlservern";
+    if (delivery.status === "FAILED") return "Mejlet misslyckades";
+    return "Leveransstatus okänd — kontrollera innan nytt mejl";
   };
 
   return (
@@ -496,10 +546,48 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
         </div>
       </header>
 
-      {canManage ? (
+      {status === "DRAFT" && kind === "SPECIAL" ? (
         <div className="order-detail-actions" aria-label="Orderåtgärder">
           <button
-            aria-checked={on}
+            className="order-detail-action order-detail-action--special"
+            onClick={() => navigate(`/admin/special-orders/${_id}`)}
+            type="button"
+          >
+            Fortsätt redigera specialbeställningen
+            <ArrowIcon direction="up-right" />
+          </button>
+        </div>
+      ) : null}
+
+      {kind === "SPECIAL" && ["SUCCESS", "PAID_REVIEW", "MANUAL_PROCESSING"].includes(String(status)) ? (
+        <section className="order-detail-final-image" aria-label="Foto av färdig specialbeställning">
+          {finalImage ? (
+            <img alt={`Färdig ${items[0].name}`} key={finalImage} src={finalImage} />
+          ) : (
+            <div aria-hidden="true"><span>Foto saknas</span></div>
+          )}
+          <div>
+            <span>Före leverans</span>
+            <strong>Fotografera det färdiga exemplaret</strong>
+            <p>Fotot följer med leveransmejlet och måste finnas innan ordern markeras skickad.</p>
+            <SpecialOrderImageUpload
+              currentImage={finalImage}
+              label="Ladda upp slutfoto"
+              onComplete={(url) => {
+                setUploadedFinalImage(url);
+                void revalidator.revalidate();
+              }}
+              orderId={String(_id)}
+              purpose="final"
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {canManageShipment ? (
+        <div className="order-detail-actions" aria-label="Orderåtgärder">
+          <button
+            aria-checked={status === "SHIPPED"}
             className="order-detail-action"
             disabled={updatingShipment}
             onClick={updateShipment}
@@ -509,9 +597,9 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
             <span className="order-detail-switch" aria-hidden="true" />
             {updatingShipment
               ? "Uppdaterar…"
-              : on
+              : status === "SHIPPED"
               ? "Markerad som skickad"
-              : "Markera som skickad"}
+              : "Markera skickad och mejla kund"}
           </button>
 
           {verification ? (
@@ -538,10 +626,77 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
         </div>
       ) : null}
 
-      {intent?.last_payment_error?.message ? (
+      {invitationDelivery || shippingDelivery ? (
+        <section className="order-detail-deliveries" aria-label="Mejlleveranser">
+          {invitationDelivery ? (
+            <div>
+              <span>Privat betalningslänk</span>
+              <strong>{deliveryCopy(invitationDelivery)}</strong>
+              {["FAILED", "PENDING", "UNKNOWN"].includes(invitationDelivery.status) ? (
+                <button
+                  disabled={orderFetcher.state !== "idle"}
+                  onClick={() => orderFetcher.submit(
+                    {
+                      _action:
+                        invitationDelivery.status === "PENDING"
+                          ? "process-email"
+                          : invitationDelivery.status === "FAILED"
+                            ? "retry-email"
+                            : "resend-email",
+                      kind: "invitation",
+                    },
+                    { method: "post" }
+                  )}
+                  type="button"
+                >
+                  {invitationDelivery.status === "PENDING"
+                    ? "Skicka nu"
+                    : invitationDelivery.status === "FAILED"
+                      ? "Försök igen"
+                      : "Skicka ett nytt mejl"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {shippingDelivery ? (
+            <div>
+              <span>Leveransbesked</span>
+              <strong>{deliveryCopy(shippingDelivery)}</strong>
+              {["FAILED", "PENDING", "UNKNOWN"].includes(shippingDelivery.status) ? (
+                <button
+                  disabled={orderFetcher.state !== "idle"}
+                  onClick={() => orderFetcher.submit(
+                    {
+                      _action:
+                        shippingDelivery.status === "PENDING"
+                          ? "process-email"
+                          : shippingDelivery.status === "FAILED"
+                            ? "retry-email"
+                            : "resend-email",
+                      kind: "shipping",
+                    },
+                    { method: "post" }
+                  )}
+                  type="button"
+                >
+                  {shippingDelivery.status === "PENDING"
+                    ? "Skicka nu"
+                    : shippingDelivery.status === "FAILED"
+                      ? "Försök igen"
+                      : "Skicka ett nytt mejl"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {status === "FAILED" ? (
         <p className="order-detail-error">
-          <strong>Betalningen gick inte igenom.</strong>{" "}
-          {intent.last_payment_error.message}
+          <strong>Betalningen gick inte igenom.</strong>
+          {paymentErrorFetcher.data?.message
+            ? ` ${paymentErrorFetcher.data.message}`
+            : null}
         </p>
       ) : null}
 
@@ -564,15 +719,24 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
             {items.map((item, index) => (
               <li className="order-detail-item" key={item._id ?? item.itemRef}>
                 <OrderItemMedia
-                  image={item.image}
+                  image={
+                    kind === "SPECIAL"
+                      ? (index === 0 ? finalImage : item.finalImage) || item.image
+                      : item.image
+                  }
                   index={index}
-                  key={item.image || "missing-image"}
+                  key={
+                    (kind === "SPECIAL" && index === 0 ? finalImage : item.finalImage) ||
+                    item.image ||
+                    "missing-image"
+                  }
                 />
                 <div className="order-detail-item__copy">
                   <strong>{item.name}</strong>
                   <small>
                     {item.quantity} × {formatPrice(item.price)}
                   </small>
+                  {item.description ? <p className="order-detail-item__description">{item.description}</p> : null}
                   {item.additionalItems?.length ? (
                     <ul className="order-detail-additions">
                       {item.additionalItems.map((addition) => (
