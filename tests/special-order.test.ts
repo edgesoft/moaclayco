@@ -3,11 +3,13 @@ import test from "node:test";
 import reactRouterConfig, { actionOriginsFor } from "../react-router.config";
 import {
   calculateSpecialOrderTotal,
+  canShareSpecialOrderInvitation,
   createSpecialOrderAccessToken,
   hashSpecialOrderAccessToken,
   readSpecialOrderAccessToken,
   resolveSpecialOrderFreightCost,
   specialOrderFormSchema,
+  specialOrderPublicUrl,
 } from "../app/services/special-order.server";
 import {
   specialOrderSourceImage,
@@ -44,6 +46,57 @@ test("special-order access tokens are signed, stable and reject tampering", () =
   const [payload, signature] = token.split(".");
   assert.equal(readSpecialOrderAccessToken(`${payload}.${signature.slice(0, -1)}x`), null);
   assert.equal(readSpecialOrderAccessToken(`${payload}.invalid`), null);
+});
+
+test("active special-order invitations expose their existing signed URL to admin", () => {
+  const specialOrder = {
+    _id: orderId,
+    kind: "SPECIAL" as const,
+    specialOrder: {
+      accessVersion: 3,
+      expiresAt: "2026-09-01T20:00:00.000Z",
+      publicOrigin: "https://moaclayco-stage.fly.dev",
+      publicTokenHash: hashSpecialOrderAccessToken(
+        createSpecialOrderAccessToken(orderId, 3)
+      ),
+    },
+    status: "AWAITING_CUSTOMER" as const,
+  };
+
+  const now = new Date("2026-08-26T10:00:00.000Z");
+  assert.equal(canShareSpecialOrderInvitation(specialOrder, now), true);
+  const url = new URL(specialOrderPublicUrl(specialOrder));
+  assert.equal(url.origin, "https://moaclayco-stage.fly.dev");
+  const token = decodeURIComponent(url.pathname.split("/").at(-1) ?? "");
+  assert.deepEqual(readSpecialOrderAccessToken(token), {
+    orderId,
+    version: 3,
+  });
+
+  assert.equal(
+    canShareSpecialOrderInvitation({ ...specialOrder, status: "SUCCESS" }, now),
+    false
+  );
+  assert.equal(
+    canShareSpecialOrderInvitation({
+      ...specialOrder,
+      specialOrder: {
+        ...specialOrder.specialOrder,
+        publicTokenHash: "stale-token-hash",
+      },
+    }, now),
+    false
+  );
+  assert.equal(
+    canShareSpecialOrderInvitation({
+      ...specialOrder,
+      specialOrder: {
+        ...specialOrder.specialOrder,
+        expiresAt: "2026-08-25T20:00:00.000Z",
+      },
+    }, now),
+    false
+  );
 });
 
 test("special-order totals stay precise and include quantity plus freight", () => {

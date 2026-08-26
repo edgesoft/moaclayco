@@ -751,6 +751,37 @@ html.orders-scroll-context {
   padding: 0 0 0.15rem;
 }
 
+.order-detail-delivery-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.85rem;
+  margin-top: 0.35rem;
+}
+
+.order-detail-deliveries .order-detail-delivery-actions button {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-top: 0;
+}
+
+.order-detail-delivery-actions svg {
+  height: 0.82rem;
+  width: 0.82rem;
+}
+
+.order-detail-delivery-feedback {
+  color: var(--orders-muted);
+  font-size: 0.62rem;
+  line-height: 1.45;
+  margin-top: 0.15rem;
+}
+
+.order-detail-delivery-feedback.is-error {
+  color: #9a4941;
+}
+
 .order-detail-final-image {
   align-items: center;
   background: #f6eee8;
@@ -1496,6 +1527,17 @@ html.orders-scroll-context {
 
   .orders-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .order-detail-deliveries {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: 1rem;
+  }
+
+  .order-detail-deliveries > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--orders-line);
+    padding-left: 0;
   }
 
   .orders-summary > div,

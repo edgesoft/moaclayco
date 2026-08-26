@@ -224,6 +224,41 @@ export const specialOrderPublicUrl = (order: Pick<Order, "_id" | "specialOrder">
   )}`;
 };
 
+const shareableInvitationStatuses = new Set<Order["status"]>([
+  "AWAITING_CUSTOMER",
+  "OPENED",
+  "PENDING",
+  "FAILED",
+]);
+
+export const canShareSpecialOrderInvitation = (
+  order: Pick<Order, "_id" | "kind" | "specialOrder" | "status">,
+  now = new Date()
+) => {
+  const version = order.specialOrder?.accessVersion;
+  const expiresAt = new Date(order.specialOrder?.expiresAt ?? 0);
+  const storedTokenHash = order.specialOrder?.publicTokenHash;
+  if (
+    order.kind === "SPECIAL" &&
+    shareableInvitationStatuses.has(order.status) &&
+    typeof version === "number" &&
+    Number.isInteger(version) &&
+    Boolean(order.specialOrder?.publicOrigin) &&
+    Boolean(storedTokenHash) &&
+    !Number.isNaN(expiresAt.getTime()) &&
+    expiresAt.getTime() > now.getTime()
+  ) {
+    try {
+      safePublicOrigin(order.specialOrder?.publicOrigin ?? "");
+      const token = createSpecialOrderAccessToken(String(order._id), version);
+      return hashSpecialOrderAccessToken(token) === storedTokenHash;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+};
+
 export async function lockAndSendSpecialOrder(input: {
   expiresAt: string;
   orderId: string;

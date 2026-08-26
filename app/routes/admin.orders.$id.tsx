@@ -1,6 +1,7 @@
 import {
   ActionFunction,
   data as json,
+  HeadersFunction,
   LoaderFunction,
   MetaFunction,
   useFetcher,
@@ -20,6 +21,7 @@ import { createVerification } from "~/services/verification.server";
 import { toLoaderData } from "~/utils/loaderData";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
+import ClientOnly from "~/components/ClientOnly";
 import {
   MAX_STANDARD_FORM_REQUEST_SIZE,
   readTextWithinLimit,
@@ -41,11 +43,16 @@ import {
   markOrderShippedAndEmail,
 } from "~/services/order-shipping.server";
 import { canManageOrderShipment } from "~/utils/orderShipping.shared";
+import {
+  canShareSpecialOrderInvitation,
+  specialOrderPublicUrl,
+} from "~/services/special-order.server";
 
 type OrderDetailLoaderData = {
   order: Order;
   invitationDelivery: OrderEmailDelivery | null;
   shippingDelivery: OrderEmailDelivery | null;
+  specialOrderUrl: string | null;
   verification: { verificationNumber: number } | null;
 };
 
@@ -112,6 +119,28 @@ function OrderItemMedia({ image, index }: { image?: string; index: number }) {
   );
 }
 
+const writeClipboardText = async (value: string) => {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  if (!copied) throw new Error("Clipboard copy was rejected");
+};
+
+export const headers: HeadersFunction = () => ({
+  "Cache-Control": "private, no-store",
+});
+
 export let loader: LoaderFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
 
@@ -138,11 +167,15 @@ export let loader: LoaderFunction = async ({ request, params }) => {
     order.kind === "SPECIAL" ? storedInvitationDelivery : null;
   const shippingDelivery =
     storedShippingDelivery ?? legacyShippingDeliveryView(order);
+  const specialOrderUrl = canShareSpecialOrderInvitation(order)
+    ? specialOrderPublicUrl(order)
+    : null;
 
   return json({
     order: toLoaderData(order),
     invitationDelivery: toLoaderData(invitationDelivery),
     shippingDelivery: toLoaderData(shippingDelivery),
+    specialOrderUrl,
     verification: toLoaderData(verification),
   });
 };
@@ -383,6 +416,7 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
     },
     invitationDelivery,
     shippingDelivery,
+    specialOrderUrl,
     verification,
   } = data;
   const orderFetcher = useFetcher<{ error?: string }>();
@@ -402,6 +436,10 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
   const statusInfo = getStatusInfo(status);
   const storedFinalImage = items[0]?.finalImage ?? "";
   const [uploadedFinalImage, setUploadedFinalImage] = useState("");
+  const [invitationActionMessage, setInvitationActionMessage] = useState<{
+    kind: "error" | "success";
+    text: string;
+  } | null>(null);
   const finalImage = uploadedFinalImage || storedFinalImage;
   const canManageShipment = canManageOrderShipment({ kind, status });
   const pendingAction = orderFetcher.formData?.get("_action");
@@ -507,6 +545,43 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
       { _action: "shipping", on: String(status !== "SHIPPED") },
       { method: "post" }
     );
+  };
+
+  const copyInvitationLink = async () => {
+    if (!specialOrderUrl) return;
+    try {
+      await writeClipboardText(specialOrderUrl);
+      setInvitationActionMessage({
+        kind: "success",
+        text: "Betalningslänken är kopierad.",
+      });
+    } catch {
+      setInvitationActionMessage({
+        kind: "error",
+        text: "Länken kunde inte kopieras. Försök igen.",
+      });
+    }
+  };
+
+  const shareInvitationLink = async () => {
+    if (!specialOrderUrl || typeof navigator.share !== "function") return;
+    try {
+      await navigator.share({
+        title: "Privat beställning · Moa Clay Co",
+        text: "Här är den privata betalningslänken för din beställning.",
+        url: specialOrderUrl,
+      });
+      setInvitationActionMessage({
+        kind: "success",
+        text: "Betalningslänken är delad.",
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setInvitationActionMessage({
+        kind: "error",
+        text: "Delningen kunde inte öppnas. Kopiera länken i stället.",
+      });
+    }
   };
 
   const deliveryCopy = (delivery: OrderEmailDelivery | null) => {
@@ -637,13 +712,61 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
         </div>
       ) : null}
 
-      {invitationDelivery || shippingDelivery ? (
-        <section className="order-detail-deliveries" aria-label="Mejlleveranser">
-          {invitationDelivery ? (
+      {invitationDelivery || specialOrderUrl || shippingDelivery ? (
+        <section
+          className="order-detail-deliveries"
+          aria-label="Betalningslänk och mejlleveranser"
+        >
+          {invitationDelivery || specialOrderUrl ? (
             <div>
               <span>Privat betalningslänk</span>
               <strong>{deliveryCopy(invitationDelivery)}</strong>
-              {["FAILED", "PENDING", "UNKNOWN"].includes(invitationDelivery.status) ? (
+              {specialOrderUrl ? (
+                <>
+                  <div className="order-detail-delivery-actions">
+                    <button
+                      aria-label="Kopiera betalningslänk"
+                      onClick={() => void copyInvitationLink()}
+                      type="button"
+                    >
+                      Kopiera länk
+                    </button>
+                    <ClientOnly>
+                      {() => {
+                        const shareData = {
+                          title: "Privat beställning · Moa Clay Co",
+                          text: "Här är den privata betalningslänken för din beställning.",
+                          url: specialOrderUrl,
+                        };
+                        const canShare =
+                          typeof navigator.share === "function" &&
+                          (typeof navigator.canShare !== "function" ||
+                            navigator.canShare(shareData));
+                        return canShare ? (
+                          <button
+                            aria-label="Dela betalningslänk"
+                            onClick={() => void shareInvitationLink()}
+                            type="button"
+                          >
+                            Dela
+                            <ArrowIcon direction="up-right" />
+                          </button>
+                        ) : null;
+                      }}
+                    </ClientOnly>
+                  </div>
+                  {invitationActionMessage ? (
+                    <small
+                      className={`order-detail-delivery-feedback is-${invitationActionMessage.kind}`}
+                      role="status"
+                    >
+                      {invitationActionMessage.text}
+                    </small>
+                  ) : null}
+                </>
+              ) : null}
+              {invitationDelivery &&
+              ["FAILED", "PENDING", "UNKNOWN"].includes(invitationDelivery.status) ? (
                 <button
                   disabled={orderFetcher.state !== "idle"}
                   onClick={() => orderFetcher.submit(
