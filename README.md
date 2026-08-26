@@ -10,7 +10,15 @@ Git-ignored `.env.stage.local` file and is available at
 Start the app:
 
 ```sh
-docker compose -f compose.local.yml up --build
+docker compose -f compose.local.yml up --build --detach --wait
+```
+
+Detached mode keeps localhost running when the terminal session closes. The
+container also restarts automatically after an unexpected process or Docker
+daemon restart. Follow the development log when needed:
+
+```sh
+docker compose -f compose.local.yml logs --follow app
 ```
 
 Stop it:
