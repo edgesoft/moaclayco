@@ -1647,14 +1647,6 @@
   width: 120px;
 }
 
-.special-address-autocomplete__error {
-  color: #8f463c;
-  display: block;
-  font-size: 0.72rem;
-  line-height: 1.45;
-  padding: 0.85rem 1rem;
-}
-
 @keyframes special-address-progress {
   0% {
     opacity: 0.35;

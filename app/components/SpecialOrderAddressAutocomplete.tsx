@@ -156,9 +156,7 @@ export default function SpecialOrderAddressAutocomplete({
 
   const nativeAutocomplete = shouldUseNativeAddressAutocomplete(apiKey, failed);
   const googleAutocomplete = !nativeAutocomplete;
-  const open = focused && (
-    suggestions.length > 0 || (failed && value.trim().length >= 3)
-  );
+  const open = focused && suggestions.length > 0;
 
   useEffect(() => {
     onNativeAutocompleteChange?.(nativeAutocomplete);
@@ -337,11 +335,6 @@ export default function SpecialOrderAddressAutocomplete({
                   );
                 })}
               </div>
-            ) : null}
-            {failed ? (
-              <small className="special-address-autocomplete__error" role="status">
-                Adressförslag är tillfälligt otillgängliga. Fyll i adressen manuellt.
-              </small>
             ) : null}
             {suggestions.length ? (
               <div className="special-address-autocomplete__attribution">
