@@ -1702,6 +1702,17 @@ html.orders-scroll-context {
     justify-self: start;
   }
 
+  .order-detail-link-manager .special-expiry-calendar {
+    bottom: auto;
+    left: 1rem;
+    max-height: calc(100svh - 6.5rem);
+    overflow-y: auto;
+    position: fixed;
+    right: 1rem;
+    top: 5.5rem;
+    width: auto;
+  }
+
   .order-detail-link-manager__confirm {
     align-items: flex-start;
     flex-direction: column;
