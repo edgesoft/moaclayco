@@ -9,6 +9,7 @@ import type {
 import { z } from "zod";
 import { distinctAddressLine2 } from "~/utils/customerAddress";
 import ArrowIcon from "~/components/ArrowIcon";
+import SpecialOrderAddressAutocomplete from "~/components/SpecialOrderAddressAutocomplete";
 import Terms from "~/components/terms";
 import { theme } from "~/components/Theme";
 import { Orders } from "~/schemas/orders";
@@ -16,6 +17,7 @@ import {
   buildCheckoutPaymentIntent,
 } from "~/services/checkout-payment.server";
 import { orderCookie } from "~/services/order-cookie.server";
+import { googleMapsBrowserApiKey } from "~/services/google-maps.server";
 import {
   hashSpecialOrderAccessToken,
   readSpecialOrderAccessToken,
@@ -38,7 +40,7 @@ export const links: LinksFunction = () => [
 
 export const headers: HeadersFunction = () => ({
   "Cache-Control": "private, no-store",
-  "Referrer-Policy": "no-referrer",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
   "X-Robots-Tag": "noindex, nofollow",
 });
 
@@ -83,11 +85,12 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     throw new Response("Länken är inte giltig", { status: 404 });
   }
   if (!["ACTIVE", "COMPLETE"].includes(result.linkState)) {
-    return json({ linkState: result.linkState, order: null });
+    return json({ googleMapsApiKey: "", linkState: result.linkState, order: null });
   }
   const { order } = result;
   return json(
     toLoaderData({
+      googleMapsApiKey: googleMapsBrowserApiKey(),
       linkState: result.linkState,
       order: {
         _id: order._id,
@@ -269,10 +272,13 @@ const money = (amount: number) =>
   }).format(amount);
 
 export default function SpecialOrderPage() {
-  const { linkState, order } = useLoaderData<typeof loader>();
+  const { googleMapsApiKey, linkState, order } = useLoaderData<typeof loader>();
   const actionData = useActionData<{ errors?: Record<string, string> }>();
   const navigation = useNavigation();
   const [showTerms, setShowTerms] = useState(false);
+  const [postaddress, setPostaddress] = useState(order?.customer.postaddress ?? "");
+  const [zipcode, setZipcode] = useState(order?.customer.zipcode ?? "");
+  const [city, setCity] = useState(order?.customer.city ?? "");
   if (!order) {
     const stateCopy = {
       EXPIRED: {
@@ -382,17 +388,21 @@ export default function SpecialOrderPage() {
             </div>
           </div>
           <div className="special-public-address__fields">
-            <label className="special-public-field--wide">
-              <span>Gatuadress</span>
-              <input
-                autoComplete="address-line1"
-                defaultValue={order.customer.postaddress}
-                name="postaddress"
-                placeholder="Gatuadress och nummer"
-                required
-              />
-              {actionData?.errors?.postaddress ? <small>{actionData.errors.postaddress}</small> : null}
-            </label>
+            <SpecialOrderAddressAutocomplete
+              apiKey={googleMapsApiKey}
+              className="special-public-field--wide"
+              error={actionData?.errors?.postaddress}
+              label="Gatuadress"
+              onAddressSelect={(address) => {
+                setPostaddress(address.postaddress);
+                if (address.zipcode) setZipcode(address.zipcode);
+                if (address.city) setCity(address.city);
+              }}
+              onChange={setPostaddress}
+              placeholder="Gatuadress och nummer"
+              required
+              value={postaddress}
+            />
             <label>
               <span>Adressrad 2 <em>valfritt</em></span>
               <input
@@ -404,12 +414,12 @@ export default function SpecialOrderPage() {
             </label>
             <label>
               <span>Postnummer</span>
-              <input autoComplete="postal-code" defaultValue={order.customer.zipcode} inputMode="numeric" name="zipcode" placeholder="123 45" required />
+              <input autoComplete="postal-code" inputMode="numeric" name="zipcode" onChange={(event) => setZipcode(event.target.value)} placeholder="123 45" required value={zipcode} />
               {actionData?.errors?.zipcode ? <small>{actionData.errors.zipcode}</small> : null}
             </label>
             <label>
               <span>Ort</span>
-              <input autoComplete="address-level2" defaultValue={order.customer.city} name="city" placeholder="Ort" required />
+              <input autoComplete="address-level2" name="city" onChange={(event) => setCity(event.target.value)} placeholder="Ort" required value={city} />
               {actionData?.errors?.city ? <small>{actionData.errors.city}</small> : null}
             </label>
             <label>

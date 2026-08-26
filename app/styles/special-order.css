@@ -163,6 +163,7 @@
 }
 
 .special-editor-fields label,
+.special-editor-fields .special-address-field,
 .special-editor-freight-field,
 .special-editor-piece-copy label {
   display: flex;
@@ -171,6 +172,7 @@
 }
 
 .special-editor-fields label > span,
+.special-editor-fields .special-address-field > label,
 .special-editor-field-label,
 .special-editor-piece-copy label > span {
   color: var(--special-muted);
@@ -1490,7 +1492,21 @@
   flex-direction: column;
 }
 
+.special-public-address__fields .special-address-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .special-public-address__fields label > span {
+  color: var(--public-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.special-public-address__fields .special-address-field > label {
   color: var(--public-muted);
   font-size: 0.62rem;
   font-weight: 700;
@@ -1520,10 +1536,146 @@
 }
 
 .special-public-address__fields label > small,
+.special-public-address__fields .special-address-field > small,
 .special-public-form-error {
   color: #a34d45;
   font-size: 0.69rem;
   margin: 0.35rem 0 0;
+}
+
+.special-address-autocomplete {
+  display: block;
+  min-width: 0;
+  position: relative;
+}
+
+.special-address-autocomplete > input {
+  width: 100%;
+}
+
+.special-address-autocomplete__progress {
+  animation: special-address-progress 1.05s ease-in-out infinite;
+  background: var(--special-accent, var(--public-accent, #b86e59));
+  bottom: 0;
+  height: 2px;
+  left: 0;
+  position: absolute;
+  transform-origin: left;
+  width: 36%;
+}
+
+.special-address-autocomplete__popover {
+  background: var(--special-surface, var(--public-surface, #fffdf8));
+  border: 1px solid var(--special-line, var(--public-line, rgba(66, 57, 48, 0.18)));
+  box-shadow: 0 1.2rem 3rem rgba(46, 38, 31, 0.14);
+  color: var(--special-ink, var(--public-ink, #211f1c));
+  left: 0;
+  overflow: hidden;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.45rem);
+  z-index: 30;
+}
+
+.special-address-autocomplete__results {
+  max-height: min(19rem, 48vh);
+  overflow-y: auto;
+}
+
+.special-address-autocomplete__results button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--special-line, var(--public-line, rgba(66, 57, 48, 0.18)));
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 0.95rem 1rem;
+  text-align: left;
+  width: 100%;
+}
+
+.special-address-autocomplete__results button:hover,
+.special-address-autocomplete__results button[aria-selected="true"] {
+  background: rgba(184, 110, 89, 0.09);
+}
+
+.special-address-autocomplete__results button > span:first-child {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.special-address-autocomplete__results strong,
+.special-address-autocomplete__results small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.special-address-autocomplete__results strong {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.special-address-autocomplete__results small {
+  color: var(--special-muted, var(--public-muted, #726c64));
+  font-size: 0.72rem;
+}
+
+.special-address-autocomplete__results button > span:last-child {
+  color: var(--special-accent-dark, var(--public-accent-dark, #8e503e));
+  flex: 0 0 auto;
+  font-size: 1rem;
+}
+
+.special-address-autocomplete__attribution {
+  align-items: center;
+  background: #fff;
+  display: flex;
+  justify-content: flex-end;
+  min-height: 2rem;
+  padding: 0.45rem 0.7rem;
+}
+
+.special-address-autocomplete__attribution img {
+  display: block;
+  height: 14px;
+  width: 120px;
+}
+
+.special-address-autocomplete__error {
+  color: #8f463c;
+  display: block;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  padding: 0.85rem 1rem;
+}
+
+@keyframes special-address-progress {
+  0% {
+    opacity: 0.35;
+    transform: translateX(0) scaleX(0.25);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(85%) scaleX(1.25);
+  }
+  100% {
+    opacity: 0.35;
+    transform: translateX(180%) scaleX(0.25);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .special-address-autocomplete__progress {
+    animation: none;
+    opacity: 0.75;
+    width: 100%;
+  }
 }
 
 .special-public-consent {

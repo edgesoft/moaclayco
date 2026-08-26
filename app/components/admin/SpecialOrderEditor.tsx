@@ -6,6 +6,7 @@ import {
   useNavigation,
 } from "react-router";
 import ArrowIcon from "~/components/ArrowIcon";
+import SpecialOrderAddressAutocomplete from "~/components/SpecialOrderAddressAutocomplete";
 import SpecialOrderExpiryControl from "~/components/admin/SpecialOrderExpiryControl";
 import SpecialOrderImageUpload from "~/components/admin/SpecialOrderImageUpload";
 import type { Order } from "~/types";
@@ -27,6 +28,7 @@ export type SpecialOrderSource = {
 };
 
 export type SpecialOrderEditorData = {
+  googleMapsApiKey: string;
   order?: Order;
   sources: SpecialOrderSource[];
 };
@@ -54,6 +56,7 @@ const imageFileName = (value: string) => {
 };
 
 export default function SpecialOrderEditor({
+  googleMapsApiKey,
   order,
   sources,
 }: SpecialOrderEditorData) {
@@ -84,6 +87,9 @@ export default function SpecialOrderEditor({
   const [image, setImage] = useState(
     savedItem?.image ?? initialSource?.images[0] ?? initialSource?.image ?? ""
   );
+  const [postaddress, setPostaddress] = useState(order?.customer.postaddress ?? "");
+  const [zipcode, setZipcode] = useState(order?.customer.zipcode ?? "");
+  const [city, setCity] = useState(order?.customer.city ?? "");
   const [expiresAt, setExpiresAt] = useState(() =>
     order?.specialOrder?.expiresAt
       ? specialOrderExpiryFormValue(
@@ -531,15 +537,19 @@ export default function SpecialOrderEditor({
               </div>
             </div>
             <div className="special-editor-fields special-editor-fields--address">
-              <label className="special-editor-field--wide">
-                <span>Gatuadress</span>
-                <input
-                  autoComplete="address-line1"
-                  defaultValue={order?.customer.postaddress}
-                  name="postaddress"
-                  placeholder="Exempelgatan 12"
-                />
-              </label>
+              <SpecialOrderAddressAutocomplete
+                apiKey={googleMapsApiKey}
+                className="special-editor-field--wide"
+                label="Gatuadress"
+                onAddressSelect={(address) => {
+                  setPostaddress(address.postaddress);
+                  if (address.zipcode) setZipcode(address.zipcode);
+                  if (address.city) setCity(address.city);
+                }}
+                onChange={setPostaddress}
+                placeholder="Exempelgatan 12"
+                value={postaddress}
+              />
               <label>
                 <span>Adressrad 2</span>
                 <input
@@ -553,19 +563,21 @@ export default function SpecialOrderEditor({
                 <span>Postnummer</span>
                 <input
                   autoComplete="postal-code"
-                  defaultValue={order?.customer.zipcode}
                   inputMode="numeric"
                   name="zipcode"
+                  onChange={(event) => setZipcode(event.target.value)}
                   placeholder="123 45"
+                  value={zipcode}
                 />
               </label>
               <label>
                 <span>Ort</span>
                 <input
                   autoComplete="address-level2"
-                  defaultValue={order?.customer.city}
                   name="city"
+                  onChange={(event) => setCity(event.target.value)}
                   placeholder="Stockholm"
+                  value={city}
                 />
               </label>
               <input name="country" type="hidden" value="Sverige" />

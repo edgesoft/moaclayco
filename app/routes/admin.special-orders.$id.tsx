@@ -10,6 +10,7 @@ import SpecialOrderEditor, {
 } from "~/components/admin/SpecialOrderEditor";
 import { Orders } from "~/schemas/orders";
 import { auth } from "~/services/auth.server";
+import { googleMapsBrowserApiKey } from "~/services/google-maps.server";
 import {
   deliverQueuedOrderEmail,
   queueOrderEmail,
@@ -49,7 +50,11 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   if (!order) throw new Response("Beställningen hittades inte", { status: 404 });
   if (order.status !== "DRAFT") return redirect(`/admin/orders/${params.id}`);
   return json<SpecialOrderEditorData>(
-    toLoaderData({ order, sources: await sourceProducts() })
+    toLoaderData({
+      googleMapsApiKey: googleMapsBrowserApiKey(),
+      order,
+      sources: await sourceProducts(),
+    })
   );
 };
 

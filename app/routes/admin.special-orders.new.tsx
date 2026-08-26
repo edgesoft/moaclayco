@@ -9,6 +9,7 @@ import SpecialOrderEditor, {
   type SpecialOrderEditorData,
 } from "~/components/admin/SpecialOrderEditor";
 import { auth } from "~/services/auth.server";
+import { googleMapsBrowserApiKey } from "~/services/google-maps.server";
 import {
   deliverQueuedOrderEmail,
   queueOrderEmail,
@@ -39,7 +40,10 @@ export const meta: MetaFunction = () => [
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
-  return json<SpecialOrderEditorData>({ sources: await sourceProducts() });
+  return json<SpecialOrderEditorData>({
+    googleMapsApiKey: googleMapsBrowserApiKey(),
+    sources: await sourceProducts(),
+  });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
