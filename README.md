@@ -10,7 +10,15 @@ Git-ignored `.env.stage.local` file and is available at
 Start the app:
 
 ```sh
-docker compose -f compose.local.yml up --build
+docker compose -f compose.local.yml up --build --detach --wait
+```
+
+Detached mode keeps localhost running when the terminal session closes. The
+container also restarts automatically after an unexpected process or Docker
+daemon restart. Follow the development log when needed:
+
+```sh
+docker compose -f compose.local.yml logs --follow app
 ```
 
 Stop it:
@@ -56,6 +64,7 @@ the `.env` file should contain the following keys.
  - MONGODB_URL `url to mongodb atlas`
  - EMAIL_PASSWORD `email password`
  - EMAIL_USERNAME `email username`
+ - EMAIL_REDIRECT_TO optional stage-only recipient that safely captures every order email and disables BCC
  - NODE_ENV `production` or `development`
  - STRIPE_PUBLIC_KEY `public key` to Stripe
  - STRIPE_SRV `server key` to Stripe

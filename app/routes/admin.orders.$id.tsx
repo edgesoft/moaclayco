@@ -1,41 +1,83 @@
 import {
   ActionFunction,
   data as json,
+  HeadersFunction,
+  LinksFunction,
   LoaderFunction,
   MetaFunction,
   useFetcher,
   useLoaderData,
   useLocation,
   useNavigate,
+  useRevalidator,
 } from "react-router";
 import { Orders } from "../schemas/orders";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { auth } from "~/services/auth.server";
 import stripeClient from "../stripeClient";
-import { sendOrderEmail } from "~/services/order-email.server";
-import { Template } from "~/components/mail/order";
 import { Order } from "~/types";
 import { Verifications } from "~/schemas/verifications";
 import { createVerification } from "~/services/verification.server";
 import { toLoaderData } from "~/utils/loaderData";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
-import type Stripe from "stripe";
+import ClientOnly from "~/components/ClientOnly";
 import {
   MAX_STANDARD_FORM_REQUEST_SIZE,
   readTextWithinLimit,
   RequestBodyTooLargeError,
 } from "~/utils/requestBody.server";
 import { orderDetailProjection } from "~/utils/queryProjections.server";
+import SpecialOrderImageUpload from "~/components/admin/SpecialOrderImageUpload";
+import SpecialOrderExpiryControl from "~/components/admin/SpecialOrderExpiryControl";
+import {
+  createDeliberateResend,
+  deliverQueuedOrderEmail,
+  getLatestOrderEmailDelivery,
+  legacyShippingDeliveryView,
+  retryFailedOrderEmail,
+  type OrderEmailDelivery,
+} from "~/services/email-delivery.server";
+import {
+  FinalSpecialOrderImageRequiredError,
+  markOrderNotShipped,
+  markOrderShippedAndEmail,
+} from "~/services/order-shipping.server";
+import { canManageOrderShipment } from "~/utils/orderShipping.shared";
+import {
+  canReplaceSpecialOrderInvitation,
+  canShareSpecialOrderInvitation,
+  replaceSpecialOrderInvitation,
+  revokeSpecialOrderInvitation,
+  SpecialOrderInvitationLifecycleError,
+  specialOrderInvitationState,
+  specialOrderPublicUrl,
+} from "~/services/special-order.server";
+import specialOrderStyles from "~/styles/special-order.css?url";
+import {
+  specialOrderExpiryError,
+  specialOrderExpiryFromDays,
+} from "~/utils/specialOrderExpiry";
+
+export const links: LinksFunction = () => [
+  { href: specialOrderStyles, rel: "stylesheet" },
+];
 
 type OrderDetailLoaderData = {
   order: Order;
-  intent: Stripe.PaymentIntent | null;
+  canReplaceInvitation: boolean;
+  canRevokeInvitation: boolean;
+  invitationDelivery: OrderEmailDelivery | null;
+  invitationState: ReturnType<typeof specialOrderInvitationState>;
+  shippingDelivery: OrderEmailDelivery | null;
+  specialOrderUrl: string | null;
   verification: { verificationNumber: number } | null;
 };
 
 const orderStatusMeta = {
+  DRAFT: { label: "Utkast", tone: "manual" },
+  AWAITING_CUSTOMER: { label: "Inväntar kund", tone: "review" },
   SUCCESS: { label: "Betald", tone: "paid" },
   FAILED: { label: "Betalning misslyckades", tone: "failed" },
   SHIPPED: { label: "Skickad", tone: "shipped" },
@@ -74,6 +116,23 @@ const formatDateTime = (value?: Date | string) => {
     .replace(" kl. ", " · ");
 };
 
+const formatInvitationExpiry = (
+  specialOrder: Order["specialOrder"]
+) => {
+  if (!specialOrder?.expiresAt) return null;
+  if (specialOrder.expiryIncludesTime) {
+    return formatDateTime(specialOrder.expiresAt);
+  }
+  const date = new Date(specialOrder.expiresAt);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("sv-SE", {
+    day: "numeric",
+    month: "long",
+    timeZone: "Europe/Stockholm",
+    year: "numeric",
+  }).format(date);
+};
+
 function OrderItemMedia({ image, index }: { image?: string; index: number }) {
   const [failed, setFailed] = useState(false);
 
@@ -96,49 +155,67 @@ function OrderItemMedia({ image, index }: { image?: string; index: number }) {
   );
 }
 
+const writeClipboardText = async (value: string) => {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  if (!copied) throw new Error("Clipboard copy was rejected");
+};
+
+export const headers: HeadersFunction = () => ({
+  "Cache-Control": "private, no-store",
+});
+
 export let loader: LoaderFunction = async ({ request, params }) => {
   await auth.isAuthenticated(request, { failureRedirect: "/login" });
 
-  const order = (await Orders.findOne({
-    _id: params.id,
-  })
-    .select(orderDetailProjection)
-    .lean()
-    .exec()) as unknown as Order | null;
+  const orderId = String(params.id ?? "");
+  const [order, storedInvitationDelivery, storedShippingDelivery, verification] =
+    await Promise.all([
+      Orders.findOne({ _id: orderId })
+        .select(orderDetailProjection)
+        .lean()
+        .exec() as unknown as Promise<Order | null>,
+      getLatestOrderEmailDelivery(orderId, "SPECIAL_ORDER_INVITATION"),
+      getLatestOrderEmailDelivery(orderId, "SHIPPING"),
+      Verifications.findOne({
+        "metadata.key": "orderId",
+        "metadata.value": orderId,
+      })
+        .select("verificationNumber")
+        .lean() as unknown as Promise<{ verificationNumber: number } | null>,
+    ]);
 
   if (!order) throw new Response("Order not found", { status: 404 });
 
-  const verification = (await Verifications.findOne({
-    "metadata.key": "orderId",
-    "metadata.value": params.id,
-  })
-    .select("verificationNumber")
-    .lean()) as unknown as { verificationNumber: number } | null;
+  const invitationDelivery =
+    order.kind === "SPECIAL" ? storedInvitationDelivery : null;
+  const shippingDelivery =
+    storedShippingDelivery ?? legacyShippingDeliveryView(order);
+  const specialOrderUrl = canShareSpecialOrderInvitation(order)
+    ? specialOrderPublicUrl(order)
+    : null;
+  const invitationState = specialOrderInvitationState(order);
 
-  let intent = null;
-
-  if (order.status === "FAILED") {
-    try {
-      if (order.paymentIntent && order.paymentIntent.id) {
-        intent = await stripeClient.paymentIntents.retrieve(
-          order.paymentIntent.id
-        );
-      }
-      return json({
-        order: toLoaderData(order),
-        intent,
-        verification: toLoaderData(verification),
-      });
-    } catch (error) {
-      console.error("Stripe PaymentIntent could not be retrieved", {
-        orderId: order._id,
-        error,
-      });
-    }
-  }
   return json({
     order: toLoaderData(order),
-    intent: null,
+    canReplaceInvitation: canReplaceSpecialOrderInvitation(order),
+    canRevokeInvitation: invitationState === "ACTIVE",
+    invitationDelivery: toLoaderData(invitationDelivery),
+    invitationState,
+    shippingDelivery: toLoaderData(shippingDelivery),
+    specialOrderUrl,
     verification: toLoaderData(verification),
   });
 };
@@ -174,6 +251,72 @@ export let action: ActionFunction = async ({ request, params }) => {
   }
   const body = new URLSearchParams(bodyText);
   const type = body.get("_action") || "";
+
+  if (
+    type === "revoke-special-order-invitation" ||
+    type === "replace-special-order-invitation"
+  ) {
+    try {
+      if (type === "revoke-special-order-invitation") {
+        await revokeSpecialOrderInvitation(String(params.id));
+        return json({
+          lifecycleAction: "REVOKED" as const,
+          message: "Betalningslänken är stängd.",
+          ok: true,
+        });
+      }
+
+      await replaceSpecialOrderInvitation({
+        expiresAt: body.get("expiresAt") ?? "",
+        orderId: String(params.id),
+      });
+      return json({
+        lifecycleAction: "REPLACED" as const,
+        message: "En ny betalningslänk är skapad.",
+        ok: true,
+      });
+    } catch (error) {
+      if (error instanceof SpecialOrderInvitationLifecycleError) {
+        const lifecycleErrors = {
+          CONFLICT: {
+            message: "Länken ändrades i en annan flik. Ladda om och försök igen.",
+            status: 409,
+          },
+          INVALID_EXPIRY: {
+            message: "Välj ett giltigt slutdatum för den nya länken.",
+            status: 400,
+          },
+          NOT_AVAILABLE: {
+            message: "Länken kan inte ändras i orderns nuvarande läge.",
+            status: 409,
+          },
+          PAYMENT_ALREADY_SUCCEEDED: {
+            message: "Betalningen verkar redan vara genomförd. Länken ändrades inte.",
+            status: 409,
+          },
+          PAYMENT_CANCEL_FAILED: {
+            message: "Stripe-betalningen kunde inte avbrytas. Länken ändrades inte.",
+            status: 502,
+          },
+          PAYMENT_PROCESSING: {
+            message: "Betalningen behandlas av Stripe. Vänta och kontrollera ordern igen.",
+            status: 409,
+          },
+        } as const;
+        const response = lifecycleErrors[error.code];
+        return json({ error: response.message }, { status: response.status });
+      }
+      console.error("Special-order invitation update failed", {
+        action: type,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        orderId: String(params.id),
+      });
+      return json(
+        { error: "Betalningslänken kunde inte ändras. Försök igen." },
+        { status: 500 }
+      );
+    }
+  }
 
   if (type === "verification") {
     const order = await Orders.findOne({
@@ -286,44 +429,72 @@ export let action: ActionFunction = async ({ request, params }) => {
     return {};
   }
 
+  if (
+    type === "process-email" ||
+    type === "retry-email" ||
+    type === "resend-email"
+  ) {
+    const kind = body.get("kind") === "invitation"
+      ? "SPECIAL_ORDER_INVITATION"
+      : "SHIPPING";
+    const order = await Orders.findById(params.id).lean<Order>();
+    if (!order) return json({ error: "Ordern hittades inte" }, { status: 404 });
+    const delivery = await getLatestOrderEmailDelivery(String(order._id), kind);
+    if (!delivery) {
+      return json({ error: "Mejlleveransen hittades inte" }, { status: 404 });
+    }
+    if (type === "process-email") {
+      if (delivery.status !== "PENDING") {
+        return json({ error: "Utskicket väntar inte längre i kön" }, { status: 409 });
+      }
+      await deliverQueuedOrderEmail(String(delivery._id));
+    } else if (type === "retry-email") {
+      if (delivery.status !== "FAILED") {
+        return json({ error: "Endast misslyckade utskick kan provas igen direkt" }, { status: 409 });
+      }
+      await retryFailedOrderEmail(String(delivery._id));
+    } else {
+      if (delivery.status !== "UNKNOWN") {
+        return json({ error: "Ett nytt utskick kräver okänd leveransstatus" }, { status: 409 });
+      }
+      await createDeliberateResend({
+        kind,
+        orderId: String(order._id),
+        previousAttempt: delivery.attempt,
+        recipient: order.customer.email,
+      });
+    }
+    return json({ ok: true });
+  }
+
   const shippingValue = body.get("on");
   if (shippingValue === null) {
     return json({ error: "Leveransstatus saknas" }, { status: 400 });
   }
 
-  const data = shippingValue === "true";
-  const order = await Orders.findOne({
-    _id: params.id,
-  }).lean<Order>();
-
-  if (order) {
-    if (data) {
-      const shippingEmailAt = order.shippingEmailAt
-        ? new Date(order.shippingEmailAt)
-        : new Date();
-      if (!order.shippingEmailAt) {
-        await sendOrderEmail(order, Template.SHIPPING);
-      }
-
-      await Orders.updateOne(
-        {
-          _id: params.id,
-        },
-        { $set: { status: "SHIPPED", shippingEmailAt } }
-      );
+  try {
+    if (shippingValue === "true") {
+      const result = await markOrderShippedAndEmail(String(params.id));
+      if (!result) return json({ error: "Ordern hittades inte" }, { status: 404 });
     } else {
-      await Orders.updateOne(
-        {
-          _id: params.id,
-        },
-        {
-          $set: {
-            status: order.manualOrderAt ? "MANUAL_PROCESSING" : "SUCCESS",
-          },
-          $unset: { shippingEmailAt: "" },
-        }
-      );
+      const result = await markOrderNotShipped(String(params.id));
+      if (!result) return json({ error: "Ordern hittades inte" }, { status: 404 });
     }
+  } catch (error) {
+    if (error instanceof FinalSpecialOrderImageRequiredError) {
+      return json({ error: error.message }, { status: 409 });
+    }
+    console.error("Shipment status update failed", {
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      orderId: String(params.id),
+    });
+    return json(
+      {
+        error:
+          "Leveransen kunde inte uppdateras klart. Kontrollera order- och mejlstatus innan du försöker igen.",
+      },
+      { status: 500 }
+    );
   }
 
   return {};
@@ -342,37 +513,101 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
       totalSum,
       items,
       webhookAt,
+      createdAt,
       freightCost,
       status,
       discount,
       manualOrderAt,
+      kind,
     },
-    intent,
+    canReplaceInvitation,
+    canRevokeInvitation,
+    invitationDelivery,
+    invitationState,
+    shippingDelivery,
+    specialOrderUrl,
     verification,
   } = data;
-  const [on, setOn] = useState(status === "SHIPPED");
-  const orderFetcher = useFetcher<{ error?: string }>();
+  const orderFetcher = useFetcher<{
+    error?: string;
+    lifecycleAction?: "REPLACED" | "REVOKED";
+    message?: string;
+    ok?: boolean;
+  }>();
+  const paymentErrorFetcher = useFetcher<{ message?: string }>();
   const location = useLocation();
   const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const swipeStartRef = useRef<{
     pointerId: number;
     x: number;
     y: number;
   } | null>(null);
-  const orderDate = webhookAt ?? manualOrderAt;
+  const orderDate = webhookAt ?? manualOrderAt ?? createdAt;
   const discountAmount = discount?.amount ?? 0;
   const productSubtotal = Math.max(0, totalSum - freightCost + discountAmount);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const statusInfo = getStatusInfo(status);
-  const canManage =
-    status === "SUCCESS" ||
-    status === "SHIPPED" ||
-    status === "MANUAL_PROCESSING";
+  const storedFinalImage = items[0]?.finalImage ?? "";
+  const [uploadedFinalImage, setUploadedFinalImage] = useState("");
+  const [invitationActionMessage, setInvitationActionMessage] = useState<{
+    kind: "error" | "success";
+    text: string;
+  } | null>(null);
+  const invitationRevision = `${data.order.specialOrder?.accessVersion ?? 0}:${
+    data.order.specialOrder?.revokedAt ?? ""
+  }`;
+  const [linkManagerState, setLinkManagerState] = useState({
+    confirmOpen: false,
+    open: false,
+    revision: invitationRevision,
+  });
+  const linkManagerOpen =
+    linkManagerState.revision === invitationRevision && linkManagerState.open;
+  const revokeConfirmOpen =
+    linkManagerState.revision === invitationRevision &&
+    linkManagerState.confirmOpen;
+  const [replacementExpiry, setReplacementExpiry] = useState(() =>
+    specialOrderExpiryFromDays(7)
+  );
+  const finalImage = uploadedFinalImage || storedFinalImage;
+  const canManageShipment = canManageOrderShipment({ kind, status });
   const pendingAction = orderFetcher.formData?.get("_action");
   const updatingShipment =
     orderFetcher.state !== "idle" && pendingAction === "shipping";
   const creatingVerification =
     orderFetcher.state !== "idle" && pendingAction === "verification";
+  const updatingInvitation =
+    orderFetcher.state !== "idle" &&
+    (pendingAction === "revoke-special-order-invitation" ||
+      pendingAction === "replace-special-order-invitation");
+  const loadPaymentError = paymentErrorFetcher.load;
+  const visibleInvitationActionMessage = orderFetcher.data?.lifecycleAction
+    ? {
+        kind: "success" as const,
+        text:
+          orderFetcher.data.lifecycleAction === "REPLACED"
+            ? `${orderFetcher.data.message} Kopiera den nya länken ovan.`
+            : orderFetcher.data.message ?? "Betalningslänken är uppdaterad.",
+      }
+    : invitationActionMessage;
+
+  useEffect(() => {
+    if (
+      status !== "FAILED" ||
+      paymentErrorFetcher.data !== undefined ||
+      paymentErrorFetcher.state !== "idle"
+    ) {
+      return;
+    }
+    void loadPaymentError(`/admin/orders/${_id}/payment-error`);
+  }, [
+    _id,
+    loadPaymentError,
+    paymentErrorFetcher.data,
+    paymentErrorFetcher.state,
+    status,
+  ]);
 
   const requestedReturnTo = (location.state as { returnTo?: unknown } | null)
     ?.returnTo;
@@ -449,12 +684,90 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
   };
 
   const updateShipment = () => {
-    const nextValue = !on;
-    setOn(nextValue);
     orderFetcher.submit(
-      { _action: "shipping", on: String(nextValue) },
+      { _action: "shipping", on: String(status !== "SHIPPED") },
       { method: "post" }
     );
+  };
+
+  const copyInvitationLink = async () => {
+    if (!specialOrderUrl) return;
+    try {
+      await writeClipboardText(specialOrderUrl);
+      setInvitationActionMessage({
+        kind: "success",
+        text: "Betalningslänken är kopierad.",
+      });
+    } catch {
+      setInvitationActionMessage({
+        kind: "error",
+        text: "Länken kunde inte kopieras. Försök igen.",
+      });
+    }
+  };
+
+  const shareInvitationLink = async () => {
+    if (!specialOrderUrl || typeof navigator.share !== "function") return;
+    try {
+      await navigator.share({
+        title: "Privat beställning · Moa Clay Co",
+        text: "Här är den privata betalningslänken för din beställning.",
+        url: specialOrderUrl,
+      });
+      setInvitationActionMessage({
+        kind: "success",
+        text: "Betalningslänken är delad.",
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setInvitationActionMessage({
+        kind: "error",
+        text: "Delningen kunde inte öppnas. Kopiera länken i stället.",
+      });
+    }
+  };
+
+  const invitationStateCopy = (() => {
+    const expiry = formatInvitationExpiry(data.order.specialOrder);
+    if (invitationState === "ACTIVE") {
+      return expiry ? `Aktiv till ${expiry}` : "Aktiv";
+    }
+    if (invitationState === "EXPIRED") return "Utgången";
+    if (invitationState === "REVOKED") return "Stängd";
+    return "Inte aktiv";
+  })();
+
+  const replaceInvitation = () => {
+    const expiryError = specialOrderExpiryError(replacementExpiry);
+    if (expiryError) {
+      setInvitationActionMessage({ kind: "error", text: expiryError });
+      return;
+    }
+    setInvitationActionMessage(null);
+    orderFetcher.submit(
+      {
+        _action: "replace-special-order-invitation",
+        expiresAt: replacementExpiry,
+      },
+      { method: "post" }
+    );
+  };
+
+  const revokeInvitation = () => {
+    setInvitationActionMessage(null);
+    orderFetcher.submit(
+      { _action: "revoke-special-order-invitation" },
+      { method: "post" }
+    );
+  };
+
+  const deliveryCopy = (delivery: OrderEmailDelivery | null) => {
+    if (!delivery) return "Inte skickat";
+    if (delivery.status === "PENDING") return "Väntar på utskick";
+    if (delivery.status === "SENDING") return "Skickas nu";
+    if (delivery.status === "SENT") return "Mejl levererat till mejlservern";
+    if (delivery.status === "FAILED") return "Mejlet misslyckades";
+    return "Leveransstatus okänd — kontrollera innan nytt mejl";
   };
 
   return (
@@ -496,10 +809,48 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
         </div>
       </header>
 
-      {canManage ? (
+      {status === "DRAFT" && kind === "SPECIAL" ? (
         <div className="order-detail-actions" aria-label="Orderåtgärder">
           <button
-            aria-checked={on}
+            className="order-detail-action order-detail-action--special"
+            onClick={() => navigate(`/admin/special-orders/${_id}`)}
+            type="button"
+          >
+            Fortsätt redigera specialbeställningen
+            <ArrowIcon direction="up-right" />
+          </button>
+        </div>
+      ) : null}
+
+      {kind === "SPECIAL" && ["SUCCESS", "PAID_REVIEW", "MANUAL_PROCESSING"].includes(String(status)) ? (
+        <section className="order-detail-final-image" aria-label="Foto av färdig specialbeställning">
+          {finalImage ? (
+            <img alt={`Färdig ${items[0].name}`} key={finalImage} src={finalImage} />
+          ) : (
+            <div aria-hidden="true"><span>Foto saknas</span></div>
+          )}
+          <div>
+            <span>Före leverans</span>
+            <strong>Fotografera det färdiga exemplaret</strong>
+            <p>Fotot följer med leveransmejlet och måste finnas innan ordern markeras skickad.</p>
+            <SpecialOrderImageUpload
+              currentImage={finalImage}
+              label="Ladda upp slutfoto"
+              onComplete={(url) => {
+                setUploadedFinalImage(url);
+                void revalidator.revalidate();
+              }}
+              orderId={String(_id)}
+              purpose="final"
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {canManageShipment ? (
+        <div className="order-detail-actions" aria-label="Orderåtgärder">
+          <button
+            aria-checked={status === "SHIPPED"}
             className="order-detail-action"
             disabled={updatingShipment}
             onClick={updateShipment}
@@ -509,9 +860,9 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
             <span className="order-detail-switch" aria-hidden="true" />
             {updatingShipment
               ? "Uppdaterar…"
-              : on
+              : status === "SHIPPED"
               ? "Markerad som skickad"
-              : "Markera som skickad"}
+              : "Markera skickad och mejla kund"}
           </button>
 
           {verification ? (
@@ -538,10 +889,252 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
         </div>
       ) : null}
 
-      {intent?.last_payment_error?.message ? (
+      {invitationDelivery || specialOrderUrl || shippingDelivery ||
+      (kind === "SPECIAL" && (canReplaceInvitation || canRevokeInvitation)) ? (
+        <section
+          className="order-detail-deliveries"
+          aria-label="Betalningslänk och mejlleveranser"
+        >
+          {kind === "SPECIAL" &&
+          (invitationDelivery || specialOrderUrl ||
+            canReplaceInvitation || canRevokeInvitation) ? (
+            <div>
+              <span>Privat betalningslänk</span>
+              <strong>{invitationStateCopy}</strong>
+              {invitationDelivery ? (
+                <small className="order-detail-delivery-email-status">
+                  {deliveryCopy(invitationDelivery)}
+                </small>
+              ) : null}
+              {specialOrderUrl ? (
+                <>
+                  <div className="order-detail-delivery-actions">
+                    <button
+                      aria-label="Kopiera betalningslänk"
+                      onClick={() => void copyInvitationLink()}
+                      type="button"
+                    >
+                      Kopiera länk
+                    </button>
+                    <ClientOnly>
+                      {() => {
+                        const shareData = {
+                          title: "Privat beställning · Moa Clay Co",
+                          text: "Här är den privata betalningslänken för din beställning.",
+                          url: specialOrderUrl,
+                        };
+                        const canShare =
+                          typeof navigator.share === "function" &&
+                          (typeof navigator.canShare !== "function" ||
+                            navigator.canShare(shareData));
+                        return canShare ? (
+                          <button
+                            aria-label="Dela betalningslänk"
+                            onClick={() => void shareInvitationLink()}
+                            type="button"
+                          >
+                            Dela
+                            <ArrowIcon direction="up-right" />
+                          </button>
+                        ) : null;
+                      }}
+                    </ClientOnly>
+                  </div>
+                </>
+              ) : null}
+              {canReplaceInvitation || canRevokeInvitation ? (
+                <button
+                  aria-expanded={linkManagerOpen}
+                  onClick={() => {
+                    setLinkManagerState({
+                      confirmOpen: false,
+                      open: !linkManagerOpen,
+                      revision: invitationRevision,
+                    });
+                  }}
+                  type="button"
+                >
+                  Hantera länk
+                </button>
+              ) : null}
+              {visibleInvitationActionMessage ? (
+                <small
+                  className={`order-detail-delivery-feedback is-${visibleInvitationActionMessage.kind}`}
+                  role="status"
+                >
+                  {visibleInvitationActionMessage.text}
+                </small>
+              ) : null}
+              {invitationDelivery &&
+              ["FAILED", "PENDING", "UNKNOWN"].includes(invitationDelivery.status) ? (
+                <button
+                  disabled={orderFetcher.state !== "idle"}
+                  onClick={() => orderFetcher.submit(
+                    {
+                      _action:
+                        invitationDelivery.status === "PENDING"
+                          ? "process-email"
+                          : invitationDelivery.status === "FAILED"
+                            ? "retry-email"
+                            : "resend-email",
+                      kind: "invitation",
+                    },
+                    { method: "post" }
+                  )}
+                  type="button"
+                >
+                  {invitationDelivery.status === "PENDING"
+                    ? "Skicka nu"
+                    : invitationDelivery.status === "FAILED"
+                      ? "Försök igen"
+                      : "Skicka ett nytt mejl"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {shippingDelivery ? (
+            <div>
+              <span>Leveransbesked</span>
+              <strong>{deliveryCopy(shippingDelivery)}</strong>
+              {["FAILED", "PENDING", "UNKNOWN"].includes(shippingDelivery.status) ? (
+                <button
+                  disabled={orderFetcher.state !== "idle"}
+                  onClick={() => orderFetcher.submit(
+                    {
+                      _action:
+                        shippingDelivery.status === "PENDING"
+                          ? "process-email"
+                          : shippingDelivery.status === "FAILED"
+                            ? "retry-email"
+                            : "resend-email",
+                      kind: "shipping",
+                    },
+                    { method: "post" }
+                  )}
+                  type="button"
+                >
+                  {shippingDelivery.status === "PENDING"
+                    ? "Skicka nu"
+                    : shippingDelivery.status === "FAILED"
+                      ? "Försök igen"
+                      : "Skicka ett nytt mejl"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {kind === "SPECIAL" && linkManagerOpen ? (
+        <section
+          aria-label="Hantera privat betalningslänk"
+          className="order-detail-link-manager"
+        >
+          <div className="order-detail-link-manager__heading">
+            <div>
+              <span>Privat betalningslänk</span>
+              <h3>
+                {invitationState === "ACTIVE"
+                  ? "Ersätt eller stäng länken"
+                  : "Skapa en ny länk"}
+              </h3>
+            </div>
+            <button
+              aria-label="Stäng länkhanteringen"
+              className="order-detail-link-manager__close"
+              onClick={() => {
+                setLinkManagerState({
+                  confirmOpen: false,
+                  open: false,
+                  revision: invitationRevision,
+                });
+              }}
+              type="button"
+            >
+              Stäng
+            </button>
+          </div>
+
+          {canReplaceInvitation ? (
+            <div className="order-detail-link-manager__replace">
+              <SpecialOrderExpiryControl
+                error={specialOrderExpiryError(replacementExpiry) ?? undefined}
+                onChange={setReplacementExpiry}
+                value={replacementExpiry}
+              />
+              <button
+                className="order-detail-link-manager__primary"
+                disabled={updatingInvitation}
+                onClick={replaceInvitation}
+                type="button"
+              >
+                {updatingInvitation &&
+                pendingAction === "replace-special-order-invitation"
+                  ? "Skapar ny länk…"
+                  : invitationState === "ACTIVE"
+                    ? "Ersätt länken"
+                    : "Skapa ny länk"}
+                <ArrowIcon direction="up-right" />
+              </button>
+            </div>
+          ) : null}
+
+          {canRevokeInvitation ? (
+            <div className="order-detail-link-manager__revoke">
+              {revokeConfirmOpen ? (
+                <div className="order-detail-link-manager__confirm" role="alert">
+                  <p>
+                    Länken stängs direkt och kunden kan inte längre använda den.
+                  </p>
+                  <div>
+                    <button
+                      disabled={updatingInvitation}
+                      onClick={() =>
+                        setLinkManagerState({
+                          confirmOpen: false,
+                          open: true,
+                          revision: invitationRevision,
+                        })
+                      }
+                      type="button"
+                    >
+                      Avbryt
+                    </button>
+                    <button
+                      disabled={updatingInvitation}
+                      onClick={revokeInvitation}
+                      type="button"
+                    >
+                      {updatingInvitation ? "Stänger…" : "Ja, stäng länken"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  className="order-detail-link-manager__revoke-trigger"
+                  onClick={() =>
+                    setLinkManagerState({
+                      confirmOpen: true,
+                      open: true,
+                      revision: invitationRevision,
+                    })
+                  }
+                  type="button"
+                >
+                  Stäng den nuvarande länken
+                </button>
+              )}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {status === "FAILED" ? (
         <p className="order-detail-error">
-          <strong>Betalningen gick inte igenom.</strong>{" "}
-          {intent.last_payment_error.message}
+          <strong>Betalningen gick inte igenom.</strong>
+          {paymentErrorFetcher.data?.message
+            ? ` ${paymentErrorFetcher.data.message}`
+            : null}
         </p>
       ) : null}
 
@@ -564,15 +1157,24 @@ function OrderDetailContent({ data }: { data: OrderDetailLoaderData }) {
             {items.map((item, index) => (
               <li className="order-detail-item" key={item._id ?? item.itemRef}>
                 <OrderItemMedia
-                  image={item.image}
+                  image={
+                    kind === "SPECIAL"
+                      ? (index === 0 ? finalImage : item.finalImage) || item.image
+                      : item.image
+                  }
                   index={index}
-                  key={item.image || "missing-image"}
+                  key={
+                    (kind === "SPECIAL" && index === 0 ? finalImage : item.finalImage) ||
+                    item.image ||
+                    "missing-image"
+                  }
                 />
                 <div className="order-detail-item__copy">
                   <strong>{item.name}</strong>
                   <small>
                     {item.quantity} × {formatPrice(item.price)}
                   </small>
+                  {item.description ? <p className="order-detail-item__description">{item.description}</p> : null}
                   {item.additionalItems?.length ? (
                     <ul className="order-detail-additions">
                       {item.additionalItems.map((addition) => (

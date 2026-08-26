@@ -5,6 +5,7 @@ primary_region = "fra"
 
 [env]
   PORT = "8080"
+  SPECIAL_ORDER_PUBLIC_ORIGIN = "https://moaclayco-stage.fly.dev"
   STRIPE_API_VERSION = "2026-07-29.dahlia"
   STRIPE_WEBHOOK_ACTIVE_VERSION = "2026-07-29.dahlia"
 

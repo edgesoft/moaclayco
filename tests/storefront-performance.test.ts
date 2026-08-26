@@ -12,6 +12,23 @@ test("public root does not eagerly load editor or toast assets", async () => {
   assert.match(root, /lazy\(\(\) => import\("\.\/components\/ToastRegion"\)\)/);
 });
 
+test("editor routes let Vite manage the shared stylesheet", async () => {
+  const editorRoutes = [
+    "app/routes/admin.discounts.tsx",
+    "app/routes/collections.$collection_.edit.tsx",
+    "app/routes/collections.new.tsx",
+    "app/routes/items.$collection.$id.edit.tsx",
+    "app/routes/items.$collection.new.tsx",
+  ];
+
+  for (const route of editorRoutes) {
+    const source = await readFile(path.resolve(route), "utf8");
+
+    assert.match(source, /import "~\/styles\/item-editor\.css";/);
+    assert.doesNotMatch(source, /item-editor\.css\?url/);
+  }
+});
+
 test("storefront image loading prioritizes visible products and defers later media", async () => {
   const home = await readFile(path.resolve("app/routes/_index.tsx"), "utf8");
   const collection = await readFile(

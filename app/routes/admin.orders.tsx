@@ -1,5 +1,6 @@
 import {
   data as json,
+  Link,
   Outlet,
   ShouldRevalidateFunction,
   useFetcher,
@@ -22,6 +23,10 @@ export const links: LinksFunction = () => [
 ];
 
 enum Status {
+  DRAFT = "DRAFT",
+  AWAITING_CUSTOMER = "AWAITING_CUSTOMER",
+  OPENED = "OPENED",
+  PENDING = "PENDING",
   SUCCESS = "SUCCESS",
   FAILED = "FAILED",
   SHIPPED = "SHIPPED",
@@ -45,6 +50,14 @@ type StatusMeta = {
 };
 
 const statusMeta: Record<Status, StatusMeta> = {
+  [Status.DRAFT]: { label: "Special · utkast", shortLabel: "Utkast", tone: "manual" },
+  [Status.AWAITING_CUSTOMER]: {
+    label: "Inväntar kund",
+    shortLabel: "Inväntar",
+    tone: "review",
+  },
+  [Status.OPENED]: { label: "Påbörjad", shortLabel: "Påbörjad", tone: "manual" },
+  [Status.PENDING]: { label: "Väntar på betalning", shortLabel: "Väntar", tone: "review" },
   [Status.SUCCESS]: { label: "Betald", shortLabel: "Betald", tone: "paid" },
   [Status.FAILED]: {
     label: "Betalning misslyckades",
@@ -77,6 +90,7 @@ const statusFor = (status: Status) =>
   statusMeta[status] ?? statusMeta[Status.SUCCESS];
 
 export type Order = {
+  kind?: "STOREFRONT" | "SPECIAL";
   status: Status;
   _id: string;
   createdAt: string;
@@ -128,6 +142,10 @@ const PAGE_SIZE = 50;
 
 const includedStatuses = Object.values(Status);
 const todoStatuses = [
+  Status.DRAFT,
+  Status.AWAITING_CUSTOMER,
+  Status.OPENED,
+  Status.PENDING,
   Status.SUCCESS,
   Status.MANUAL_PROCESSING,
   Status.PAID_REVIEW,
@@ -136,6 +154,12 @@ const attentionStatuses = [
   Status.FAILED,
   Status.CANCELED,
   Status.PAID_REVIEW,
+];
+const revenueStatuses = [
+  Status.SUCCESS,
+  Status.SHIPPED,
+  Status.PAID_REVIEW,
+  Status.MANUAL_PROCESSING,
 ];
 
 const filterStatuses: Record<Exclude<Filter, "all">, Status[]> = {
@@ -296,6 +320,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       status: 1,
       createdAt: 1,
       customer: 1,
+      kind: 1,
       _id: 1,
       totalSum: 1,
     })
@@ -320,9 +345,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               orderValue: {
                 $sum: {
                   $cond: [
-                    { $in: ["$status", [Status.FAILED, Status.CANCELED]] },
-                    0,
+                    { $in: ["$status", revenueStatuses] },
                     { $ifNull: ["$totalSum", 0] },
+                    0,
                   ],
                 },
               },
@@ -363,6 +388,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       firstname: order.customer?.firstname,
       lastname: order.customer?.lastname,
     },
+    kind: order.kind as "STOREFRONT" | "SPECIAL" | undefined,
     status: order.status as Status,
     totalSum: Number(order.totalSum ?? 0),
   }));
@@ -639,21 +665,13 @@ export default function Orders() {
     );
   };
 
-  const openOrder = (orderId: string) => {
-    const isCompact = window.matchMedia("(max-width: 959px)").matches;
-    const closesCurrentOrder = id === orderId;
-
+  const rememberOrderNavigation = (orderId: string) => {
     sessionStorage.setItem("ordersScrollPosition", window.scrollY.toString());
     sessionStorage.setItem("ordersLastViewedId", orderId);
     navigationScrollPositionRef.current = window.scrollY;
     navigationListScrollPositionRef.current =
       document.querySelector<HTMLElement>(".orders-list")?.scrollTop ?? null;
     setLastViewedId(orderId);
-
-    navigate(
-      closesCurrentOrder ? "/admin/orders" : `/admin/orders/${orderId}`,
-      { preventScrollReset: !isCompact }
-    );
   };
 
   useEffect(() => {
@@ -734,10 +752,16 @@ export default function Orders() {
               först, med fler på begäran.
             </p>
           </div>
-          <p className="orders-header-note">
-            <span>Uppdaterad vy</span>
-            Öppna en order för leverans och bokföring
-          </p>
+          <div className="orders-header-actions">
+            <button
+              className="orders-special-create"
+              onClick={() => navigate("/admin/special-orders/new")}
+              type="button"
+            >
+              <span>Ny specialbeställning</span>
+              <ArrowIcon direction="up-right" />
+            </button>
+          </div>
         </header>
 
         <section className="orders-summary" aria-label="Orderöversikt">
@@ -861,7 +885,7 @@ export default function Orders() {
 
                   return (
                     <li key={order._id}>
-                      <button
+                      <Link
                         aria-busy={isOpening || undefined}
                         aria-current={isSelected ? "true" : undefined}
                         aria-expanded={isSelected}
@@ -873,8 +897,14 @@ export default function Orders() {
                           wasLastViewed ? " was-last-viewed" : ""
                         }`}
                         id={`order-${order._id}`}
-                        onClick={() => openOrder(order._id)}
-                        type="button"
+                        onClick={() => rememberOrderNavigation(order._id)}
+                        prefetch={isSelected ? "none" : "intent"}
+                        preventScrollReset
+                        to={
+                          isSelected
+                            ? "/admin/orders"
+                            : `/admin/orders/${order._id}`
+                        }
                       >
                         <span className="orders-order-row__identity">
                           <strong>{shortOrderNumber(order._id)}</strong>
@@ -882,6 +912,9 @@ export default function Orders() {
                         </span>
                         <span className="orders-order-row__customer">
                           <strong>{customerName || "Kundnamn saknas"}</strong>
+                          {order.kind === "SPECIAL" ? (
+                            <em className="orders-special-label">Specialbeställning</em>
+                          ) : null}
                           <small className={`orders-compact-status tone-${meta.tone}`}>
                             {meta.shortLabel}
                           </small>
@@ -901,7 +934,7 @@ export default function Orders() {
                             <ArrowIcon direction="up-right" />
                           )}
                         </span>
-                      </button>
+                      </Link>
                     </li>
                   );
                 })}
@@ -940,7 +973,6 @@ export default function Orders() {
             <aside
               className="orders-detail-pane"
               id="order-detail"
-              key={id}
             >
               <Outlet />
             </aside>

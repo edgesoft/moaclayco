@@ -3,7 +3,7 @@ import type { ClientSession } from "mongoose";
 import { ImageDrafts } from "~/schemas/image-drafts";
 import { s3Client } from "~/services/s3.server";
 
-export type ImageDraftKind = "collection" | "item";
+export type ImageDraftKind = "collection" | "item" | "special-order";
 
 export const IMAGE_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
 const CLEANUP_RETRY_MS = 60 * 60 * 1000;

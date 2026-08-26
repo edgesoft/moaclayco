@@ -144,7 +144,11 @@ const mapAssetUrl = (rawValue, field) => {
   if (existing && existing.sourceKey !== sourceKey) {
     throw new Error(`Två production-objekt mappar till samma stage-nyckel: ${targetKey}`);
   }
-  assetCopies.set(targetKey, { sourceKey, targetKey });
+  assetCopies.set(targetKey, {
+    fields: Array.from(new Set([...(existing?.fields ?? []), field])),
+    sourceKey,
+    targetKey,
+  });
 
   if (field === "verifications.files.path") {
     const target = new URL(
@@ -172,9 +176,9 @@ const transformDocuments = (collectionName, documents) =>
       );
     }
     if (collectionName === "items") {
-      transformed.images = (transformed.images ?? []).map((image) =>
-        mapAssetUrl(image, "items.images")
-      );
+      transformed.images = (transformed.images ?? [])
+        .filter(Boolean)
+        .map((image) => mapAssetUrl(image, "items.images"));
     }
     if (collectionName === "orders") {
       transformed.items = (transformed.items ?? []).map((item) => ({
@@ -205,11 +209,11 @@ const headOrNull = async (client, bucket, key) => {
   }
 };
 
-const ensureAsset = async ({ sourceKey, targetKey }) => {
+const ensureAsset = async ({ fields, sourceKey, targetKey }) => {
   const sourceHead = await headOrNull(sourceS3, SOURCE_BUCKET, sourceKey);
   const targetHead = await headOrNull(targetS3, targetBucket, targetKey);
   if (!sourceHead) {
-    if (targetHead) return "target-only";
+    if (targetHead) return { fields, sourceKey, status: "target-only", targetKey };
     throw new Error(
       `Objektet saknas i både production och stage: ${sourceKey}`
     );
@@ -219,9 +223,16 @@ const ensureAsset = async ({ sourceKey, targetKey }) => {
     targetHead.ContentLength === sourceHead.ContentLength &&
     targetHead.ETag === sourceHead.ETag
   ) {
-    return "unchanged";
+    return { fields, sourceKey, status: "unchanged", targetKey };
   }
-  if (!apply) return targetHead ? "would-update" : "would-copy";
+  if (!apply) {
+    return {
+      fields,
+      sourceKey,
+      status: targetHead ? "would-update" : "would-copy",
+      targetKey,
+    };
+  }
 
   const sourceObject = await sourceS3.send(
     new GetObjectCommand({ Bucket: SOURCE_BUCKET, Key: sourceKey })
@@ -245,7 +256,12 @@ const ensureAsset = async ({ sourceKey, targetKey }) => {
   if (!verified || verified.ContentLength !== sourceHead.ContentLength) {
     throw new Error(`Stage-objekt kunde inte verifieras: ${targetKey}`);
   }
-  return targetHead ? "updated" : "copied";
+  return {
+    fields,
+    sourceKey,
+    status: targetHead ? "updated" : "copied",
+    targetKey,
+  };
 };
 
 const mapWithConcurrency = async (values, concurrency, worker) => {
@@ -291,10 +307,13 @@ try {
     ensureAsset
   );
   const assetSummary = Object.fromEntries(
-    Array.from(new Set(assetResults)).map((status) => [
+    Array.from(new Set(assetResults.map((result) => result.status))).map((status) => [
       status,
-      assetResults.filter((value) => value === status).length,
+      assetResults.filter((result) => result.status === status).length,
     ])
+  );
+  const changedAssets = assetResults.filter(
+    (result) => result.status !== "unchanged"
   );
 
   const planned = Object.fromEntries(
@@ -313,6 +332,7 @@ try {
         plannedDocuments: planned,
         referencedAssets: assetCopies.size,
         assetSummary,
+        changedAssets,
         untouchedCollections: ["users", "webhookEvents"],
       },
       null,

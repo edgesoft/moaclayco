@@ -67,6 +67,7 @@ test("order creation replaces product URLs with permanent order image URLs", asy
     archivedUrl: string;
     itemId: string;
     orderId: string;
+    referenceField: "itemRef" | "templateItemRef";
     sourceUrl: string;
   }> = [];
 
@@ -110,10 +111,36 @@ test("order creation replaces product URLs with permanent order image URLs", asy
         "https://38vabcm3.twic.pics/order-images-stage/order-1/item-1/first%20image.webp",
       itemId: "item-1",
       orderId: "order-1",
+      referenceField: "itemRef",
       sourceUrl:
         "https://38vabcm3.twic.pics/items-stage/wanja/first image.webp?width=800",
     },
   ]);
+});
+
+test("special-order source products are archived through their template reference", async () => {
+  const replacements: Array<Record<string, unknown>> = [];
+  const result = await archiveOrderImages(
+    {
+      _id: "special-order-1",
+      items: [
+        {
+          image: "https://38vabcm3.twic.pics/items-stage/vas/source.webp",
+          templateItemRef: "template-1",
+        },
+      ],
+    },
+    dependencies({
+      replaceOrderImage: async (input) => {
+        replacements.push(input);
+        return true;
+      },
+    })
+  );
+
+  assert.deepEqual(result, { archivedCount: 1, failedItemRefs: [] });
+  assert.equal(replacements[0].referenceField, "templateItemRef");
+  assert.equal(replacements[0].itemId, "template-1");
 });
 
 test("an archival failure leaves the original order URL untouched", async () => {

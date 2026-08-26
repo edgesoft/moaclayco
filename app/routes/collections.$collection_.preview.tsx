@@ -60,6 +60,10 @@ export const loader: LoaderFunction = async ({ params }) => {
 
   return json(
     { collectionRef, items } satisfies CollectionPreviewData,
-    { headers: { "Cache-Control": "private, no-store" } }
+    {
+      headers: {
+        "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
+      },
+    }
   );
 };

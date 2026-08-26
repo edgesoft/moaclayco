@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  clearDatabaseConnectionCacheOnClose,
   connectWithCache,
   databaseConnectionOptions,
   type DatabaseConnectionCache,
@@ -46,12 +47,53 @@ test("a failed database connection can be retried", async () => {
   assert.equal(cache.promise, null);
 });
 
-test("the database pool keeps warm capacity and tolerates short bursts", () => {
-  assert.ok(databaseConnectionOptions.minPoolSize >= 2);
-  assert.ok(
-    databaseConnectionOptions.maxPoolSize >=
-      databaseConnectionOptions.minPoolSize * 5
+test("a resolved database client remains the only client for the process", async () => {
+  const existing = { connected: true as const };
+  const cache: DatabaseConnectionCache<typeof existing> = {
+    connection: existing,
+    promise: null,
+  };
+  let attempts = 0;
+
+  const connection = await connectWithCache(cache, async () => {
+    attempts += 1;
+    return { connected: true as const };
+  });
+
+  assert.equal(connection, existing);
+  assert.equal(attempts, 0);
+});
+
+test("only an explicit close clears the cached database client", () => {
+  const existing = { connected: true as const };
+  const cache: DatabaseConnectionCache<typeof existing> = {
+    connection: existing,
+    promise: Promise.resolve(existing),
+  };
+  let subscribedEvent: string | undefined;
+  let closeListener: (() => void) | undefined;
+
+  clearDatabaseConnectionCacheOnClose(
+    {
+      on(event, listener) {
+        subscribedEvent = event;
+        closeListener = listener;
+      },
+    },
+    cache
   );
-  assert.ok(databaseConnectionOptions.maxConnecting >= 4);
+
+  assert.equal(subscribedEvent, "close");
+  assert.equal(cache.connection, existing);
+  closeListener?.();
+  assert.equal(cache.connection, null);
+  assert.equal(cache.promise, null);
+});
+
+test("the database pool releases idle capacity and bounds short bursts", () => {
+  assert.equal(databaseConnectionOptions.minPoolSize, 0);
+  assert.equal(databaseConnectionOptions.maxPoolSize, 10);
+  assert.equal(databaseConnectionOptions.maxConnecting, 2);
+  assert.equal(databaseConnectionOptions.maxIdleTimeMS, 60_000);
   assert.ok(databaseConnectionOptions.waitQueueTimeoutMS >= 15_000);
 });

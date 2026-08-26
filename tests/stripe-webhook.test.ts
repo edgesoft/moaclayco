@@ -721,6 +721,44 @@ test("a paid PaymentIntent alias still finds the review order for email", async 
   ]);
 });
 
+test("paid special orders use normal payment and email flow without changing catalog stock", async () => {
+  const specialOrder: Order = {
+    ...order,
+    discount: { amount: 0, code: undefined, percentage: undefined },
+    items: order.items.map((item) => ({
+      ...item,
+      inventoryMode: "UNTRACKED" as const,
+      itemRef: undefined,
+      templateItemRef: item.itemRef,
+    })),
+    kind: "SPECIAL",
+    status: "SUCCESS",
+  };
+  let itemUpdates = 0;
+  let emails = 0;
+  const dependencies = makeDependencies({
+    items: {
+      updateOne: async () => {
+        itemUpdates += 1;
+        return { modifiedCount: 1 };
+      },
+    } as never,
+    orders: {
+      findOneAndUpdate: () => leanResult(specialOrder),
+      updateOne: async () => ({ modifiedCount: 1 }),
+    } as never,
+    sendOrderEmail: async () => {
+      emails += 1;
+      return { messageId: "special-order-test" };
+    },
+  });
+
+  await fromPaymentIntent(paymentIntent.id, "SUCCESS", dependencies);
+
+  assert.equal(itemUpdates, 0);
+  assert.equal(emails, 1);
+});
+
 test("accounting uses the Stripe balance transaction amounts and stable idempotency key", async () => {
   const verifications: Array<Record<string, unknown>> = [];
   const dependencies = makeDependencies({

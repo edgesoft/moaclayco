@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
+    restart: unless-stopped
     env_file:
       - ${APP_ENV_FILE:-.env.stage.local}
     environment:

@@ -8,12 +8,11 @@ import { toLoaderData } from "~/utils/loaderData";
 import ArrowIcon from "~/components/ArrowIcon";
 import PlusMinusIcon from "~/components/PlusMinusIcon";
 import { discountProjection } from "~/utils/queryProjections.server";
-import itemEditorStyles from "~/styles/item-editor.css?url";
+import "~/styles/item-editor.css";
 import reactToastifyStyles from "react-toastify/dist/ReactToastify.css?url";
 import toastStyles from "~/styles/toast.css?url";
 
 export const links: LinksFunction = () => [
-  { rel: "stylesheet", href: itemEditorStyles },
   { rel: "stylesheet", href: reactToastifyStyles },
   { rel: "stylesheet", href: toastStyles },
 ];
