@@ -2,8 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   formatSwedishPostalCode,
+  shouldUseNativeAddressAutocomplete,
   swedishAddressFromGoogle,
 } from "../app/utils/googleAddress";
+
+test("only enables native address suggestions when Google is unavailable", () => {
+  assert.equal(shouldUseNativeAddressAutocomplete("browser-key", false), false);
+  assert.equal(shouldUseNativeAddressAutocomplete("browser-key", true), true);
+  assert.equal(shouldUseNativeAddressAutocomplete("", false), true);
+});
 
 test("maps Swedish Google address components to the special-order fields", () => {
   const address = swedishAddressFromGoogle([

@@ -6,6 +6,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import {
+  shouldUseNativeAddressAutocomplete,
   swedishAddressFromGoogle,
   type GoogleAddressComponent,
   type SwedishAddress,
@@ -123,6 +124,7 @@ type Props = {
   name?: string;
   onAddressSelect: (address: SwedishAddress) => void;
   onChange: (value: string) => void;
+  onNativeAutocompleteChange?: (enabled: boolean) => void;
   placeholder: string;
   required?: boolean;
   value: string;
@@ -136,6 +138,7 @@ export default function SpecialOrderAddressAutocomplete({
   name = "postaddress",
   onAddressSelect,
   onChange,
+  onNativeAutocompleteChange,
   placeholder,
   required,
   value,
@@ -147,15 +150,39 @@ export default function SpecialOrderAddressAutocomplete({
   const sessionTokenRef = useRef<unknown>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [focused, setFocused] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState(() => !apiKey);
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<AutocompleteSuggestion[]>([]);
 
-  const open = focused && (failed || suggestions.length > 0);
+  const nativeAutocomplete = shouldUseNativeAddressAutocomplete(apiKey, failed);
+  const googleAutocomplete = !nativeAutocomplete;
+  const open = focused && (
+    suggestions.length > 0 || (failed && value.trim().length >= 3)
+  );
+
+  useEffect(() => {
+    onNativeAutocompleteChange?.(nativeAutocomplete);
+  }, [nativeAutocomplete, onNativeAutocompleteChange]);
+
+  useEffect(() => {
+    if (!apiKey) return;
+
+    let active = true;
+    void loadPlacesLibrary(apiKey)
+      .then(() => {
+        if (active) setFailed(false);
+      })
+      .catch(() => {
+        if (active) setFailed(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [apiKey]);
 
   useEffect(() => {
     const query = value.trim();
-    if (!apiKey || !focused || query.length < 3) {
+    if (!apiKey || failed || !focused || query.length < 3) {
       return;
     }
 
@@ -174,6 +201,7 @@ export default function SpecialOrderAddressAutocomplete({
           sessionToken: sessionTokenRef.current,
         });
         if (currentRequest !== requestNumberRef.current) return;
+        setFailed(false);
         setSuggestions(
           response.suggestions.filter((suggestion) => suggestion.placePrediction)
         );
@@ -185,10 +213,10 @@ export default function SpecialOrderAddressAutocomplete({
       } finally {
         if (currentRequest === requestNumberRef.current) setLoading(false);
       }
-    }, 220);
+    }, 140);
 
     return () => window.clearTimeout(timer);
-  }, [apiKey, focused, value]);
+  }, [apiKey, failed, focused, value]);
 
   useEffect(() => () => {
     if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
@@ -220,7 +248,8 @@ export default function SpecialOrderAddressAutocomplete({
     } finally {
       sessionTokenRef.current = null;
       setLoading(false);
-      close();
+      setActiveIndex(-1);
+      setSuggestions([]);
     }
   };
 
@@ -250,10 +279,10 @@ export default function SpecialOrderAddressAutocomplete({
       <div className="special-address-autocomplete">
         <input
           aria-activedescendant={activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined}
-          aria-autocomplete={apiKey ? "list" : undefined}
-          aria-controls={apiKey ? listboxId : undefined}
-          aria-expanded={apiKey ? open : undefined}
-          autoComplete="address-line1"
+          aria-autocomplete={googleAutocomplete ? "list" : undefined}
+          aria-controls={googleAutocomplete ? listboxId : undefined}
+          aria-expanded={googleAutocomplete ? open : undefined}
+          autoComplete={nativeAutocomplete ? "address-line1" : "off"}
           id={id}
           name={name}
           onBlur={() => {
@@ -263,7 +292,6 @@ export default function SpecialOrderAddressAutocomplete({
             const nextValue = event.target.value;
             requestNumberRef.current += 1;
             setActiveIndex(-1);
-            setFailed(false);
             setSuggestions([]);
             if (nextValue.trim().length < 3) setLoading(false);
             onChange(nextValue);
@@ -275,7 +303,8 @@ export default function SpecialOrderAddressAutocomplete({
           onKeyDown={onKeyDown}
           placeholder={placeholder}
           required={required}
-          role={apiKey ? "combobox" : undefined}
+          role={googleAutocomplete ? "combobox" : undefined}
+          spellCheck={false}
           value={value}
         />
         {loading ? <i aria-label="Söker adress" className="special-address-autocomplete__progress" /> : null}

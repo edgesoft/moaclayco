@@ -12,6 +12,11 @@ export type SwedishAddress = {
   zipcode: string;
 };
 
+export const shouldUseNativeAddressAutocomplete = (
+  apiKey: string,
+  googleUnavailable: boolean
+) => !apiKey || googleUnavailable;
+
 const textOf = (component?: GoogleAddressComponent) =>
   component?.longText?.trim() || component?.long_name?.trim() || "";
 

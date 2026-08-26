@@ -90,6 +90,9 @@ export default function SpecialOrderEditor({
   const [postaddress, setPostaddress] = useState(order?.customer.postaddress ?? "");
   const [zipcode, setZipcode] = useState(order?.customer.zipcode ?? "");
   const [city, setCity] = useState(order?.customer.city ?? "");
+  const [nativeAddressAutocomplete, setNativeAddressAutocomplete] = useState(
+    !googleMapsApiKey
+  );
   const [expiresAt, setExpiresAt] = useState(() =>
     order?.specialOrder?.expiresAt
       ? specialOrderExpiryFormValue(
@@ -547,13 +550,14 @@ export default function SpecialOrderEditor({
                   if (address.city) setCity(address.city);
                 }}
                 onChange={setPostaddress}
+                onNativeAutocompleteChange={setNativeAddressAutocomplete}
                 placeholder="Exempelgatan 12"
                 value={postaddress}
               />
               <label>
                 <span>Adressrad 2</span>
                 <input
-                  autoComplete="address-line2"
+                  autoComplete={nativeAddressAutocomplete ? "address-line2" : "off"}
                   defaultValue={order?.customer.addressLine2}
                   name="addressLine2"
                   placeholder="C/o eller lägenhet"
@@ -562,7 +566,7 @@ export default function SpecialOrderEditor({
               <label>
                 <span>Postnummer</span>
                 <input
-                  autoComplete="postal-code"
+                  autoComplete={nativeAddressAutocomplete ? "postal-code" : "off"}
                   inputMode="numeric"
                   name="zipcode"
                   onChange={(event) => setZipcode(event.target.value)}
@@ -573,7 +577,7 @@ export default function SpecialOrderEditor({
               <label>
                 <span>Ort</span>
                 <input
-                  autoComplete="address-level2"
+                  autoComplete={nativeAddressAutocomplete ? "address-level2" : "off"}
                   name="city"
                   onChange={(event) => setCity(event.target.value)}
                   placeholder="Stockholm"
