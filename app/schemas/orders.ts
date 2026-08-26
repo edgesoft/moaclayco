@@ -1,6 +1,24 @@
 import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
+const SpecialOrderInvitationHistorySchema = new Schema({
+    action: {
+        type: String,
+        enum: ['REVOKED', 'REPLACED'],
+        required: true
+    },
+    at: {
+        type: Date,
+        required: true
+    },
+    fromVersion: {
+        type: Number,
+        required: true
+    },
+    paymentIntentId: String,
+    toVersion: Number
+}, { _id: false });
+
 const OrderSchema = new Schema({
     customer: {
         firstname: String,
@@ -75,8 +93,11 @@ const OrderSchema = new Schema({
             enum: ['AUTO', 'CUSTOM']
         },
         lockedAt: Date,
+        invitationHistory: [SpecialOrderInvitationHistorySchema],
         publicOrigin: String,
         publicTokenHash: String,
+        replacedAt: Date,
+        revokedAt: Date,
         sentAt: Date,
         termsAcceptedAt: Date
     }

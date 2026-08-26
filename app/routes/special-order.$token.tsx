@@ -1,4 +1,3 @@
-import { timingSafeEqual } from "node:crypto";
 import { data as json, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import type {
   ActionFunctionArgs,
@@ -20,6 +19,7 @@ import { orderCookie } from "~/services/order-cookie.server";
 import {
   hashSpecialOrderAccessToken,
   readSpecialOrderAccessToken,
+  resolveSpecialOrderPublicLinkState,
 } from "~/services/special-order.server";
 import specialOrderStyles from "~/styles/special-order.css?url";
 import stripeClient from "~/stripeClient";
@@ -60,54 +60,35 @@ const addressSchema = z.object({
   zipcode: z.string().trim().min(1, "Fyll i postnummer").max(20),
 });
 
-const equalHash = (left: string, right: string) => {
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
-  return (
-    leftBuffer.length === rightBuffer.length &&
-    timingSafeEqual(leftBuffer, rightBuffer)
-  );
-};
-
 const readPublicOrder = async (token: string) => {
   const access = readSpecialOrderAccessToken(token);
   if (!access) return null;
   const order = (await Orders.findOne({
     _id: access.orderId,
     kind: "SPECIAL",
-    "specialOrder.accessVersion": access.version,
   }).lean()) as Order | null;
-  if (
-    !order?.specialOrder?.publicTokenHash ||
-    !equalHash(order.specialOrder.publicTokenHash, hashSpecialOrderAccessToken(token))
-  ) {
-    return null;
-  }
-  return order;
+  if (!order) return null;
+  return {
+    access,
+    linkState: resolveSpecialOrderPublicLinkState(order, token),
+    order,
+    tokenHash: hashSpecialOrderAccessToken(token),
+  };
 };
 
 export const loader = async ({ params }: LoaderFunctionArgs) => {
   const token = String(params.token ?? "");
-  const order = await readPublicOrder(token);
-  if (!order) throw new Response("Länken är inte giltig", { status: 404 });
-  const isComplete = ["SUCCESS", "PAID_REVIEW", "SHIPPED"].includes(
-    String(order.status)
-  );
-  const expiresAt = new Date(order.specialOrder?.expiresAt ?? 0);
-  if (!isComplete && expiresAt.getTime() <= Date.now()) {
-    throw new Response("Länken har gått ut", { status: 410 });
+  const result = await readPublicOrder(token);
+  if (!result || result.linkState === "INVALID") {
+    throw new Response("Länken är inte giltig", { status: 404 });
   }
-  if (
-    !isComplete &&
-    !["AWAITING_CUSTOMER", "OPENED", "PENDING", "FAILED"].includes(
-      String(order.status)
-    )
-  ) {
-    throw new Response("Beställningen är inte längre tillgänglig", { status: 409 });
+  if (!["ACTIVE", "COMPLETE"].includes(result.linkState)) {
+    return json({ linkState: result.linkState, order: null });
   }
+  const { order } = result;
   return json(
     toLoaderData({
-      isComplete,
+      linkState: result.linkState,
       order: {
         _id: order._id,
         customer: order.customer,
@@ -123,19 +104,24 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
   const token = String(params.token ?? "");
-  const order = await readPublicOrder(token);
-  if (!order) return json({ errors: { form: "Länken är inte giltig." } }, { status: 404 });
-  const expiresAt = new Date(order.specialOrder?.expiresAt ?? 0);
-  if (expiresAt.getTime() <= Date.now()) {
-    return json({ errors: { form: "Länken har gått ut. Kontakta Moa för en ny." } }, { status: 410 });
+  const result = await readPublicOrder(token);
+  if (!result || result.linkState === "INVALID") {
+    return json({ errors: { form: "Länken är inte giltig." } }, { status: 404 });
   }
-  if (
-    !["AWAITING_CUSTOMER", "OPENED", "PENDING", "FAILED"].includes(
-      String(order.status)
-    )
-  ) {
-    return json({ errors: { form: "Beställningen går inte längre att betala." } }, { status: 409 });
+  if (result.linkState !== "ACTIVE") {
+    const messages = {
+      COMPLETE: "Beställningen är redan betald.",
+      EXPIRED: "Länken har gått ut. Kontakta Moa för en ny.",
+      REPLACED: "Länken har ersatts. Använd den senaste länken du fått.",
+      REVOKED: "Länken har stängts och går inte längre att använda.",
+      UNAVAILABLE: "Beställningen går inte längre att betala.",
+    } as const;
+    return json(
+      { errors: { form: messages[result.linkState] } },
+      { status: result.linkState === "EXPIRED" ? 410 : 409 }
+    );
   }
+  const { access, order, tokenHash } = result;
 
   let formData: FormData;
   try {
@@ -166,10 +152,12 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   }
 
   const now = new Date();
-  await Orders.updateOne(
+  const addressUpdate = await Orders.updateOne(
     {
       _id: order._id,
       kind: "SPECIAL",
+      "specialOrder.accessVersion": access.version,
+      "specialOrder.publicTokenHash": tokenHash,
       status: { $in: ["AWAITING_CUSTOMER", "OPENED", "PENDING", "FAILED"] },
     },
     {
@@ -190,14 +178,36 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       },
     }
   );
+  if (!addressUpdate.matchedCount) {
+    return json(
+      { errors: { form: "Länken ändrades medan sidan var öppen. Ladda om sidan." } },
+      { status: 409 }
+    );
+  }
 
-  if (!order.checkoutToken) throw new Response("Betalningssessionen saknas", { status: 409 });
-  let clientSecret = order.paymentIntent?.client_secret;
-  let paymentIntentId = order.paymentIntent?.id;
+  const currentOrder = (await Orders.findOne({
+    _id: order._id,
+    kind: "SPECIAL",
+    "specialOrder.accessVersion": access.version,
+    "specialOrder.publicTokenHash": tokenHash,
+    status: { $in: ["OPENED", "PENDING", "FAILED"] },
+  }).lean()) as Order | null;
+  if (!currentOrder) {
+    return json(
+      { errors: { form: "Länken ändrades medan sidan var öppen. Ladda om sidan." } },
+      { status: 409 }
+    );
+  }
+
+  if (!currentOrder.checkoutToken) {
+    throw new Response("Betalningssessionen saknas", { status: 409 });
+  }
+  let clientSecret = currentOrder.paymentIntent?.client_secret;
+  let paymentIntentId = currentOrder.paymentIntent?.id;
   if (!clientSecret || !paymentIntentId) {
     const paymentIntentRequest = buildCheckoutPaymentIntent({
-      checkoutToken: order.checkoutToken,
-      order,
+      checkoutToken: currentOrder.checkoutToken,
+      order: currentOrder,
       paymentMethods: theme.paymentMethods,
     });
     const paymentIntent = await stripeClient.paymentIntents.create(
@@ -211,8 +221,11 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     paymentIntentId = paymentIntent.id;
     const updated = await Orders.updateOne(
       {
-        _id: order._id,
+        _id: currentOrder._id,
+        checkoutToken: currentOrder.checkoutToken,
         "paymentIntent.id": { $exists: false },
+        "specialOrder.accessVersion": access.version,
+        "specialOrder.publicTokenHash": tokenHash,
         status: "OPENED",
       },
       {
@@ -224,10 +237,18 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       }
     );
     if (!updated.matchedCount) {
-      const current = (await Orders.findById(order._id)
+      const current = (await Orders.findById(currentOrder._id)
         .select("paymentIntent")
         .lean()) as Order | null;
       if (current?.paymentIntent?.id !== paymentIntentId) {
+        try {
+          await stripeClient.paymentIntents.cancel(paymentIntentId);
+        } catch (error) {
+          console.error("Unused special-order PaymentIntent could not be canceled", {
+            errorName: error instanceof Error ? error.name : "UnknownError",
+            paymentIntentId,
+          });
+        }
         throw new Error("Special order payment intent could not be attached");
       }
     }
@@ -248,10 +269,42 @@ const money = (amount: number) =>
   }).format(amount);
 
 export default function SpecialOrderPage() {
-  const { isComplete, order } = useLoaderData<typeof loader>();
+  const { linkState, order } = useLoaderData<typeof loader>();
   const actionData = useActionData<{ errors?: Record<string, string> }>();
   const navigation = useNavigation();
   const [showTerms, setShowTerms] = useState(false);
+  if (!order) {
+    const stateCopy = {
+      EXPIRED: {
+        heading: "Länken har gått ut.",
+        text: "Svara på mejlet eller kontakta Moa om du behöver en ny betalningslänk.",
+      },
+      REPLACED: {
+        heading: "Länken har ersatts.",
+        text: "Använd den senaste betalningslänken du har fått från Moa.",
+      },
+      REVOKED: {
+        heading: "Länken är stängd.",
+        text: "Beställningen går inte längre att betala via den här länken.",
+      },
+      UNAVAILABLE: {
+        heading: "Beställningen är inte tillgänglig.",
+        text: "Kontakta Moa om du behöver hjälp med beställningen.",
+      },
+    } as const;
+    const copy = stateCopy[linkState as keyof typeof stateCopy];
+    return (
+      <main className="special-public-page">
+        <section className="special-public-complete special-public-complete--expired">
+          <span aria-hidden="true">○</span>
+          <p>Privat beställning</p>
+          <h1>{copy.heading}</h1>
+          <p>{copy.text}</p>
+          <a href={`mailto:${theme.email}`}>Kontakta ateljén</a>
+        </section>
+      </main>
+    );
+  }
   const item = order.items[0];
   const pending = navigation.state !== "idle";
   const expiresAt = new Date(order.specialOrder?.expiresAt ?? 0);
@@ -265,7 +318,7 @@ export default function SpecialOrderPage() {
       : {}),
   }).format(expiresAt);
 
-  if (isComplete) {
+  if (linkState === "COMPLETE") {
     return (
       <main className="special-public-page">
         <section className="special-public-complete">

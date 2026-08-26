@@ -3,14 +3,24 @@ import test from "node:test";
 import reactRouterConfig, { actionOriginsFor } from "../react-router.config";
 import {
   calculateSpecialOrderTotal,
+  canReplaceSpecialOrderInvitation,
   canShareSpecialOrderInvitation,
   createSpecialOrderAccessToken,
   hashSpecialOrderAccessToken,
   readSpecialOrderAccessToken,
+  replaceSpecialOrderInvitation,
+  resolveSpecialOrderPublicLinkState,
   resolveSpecialOrderFreightCost,
+  revokeSpecialOrderInvitation,
+  SpecialOrderInvitationLifecycleError,
+  specialOrderInvitationState,
   specialOrderFormSchema,
   specialOrderPublicUrl,
 } from "../app/services/special-order.server";
+import type {
+  SpecialOrderInvitationLifecycleDependencies,
+} from "../app/services/special-order.server";
+import type { Order } from "../app/types";
 import {
   specialOrderSourceImage,
   specialOrderSourceImages,
@@ -23,6 +33,53 @@ import {
 } from "../app/utils/specialOrderExpiry";
 
 const orderId = "64f10123456789abcdef0999";
+
+const invitationOrder = (
+  overrides: Partial<Order> = {}
+): Order => {
+  const version = overrides.specialOrder?.accessVersion ?? 3;
+  return {
+    _id: orderId,
+    checkoutToken: "checkout-original",
+    customer: {
+      city: "Järfälla",
+      email: "wicket.programmer@gmail.com",
+      firstname: "Mathias",
+      lastname: "Nilsson",
+      postaddress: "Datavägen 2A",
+      zipcode: "175 43",
+    },
+    discount: {
+      amount: 0,
+      code: undefined,
+      percentage: undefined,
+    },
+    freightCost: 0,
+    items: [
+      {
+        _id: "64f10123456789abcdef0888",
+        additionalItems: [],
+        image: "",
+        name: "Wanja 2.0",
+        price: 329,
+        quantity: 1,
+      },
+    ],
+    kind: "SPECIAL",
+    status: "AWAITING_CUSTOMER",
+    totalSum: 329,
+    ...overrides,
+    specialOrder: {
+      accessVersion: version,
+      expiresAt: "2026-09-01T21:59:00.000Z",
+      publicOrigin: "https://moaclayco-stage.fly.dev",
+      publicTokenHash: hashSpecialOrderAccessToken(
+        createSpecialOrderAccessToken(orderId, version)
+      ),
+      ...overrides.specialOrder,
+    },
+  };
+};
 
 test("trusted special-order action origins are explicit and never wildcarded", () => {
   assert.ok(reactRouterConfig.allowedActionOrigins.includes("localhost:5175"));
@@ -97,6 +154,211 @@ test("active special-order invitations expose their existing signed URL to admin
     }, now),
     false
   );
+});
+
+test("special-order links explain expired, replaced and revoked states", () => {
+  const now = new Date("2026-08-26T10:00:00.000Z");
+  const currentToken = createSpecialOrderAccessToken(orderId, 3);
+  const activeOrder = invitationOrder();
+
+  assert.equal(specialOrderInvitationState(activeOrder, now), "ACTIVE");
+  assert.equal(
+    resolveSpecialOrderPublicLinkState(activeOrder, currentToken, now),
+    "ACTIVE"
+  );
+  assert.equal(canReplaceSpecialOrderInvitation(activeOrder), true);
+
+  const expiredOrder = invitationOrder({
+    specialOrder: {
+      ...activeOrder.specialOrder,
+      expiresAt: "2026-08-25T20:00:00.000Z",
+    },
+  });
+  assert.equal(specialOrderInvitationState(expiredOrder, now), "EXPIRED");
+  assert.equal(
+    resolveSpecialOrderPublicLinkState(expiredOrder, currentToken, now),
+    "EXPIRED"
+  );
+
+  const replacementToken = createSpecialOrderAccessToken(orderId, 4);
+  const replacedOrder = invitationOrder({
+    specialOrder: {
+      ...activeOrder.specialOrder,
+      accessVersion: 4,
+      invitationHistory: [
+        {
+          action: "REPLACED",
+          at: now,
+          fromVersion: 3,
+          toVersion: 4,
+        },
+      ],
+      publicTokenHash: hashSpecialOrderAccessToken(replacementToken),
+    },
+  });
+  assert.equal(
+    resolveSpecialOrderPublicLinkState(replacedOrder, currentToken, now),
+    "REPLACED"
+  );
+  assert.equal(
+    resolveSpecialOrderPublicLinkState(replacedOrder, replacementToken, now),
+    "ACTIVE"
+  );
+
+  const revokedOrder = invitationOrder({
+    specialOrder: {
+      ...activeOrder.specialOrder,
+      invitationHistory: [
+        {
+          action: "REVOKED",
+          at: now,
+          fromVersion: 3,
+        },
+      ],
+      publicTokenHash: undefined,
+      revokedAt: now,
+    },
+    status: "CANCELED",
+  });
+  assert.equal(specialOrderInvitationState(revokedOrder, now), "REVOKED");
+  assert.equal(
+    resolveSpecialOrderPublicLinkState(revokedOrder, currentToken, now),
+    "REVOKED"
+  );
+  assert.equal(canReplaceSpecialOrderInvitation(revokedOrder), true);
+});
+
+test("replacing a special-order link cancels payment and rotates every access credential", async () => {
+  const now = new Date("2026-08-26T10:00:00.000Z");
+  const order = invitationOrder({
+    paymentIntent: {
+      client_secret: "secret-original",
+      id: "pi_original",
+    },
+  });
+  let canceledIntent = "";
+  let captured:
+    | Parameters<SpecialOrderInvitationLifecycleDependencies["updateOrder"]>[0]
+    | undefined;
+
+  await replaceSpecialOrderInvitation(
+    { expiresAt: "2026-09-01", orderId },
+    {
+      cancelPaymentIntent: async (id) => {
+        canceledIntent = id;
+        return { id, status: "canceled" };
+      },
+      findOrder: async () => order,
+      newCheckoutToken: () => "checkout-replacement",
+      now: () => now,
+      retrievePaymentIntent: async (id) => ({
+        id,
+        status: "requires_payment_method",
+      }),
+      updateOrder: async (input) => {
+        captured = input;
+        return order;
+      },
+    }
+  );
+
+  assert.equal(canceledIntent, "pi_original");
+  assert.equal(captured?.expectedPaymentIntentId, "pi_original");
+  assert.equal(captured?.expectedVersion, 3);
+  const update = captured?.update as {
+    $push: Record<string, { $each: Array<Record<string, unknown>> }>;
+    $set: Record<string, unknown>;
+    $unset: Record<string, unknown>;
+  };
+  assert.equal(update.$set.checkoutToken, "checkout-replacement");
+  assert.equal(update.$set["specialOrder.accessVersion"], 4);
+  assert.equal(update.$set.status, "AWAITING_CUSTOMER");
+  assert.equal(
+    update.$set["specialOrder.publicTokenHash"],
+    hashSpecialOrderAccessToken(createSpecialOrderAccessToken(orderId, 4))
+  );
+  assert.equal(update.$unset.paymentIntent, "");
+  assert.equal(update.$unset["specialOrder.termsAcceptedAt"], "");
+  assert.deepEqual(
+    update.$push["specialOrder.invitationHistory"].$each[0],
+    {
+      action: "REPLACED",
+      at: now,
+      fromVersion: 3,
+      paymentIntentId: "pi_original",
+      toVersion: 4,
+    }
+  );
+});
+
+test("revoking a special-order link invalidates its public token", async () => {
+  const now = new Date("2026-08-26T10:00:00.000Z");
+  const order = invitationOrder();
+  let captured:
+    | Parameters<SpecialOrderInvitationLifecycleDependencies["updateOrder"]>[0]
+    | undefined;
+
+  await revokeSpecialOrderInvitation(orderId, {
+    findOrder: async () => order,
+    now: () => now,
+    updateOrder: async (input) => {
+      captured = input;
+      return order;
+    },
+  });
+
+  const update = captured?.update as {
+    $push: Record<string, { $each: Array<Record<string, unknown>> }>;
+    $set: Record<string, unknown>;
+    $unset: Record<string, unknown>;
+  };
+  assert.equal(update.$set.status, "CANCELED");
+  assert.equal(update.$set["specialOrder.revokedAt"], now);
+  assert.equal(update.$unset["specialOrder.publicTokenHash"], "");
+  assert.deepEqual(
+    update.$push["specialOrder.invitationHistory"].$each[0],
+    {
+      action: "REVOKED",
+      at: now,
+      fromVersion: 3,
+      paymentIntentId: undefined,
+    }
+  );
+});
+
+test("special-order links cannot change while Stripe is processing or after payment", async () => {
+  const order = invitationOrder({
+    paymentIntent: {
+      client_secret: "secret-original",
+      id: "pi_original",
+    },
+  });
+
+  for (const [status, code] of [
+    ["processing", "PAYMENT_PROCESSING"],
+    ["succeeded", "PAYMENT_ALREADY_SUCCEEDED"],
+  ] as const) {
+    let updated = false;
+    await assert.rejects(
+      () =>
+        replaceSpecialOrderInvitation(
+          { expiresAt: "2026-09-01", orderId },
+          {
+            findOrder: async () => order,
+            now: () => new Date("2026-08-26T10:00:00.000Z"),
+            retrievePaymentIntent: async (id) => ({ id, status }),
+            updateOrder: async () => {
+              updated = true;
+              return order;
+            },
+          }
+        ),
+      (error) =>
+        error instanceof SpecialOrderInvitationLifecycleError &&
+        error.code === code
+    );
+    assert.equal(updated, false);
+  }
 });
 
 test("special-order totals stay precise and include quantity plus freight", () => {

@@ -782,6 +782,155 @@ html.orders-scroll-context {
   color: #9a4941;
 }
 
+.order-detail-delivery-email-status {
+  color: var(--orders-faint);
+  font-size: 0.6rem;
+  line-height: 1.45;
+}
+
+.order-detail-link-manager {
+  --special-accent: var(--orders-accent);
+  --special-accent-dark: var(--orders-accent-dark);
+  --special-ink: var(--orders-ink);
+  --special-line: rgba(66, 57, 48, 0.18);
+  --special-muted: var(--orders-muted);
+  --special-surface: var(--orders-surface);
+  background:
+    radial-gradient(circle at 94% 8%, rgba(184, 110, 89, 0.1), transparent 18rem),
+    #f8f4ed;
+  border-bottom: 1px solid var(--orders-line);
+  padding: 1.5rem 1.4rem 1.35rem;
+}
+
+.order-detail-link-manager__heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 1.5rem;
+  justify-content: space-between;
+}
+
+.order-detail-link-manager__heading span {
+  color: var(--orders-accent-dark);
+  display: block;
+  font-size: 0.54rem;
+  font-weight: 750;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.order-detail-link-manager__heading h3 {
+  font-size: clamp(1.45rem, 3vw, 2rem);
+  line-height: 1.05;
+  margin: 0.35rem 0 0;
+}
+
+.order-detail-link-manager__close,
+.order-detail-link-manager__revoke-trigger {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  color: var(--orders-muted);
+  cursor: pointer;
+  font-size: 0.6rem;
+  padding: 0 0 0.14rem;
+}
+
+.order-detail-link-manager__replace {
+  align-items: end;
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-top: 1.35rem;
+}
+
+.order-detail-link-manager .special-expiry-control {
+  max-width: 34rem;
+}
+
+.order-detail-link-manager .special-expiry-calendar,
+.order-detail-link-manager .special-expiry-time-picker {
+  bottom: auto;
+  top: calc(100% + 0.5rem);
+}
+
+.order-detail-link-manager__primary {
+  align-items: center;
+  background: var(--orders-accent-dark);
+  border: 1px solid var(--orders-accent-dark);
+  border-radius: 999px;
+  color: white;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.62rem;
+  font-weight: 750;
+  gap: 0.55rem;
+  justify-content: center;
+  letter-spacing: 0.08em;
+  min-height: 3rem;
+  padding: 0.75rem 1.05rem 0.75rem 1.2rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.order-detail-link-manager__primary svg {
+  height: 0.9rem;
+  width: 0.9rem;
+}
+
+.order-detail-link-manager__primary:disabled,
+.order-detail-link-manager__confirm button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.order-detail-link-manager__revoke {
+  border-top: 1px solid var(--orders-line);
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+}
+
+.order-detail-link-manager__revoke-trigger {
+  color: #8f463d;
+}
+
+.order-detail-link-manager__confirm {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.order-detail-link-manager__confirm p {
+  color: var(--orders-muted);
+  font-size: 0.66rem;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 25rem;
+}
+
+.order-detail-link-manager__confirm > div {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.5rem;
+}
+
+.order-detail-link-manager__confirm button {
+  background: transparent;
+  border: 1px solid var(--orders-line);
+  border-radius: 999px;
+  color: var(--orders-muted);
+  cursor: pointer;
+  font-size: 0.6rem;
+  min-height: 2.4rem;
+  padding: 0.5rem 0.8rem;
+}
+
+.order-detail-link-manager__confirm button:last-child {
+  border-color: rgba(143, 70, 61, 0.5);
+  color: #8f463d;
+}
+
 .order-detail-final-image {
   align-items: center;
   background: #f6eee8;
@@ -1538,6 +1687,24 @@ html.orders-scroll-context {
     border-left: 0;
     border-top: 1px solid var(--orders-line);
     padding-left: 0;
+  }
+
+  .order-detail-link-manager {
+    padding-inline: 1rem;
+  }
+
+  .order-detail-link-manager__replace {
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .order-detail-link-manager__primary {
+    justify-self: start;
+  }
+
+  .order-detail-link-manager__confirm {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .orders-summary > div,

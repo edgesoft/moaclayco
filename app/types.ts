@@ -62,6 +62,15 @@ export type Order = {
     lockedAt?: Date | string;
     publicOrigin?: string;
     publicTokenHash?: string;
+    invitationHistory?: Array<{
+      action: "REVOKED" | "REPLACED";
+      at: Date | string;
+      fromVersion: number;
+      paymentIntentId?: string;
+      toVersion?: number;
+    }>;
+    replacedAt?: Date | string;
+    revokedAt?: Date | string;
     sentAt?: Date | string;
     termsAcceptedAt?: Date | string;
   };

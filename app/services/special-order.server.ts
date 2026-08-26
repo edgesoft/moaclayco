@@ -11,6 +11,7 @@ import {
   specialOrderExpiryError,
 } from "~/utils/specialOrderExpiry";
 import { distinctAddressLine2 } from "~/utils/customerAddress";
+import stripeClient from "~/stripeClient";
 
 const optionalText = (max: number) =>
   z.string().trim().max(max).optional().transform((value) => value || "");
@@ -224,39 +225,449 @@ export const specialOrderPublicUrl = (order: Pick<Order, "_id" | "specialOrder">
   )}`;
 };
 
-const shareableInvitationStatuses = new Set<Order["status"]>([
+const activeInvitationStatuses = new Set<Order["status"]>([
   "AWAITING_CUSTOMER",
   "OPENED",
   "PENDING",
   "FAILED",
 ]);
 
+const replaceableInvitationStatuses = new Set<Order["status"]>([
+  ...activeInvitationStatuses,
+  "CANCELED",
+]);
+
+export type SpecialOrderInvitationState =
+  | "ACTIVE"
+  | "EXPIRED"
+  | "INACTIVE"
+  | "REVOKED";
+
+const currentInvitationConfiguration = (
+  order: Pick<Order, "_id" | "specialOrder">
+) => {
+  const version = order.specialOrder?.accessVersion;
+  const storedTokenHash = order.specialOrder?.publicTokenHash;
+  if (
+    typeof version !== "number" ||
+    !Number.isInteger(version) ||
+    !order.specialOrder?.publicOrigin ||
+    !storedTokenHash
+  ) {
+    return null;
+  }
+  try {
+    safePublicOrigin(order.specialOrder.publicOrigin);
+    const token = createSpecialOrderAccessToken(String(order._id), version);
+    return hashSpecialOrderAccessToken(token) === storedTokenHash
+      ? { storedTokenHash, version }
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+export const specialOrderInvitationState = (
+  order: Pick<Order, "_id" | "kind" | "specialOrder" | "status">,
+  now = new Date()
+): SpecialOrderInvitationState => {
+  if (order.kind !== "SPECIAL") return "INACTIVE";
+  if (order.status === "CANCELED" && order.specialOrder?.revokedAt) {
+    return "REVOKED";
+  }
+  if (
+    !activeInvitationStatuses.has(order.status) ||
+    !currentInvitationConfiguration(order)
+  ) {
+    return "INACTIVE";
+  }
+  const expiresAt = new Date(order.specialOrder?.expiresAt ?? 0);
+  return !Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() > now.getTime()
+    ? "ACTIVE"
+    : "EXPIRED";
+};
+
+export const canReplaceSpecialOrderInvitation = (
+  order: Pick<Order, "kind" | "specialOrder" | "status">
+) => {
+  const version = order.specialOrder?.accessVersion;
+  if (
+    order.kind !== "SPECIAL" ||
+    !replaceableInvitationStatuses.has(order.status) ||
+    typeof version !== "number" ||
+    !Number.isInteger(version) ||
+    !order.specialOrder?.publicOrigin
+  ) {
+    return false;
+  }
+  try {
+    safePublicOrigin(order.specialOrder.publicOrigin);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const canShareSpecialOrderInvitation = (
   order: Pick<Order, "_id" | "kind" | "specialOrder" | "status">,
   now = new Date()
 ) => {
-  const version = order.specialOrder?.accessVersion;
-  const expiresAt = new Date(order.specialOrder?.expiresAt ?? 0);
-  const storedTokenHash = order.specialOrder?.publicTokenHash;
+  return specialOrderInvitationState(order, now) === "ACTIVE";
+};
+
+export type SpecialOrderPublicLinkState =
+  | "ACTIVE"
+  | "COMPLETE"
+  | "EXPIRED"
+  | "INVALID"
+  | "REPLACED"
+  | "REVOKED"
+  | "UNAVAILABLE";
+
+export const resolveSpecialOrderPublicLinkState = (
+  order: Pick<Order, "_id" | "kind" | "specialOrder" | "status">,
+  token: string,
+  now = new Date()
+): SpecialOrderPublicLinkState => {
+  const access = readSpecialOrderAccessToken(token);
   if (
-    order.kind === "SPECIAL" &&
-    shareableInvitationStatuses.has(order.status) &&
-    typeof version === "number" &&
-    Number.isInteger(version) &&
-    Boolean(order.specialOrder?.publicOrigin) &&
-    Boolean(storedTokenHash) &&
-    !Number.isNaN(expiresAt.getTime()) &&
-    expiresAt.getTime() > now.getTime()
+    !access ||
+    order.kind !== "SPECIAL" ||
+    String(order._id) !== access.orderId
   ) {
-    try {
-      safePublicOrigin(order.specialOrder?.publicOrigin ?? "");
-      const token = createSpecialOrderAccessToken(String(order._id), version);
-      return hashSpecialOrderAccessToken(token) === storedTokenHash;
-    } catch {
-      return false;
-    }
+    return "INVALID";
   }
-  return false;
+
+  const currentVersion = order.specialOrder?.accessVersion;
+  const currentHash = order.specialOrder?.publicTokenHash;
+  const tokenIsCurrent =
+    currentVersion === access.version &&
+    Boolean(currentHash) &&
+    hashSpecialOrderAccessToken(token) === currentHash;
+
+  if (!tokenIsCurrent) {
+    const matchingHistory = (order.specialOrder?.invitationHistory ?? [])
+      .filter((entry) => entry.fromVersion === access.version)
+      .at(-1);
+    if (matchingHistory?.action === "REPLACED") return "REPLACED";
+    if (matchingHistory?.action === "REVOKED") return "REVOKED";
+    return "INVALID";
+  }
+
+  if (["SUCCESS", "PAID_REVIEW", "SHIPPED"].includes(String(order.status))) {
+    return "COMPLETE";
+  }
+  const expiresAt = new Date(order.specialOrder?.expiresAt ?? 0);
+  if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= now.getTime()) {
+    return "EXPIRED";
+  }
+  if (activeInvitationStatuses.has(order.status)) return "ACTIVE";
+  if (order.status === "CANCELED" && order.specialOrder?.revokedAt) {
+    return "REVOKED";
+  }
+  return "UNAVAILABLE";
+};
+
+export type SpecialOrderInvitationLifecycleErrorCode =
+  | "CONFLICT"
+  | "INVALID_EXPIRY"
+  | "NOT_AVAILABLE"
+  | "PAYMENT_ALREADY_SUCCEEDED"
+  | "PAYMENT_CANCEL_FAILED"
+  | "PAYMENT_PROCESSING";
+
+export class SpecialOrderInvitationLifecycleError extends Error {
+  code: SpecialOrderInvitationLifecycleErrorCode;
+
+  constructor(code: SpecialOrderInvitationLifecycleErrorCode, message: string) {
+    super(message);
+    this.name = "SpecialOrderInvitationLifecycleError";
+    this.code = code;
+  }
+}
+
+type PaymentIntentState = { id: string; status: string };
+type InvitationUpdate = Record<string, unknown>;
+
+export type SpecialOrderInvitationLifecycleDependencies = {
+  cancelPaymentIntent: (id: string) => Promise<PaymentIntentState>;
+  findOrder: (
+    orderId: string,
+    statuses: NonNullable<Order["status"]>[]
+  ) => Promise<Order | null>;
+  newCheckoutToken: () => string;
+  now: () => Date;
+  retrievePaymentIntent: (id: string) => Promise<PaymentIntentState>;
+  updateOrder: (input: {
+    expectedPaymentIntentId?: string;
+    expectedPublicTokenHash?: string;
+    expectedStatus: NonNullable<Order["status"]>;
+    expectedVersion: number;
+    orderId: string;
+    update: InvitationUpdate;
+  }) => Promise<Order | null>;
+};
+
+const defaultInvitationLifecycleDependencies: SpecialOrderInvitationLifecycleDependencies = {
+  cancelPaymentIntent: async (id) => {
+    const intent = await stripeClient.paymentIntents.cancel(id);
+    return { id: intent.id, status: intent.status };
+  },
+  findOrder: async (orderId, statuses) =>
+    (await Orders.findOne({
+      _id: orderId,
+      kind: "SPECIAL",
+      status: { $in: statuses },
+    }).lean()) as Order | null,
+  newCheckoutToken: () => randomUUID(),
+  now: () => new Date(),
+  retrievePaymentIntent: async (id) => {
+    const intent = await stripeClient.paymentIntents.retrieve(id);
+    return { id: intent.id, status: intent.status };
+  },
+  updateOrder: async ({
+    expectedPaymentIntentId,
+    expectedPublicTokenHash,
+    expectedStatus,
+    expectedVersion,
+    orderId,
+    update,
+  }) => {
+    const query: Record<string, unknown> = {
+      _id: orderId,
+      kind: "SPECIAL",
+      "specialOrder.accessVersion": expectedVersion,
+      status: expectedPaymentIntentId
+        ? { $in: [expectedStatus, "CANCELED"] }
+        : expectedStatus,
+    };
+    query["paymentIntent.id"] = expectedPaymentIntentId
+      ? expectedPaymentIntentId
+      : { $exists: false };
+    query["specialOrder.publicTokenHash"] = expectedPublicTokenHash
+      ? expectedPublicTokenHash
+      : { $exists: false };
+    return (await Orders.findOneAndUpdate(query, update, { new: true }).lean()) as
+      | Order
+      | null;
+  },
+};
+
+const lifecycleDependencies = (
+  overrides?: Partial<SpecialOrderInvitationLifecycleDependencies>
+) => ({ ...defaultInvitationLifecycleDependencies, ...overrides });
+
+const cancelOutstandingSpecialOrderPayment = async (
+  order: Order,
+  dependencies: SpecialOrderInvitationLifecycleDependencies
+) => {
+  const paymentIntentId = order.paymentIntent?.id;
+  if (!paymentIntentId) return undefined;
+
+  const intent = await dependencies.retrievePaymentIntent(paymentIntentId);
+  if (intent.status === "succeeded") {
+    throw new SpecialOrderInvitationLifecycleError(
+      "PAYMENT_ALREADY_SUCCEEDED",
+      "The special order has already been paid"
+    );
+  }
+  if (intent.status === "processing") {
+    throw new SpecialOrderInvitationLifecycleError(
+      "PAYMENT_PROCESSING",
+      "The special-order payment is still processing"
+    );
+  }
+  if (intent.status === "canceled") return paymentIntentId;
+
+  try {
+    const canceled = await dependencies.cancelPaymentIntent(paymentIntentId);
+    if (canceled.status !== "canceled") {
+      throw new Error(`Unexpected PaymentIntent status: ${canceled.status}`);
+    }
+    return paymentIntentId;
+  } catch (error) {
+    const latest = await dependencies.retrievePaymentIntent(paymentIntentId);
+    if (latest.status === "canceled") return paymentIntentId;
+    if (latest.status === "succeeded") {
+      throw new SpecialOrderInvitationLifecycleError(
+        "PAYMENT_ALREADY_SUCCEEDED",
+        "The special order was paid while the invitation was being changed"
+      );
+    }
+    if (latest.status === "processing") {
+      throw new SpecialOrderInvitationLifecycleError(
+        "PAYMENT_PROCESSING",
+        "The special-order payment is still processing"
+      );
+    }
+    throw new SpecialOrderInvitationLifecycleError(
+      "PAYMENT_CANCEL_FAILED",
+      error instanceof Error ? error.message : "The payment could not be canceled"
+    );
+  }
+};
+
+const invitationHistoryUpdate = (entry: {
+  action: "REVOKED" | "REPLACED";
+  at: Date;
+  fromVersion: number;
+  paymentIntentId?: string;
+  toVersion?: number;
+}) => ({
+  $each: [entry],
+  $slice: -20,
+});
+
+export const revokeSpecialOrderInvitation = async (
+  orderId: string,
+  overrides?: Partial<SpecialOrderInvitationLifecycleDependencies>
+) => {
+  if (!mongoose.Types.ObjectId.isValid(orderId)) {
+    throw new SpecialOrderInvitationLifecycleError(
+      "NOT_AVAILABLE",
+      "The special-order invitation was not found"
+    );
+  }
+  const dependencies = lifecycleDependencies(overrides);
+  const order = await dependencies.findOrder(
+    orderId,
+    Array.from(activeInvitationStatuses) as NonNullable<Order["status"]>[]
+  );
+  const configuration = order ? currentInvitationConfiguration(order) : null;
+  if (!order || !configuration) {
+    throw new SpecialOrderInvitationLifecycleError(
+      "NOT_AVAILABLE",
+      "The special-order invitation is no longer active"
+    );
+  }
+
+  const paymentIntentId = await cancelOutstandingSpecialOrderPayment(
+    order,
+    dependencies
+  );
+  const now = dependencies.now();
+  const updated = await dependencies.updateOrder({
+    expectedPaymentIntentId: order.paymentIntent?.id,
+    expectedPublicTokenHash: configuration.storedTokenHash,
+    expectedStatus: order.status as NonNullable<Order["status"]>,
+    expectedVersion: configuration.version,
+    orderId,
+    update: {
+      $push: {
+        "specialOrder.invitationHistory": invitationHistoryUpdate({
+          action: "REVOKED",
+          at: now,
+          fromVersion: configuration.version,
+          paymentIntentId,
+        }),
+      },
+      $set: {
+        "specialOrder.revokedAt": now,
+        status: "CANCELED",
+        updatedAt: now,
+      },
+      $unset: {
+        paidReviewReason: "",
+        paymentIntent: "",
+        "specialOrder.publicTokenHash": "",
+      },
+    },
+  });
+  if (!updated) {
+    throw new SpecialOrderInvitationLifecycleError(
+      "CONFLICT",
+      "The special-order invitation changed while it was being revoked"
+    );
+  }
+  return updated;
+};
+
+export const replaceSpecialOrderInvitation = async (
+  input: { expiresAt: string; orderId: string },
+  overrides?: Partial<SpecialOrderInvitationLifecycleDependencies>
+) => {
+  if (!mongoose.Types.ObjectId.isValid(input.orderId)) {
+    throw new SpecialOrderInvitationLifecycleError(
+      "NOT_AVAILABLE",
+      "The special-order invitation was not found"
+    );
+  }
+  const dependencies = lifecycleDependencies(overrides);
+  const now = dependencies.now();
+  const expiry = resolveSpecialOrderExpiry(input.expiresAt);
+  if (!expiry || specialOrderExpiryError(input.expiresAt, now)) {
+    throw new SpecialOrderInvitationLifecycleError(
+      "INVALID_EXPIRY",
+      "The replacement expiry is invalid"
+    );
+  }
+  const statuses = Array.from(
+    replaceableInvitationStatuses
+  ) as NonNullable<Order["status"]>[];
+  const order = await dependencies.findOrder(input.orderId, statuses);
+  const version = order?.specialOrder?.accessVersion;
+  if (
+    !order ||
+    typeof version !== "number" ||
+    !Number.isInteger(version) ||
+    !canReplaceSpecialOrderInvitation(order)
+  ) {
+    throw new SpecialOrderInvitationLifecycleError(
+      "NOT_AVAILABLE",
+      "The special-order invitation cannot be replaced"
+    );
+  }
+
+  const paymentIntentId = await cancelOutstandingSpecialOrderPayment(
+    order,
+    dependencies
+  );
+  const nextVersion = version + 1;
+  const token = createSpecialOrderAccessToken(input.orderId, nextVersion);
+  const updated = await dependencies.updateOrder({
+    expectedPaymentIntentId: order.paymentIntent?.id,
+    expectedPublicTokenHash: order.specialOrder?.publicTokenHash,
+    expectedStatus: order.status as NonNullable<Order["status"]>,
+    expectedVersion: version,
+    orderId: input.orderId,
+    update: {
+      $push: {
+        "specialOrder.invitationHistory": invitationHistoryUpdate({
+          action: "REPLACED",
+          at: now,
+          fromVersion: version,
+          paymentIntentId,
+          toVersion: nextVersion,
+        }),
+      },
+      $set: {
+        checkoutToken: dependencies.newCheckoutToken(),
+        "specialOrder.accessVersion": nextVersion,
+        "specialOrder.expiresAt": expiry.expiresAt,
+        "specialOrder.expiryIncludesTime": expiry.includesTime,
+        "specialOrder.lockedAt": now,
+        "specialOrder.publicTokenHash": hashSpecialOrderAccessToken(token),
+        "specialOrder.replacedAt": now,
+        status: "AWAITING_CUSTOMER",
+        updatedAt: now,
+      },
+      $unset: {
+        paidReviewReason: "",
+        paymentIntent: "",
+        "specialOrder.addressConfirmedAt": "",
+        "specialOrder.revokedAt": "",
+        "specialOrder.termsAcceptedAt": "",
+        webhookAt: "",
+      },
+    },
+  });
+  if (!updated) {
+    throw new SpecialOrderInvitationLifecycleError(
+      "CONFLICT",
+      "The special-order invitation changed while it was being replaced"
+    );
+  }
+  return updated;
 };
 
 export async function lockAndSendSpecialOrder(input: {
